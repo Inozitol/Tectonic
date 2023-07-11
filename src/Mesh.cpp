@@ -11,7 +11,7 @@ Mesh::~Mesh() {
 }
 
 void Mesh::load_mesh(const std::string &filename) {
-    // Clear previous mesh
+    // Clear previous vase
     clear();
 
     // Create VAO
@@ -25,7 +25,7 @@ void Mesh::load_mesh(const std::string &filename) {
     if(scene){
         init_from_scene(scene, filename);
     }else{
-        throw mesh_exception("Unable to parse file");
+        throw mesh_exception("Unable to parse file ", filename);
     }
 }
 
@@ -115,7 +115,7 @@ void Mesh::init_materials(const aiScene *scene, const std::string &filename) {
 
     for(uint32_t i = 0; i < scene->mNumMaterials; i++){
         const aiMaterial* material = scene->mMaterials[i];
-        load_textures(dir, material, i);
+        load_textures(dir, material, i, scene);
         load_colors(material, i);
     }
 }
@@ -171,7 +171,7 @@ Transformation& Mesh::transformation() {
     return _transformation;
 }
 
-const Material Mesh::material() {
+Material Mesh::material() {
     for(const auto& material : _materials){
         if(material.ambient_color != glm::vec3(0.0f, 0.0f, 0.0f)){
             return material;
@@ -180,43 +180,62 @@ const Material Mesh::material() {
     return Material({glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f)});
 }
 
-void Mesh::load_textures(const std::string &dir, const aiMaterial *material, uint32_t index) {
-    load_diffuse_texture(dir, material, index);
-    load_specular_texture(dir, material, index);
+void Mesh::load_textures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
+    load_diffuse_texture(dir, material, index, scene);
+    load_specular_texture(dir, material, index, scene);
 }
 
-void Mesh::load_diffuse_texture(const std::string &dir, const aiMaterial *material, uint32_t index) {
+void Mesh::load_diffuse_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
     if(material->GetTextureCount(aiTextureType_DIFFUSE) > 0){
         aiString path;
         if(material->GetTexture(aiTextureType_DIFFUSE, 0, &path, nullptr, nullptr, nullptr, nullptr, nullptr) == AI_SUCCESS){
             std::string p(path.data);
-
-            if(p.substr(0, 2) == ".\\"){
-                p = p.substr(2, p.size() - 2);
+            const aiTexture* texture;
+            if((texture = scene->GetEmbeddedTexture(path.C_Str()))){
+                std::string hint = texture->achFormatHint;
+                if(hint == "png" || hint == "jpg"){
+                    if(texture->mHeight == 0) {
+                        _materials[index].diffuse = new Texture(GL_TEXTURE_2D, (u_char *) texture->pcData,
+                                                                texture->mWidth, 3);
+                        _materials[index].diffuse->load();
+                    }
+                }
+            }else{
+                if(p.substr(0, 2) == ".\\") {
+                    p = p.substr(2, p.size() - 2);
+                }
+                std::string fullpath;
+                fullpath.append(dir).append("/").append(p);
+                _materials[index].diffuse = new Texture(GL_TEXTURE_2D, fullpath);
+                _materials[index].diffuse->load();
             }
-
-            std::string fullpath;
-            fullpath.append(dir).append("/").append(p);
-            _materials[index].diffuse = new Texture(GL_TEXTURE_2D, fullpath);
-            _materials[index].diffuse->load();
         }
     }
 }
 
-void Mesh::load_specular_texture(const std::string &dir, const aiMaterial *material, uint32_t index) {
+void Mesh::load_specular_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
     if(material->GetTextureCount(aiTextureType_SHININESS) > 0){
         aiString path;
         if(material->GetTexture(aiTextureType_SHININESS, 0, &path, nullptr, nullptr, nullptr, nullptr, nullptr) == AI_SUCCESS){
             std::string p(path.data);
-
-            if(p.substr(0, 2) == ".\\"){
-                p = p.substr(2, p.size() - 2);
+            const aiTexture* texture;
+            if((texture = scene->GetEmbeddedTexture(path.C_Str()))){
+                std::string hint = texture->achFormatHint;
+                if(hint == "png" || hint == "jpg"){
+                    if(texture->mHeight == 0){
+                        _materials[index].specular_exponent = new Texture(GL_TEXTURE_2D, (u_char*)texture->pcData, texture->mWidth, 1);
+                        _materials[index].specular_exponent->load();
+                    }
+                }
+            }else {
+                if (p.substr(0, 2) == ".\\") {
+                    p = p.substr(2, p.size() - 2);
+                }
+                std::string fullpath;
+                fullpath.append(dir).append("/").append(p);
+                _materials[index].specular_exponent = new Texture(GL_TEXTURE_2D, fullpath);
+                _materials[index].specular_exponent->load();
             }
-
-            std::string fullpath;
-            fullpath.append(dir).append("/").append(p);
-            _materials[index].specular_exponent = new Texture(GL_TEXTURE_2D, fullpath);
-            _materials[index].specular_exponent->load();
         }
     }
 }

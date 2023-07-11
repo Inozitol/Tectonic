@@ -9,7 +9,7 @@
 #include <glm/mat4x4.hpp>
 #include <vector>
 #include <tuple>
-#include "glad/glad.h"
+#include "extern/glad/glad.h"
 
 #include "exceptions.h"
 #include "texture_defines.h"
@@ -29,7 +29,7 @@ public:
     void load_mesh(const std::string& filename);
     void render();
     Transformation& transformation();
-    const Material material();
+    Material material();
 
 private:
     void clear();
@@ -38,10 +38,11 @@ private:
     void init_all_meshes(const aiScene* scene);
     void init_single_mesh(const aiMesh* mesh);
     void init_materials(const aiScene* scene, const std::string& filename);
-    void load_textures(const std::string& dir, const aiMaterial* material, uint32_t index);
+    void load_textures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
     void load_colors(const aiMaterial* material, uint32_t index);
-    void load_diffuse_texture(const std::string& dir, const aiMaterial* material, uint32_t index);
-    void load_specular_texture(const std::string& dir, const aiMaterial* material, uint32_t index);
+    void load_diffuse_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+    void
+    load_specular_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
     void buffer_data();
 
     enum BUFFER_TYPE{

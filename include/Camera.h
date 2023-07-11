@@ -26,6 +26,7 @@ public:
     const glm::mat4x4& view_matrix();
 
     const glm::vec3& position();
+    glm::vec3 direction();
 
 private:
     inline glm::mat4x4 rotation_matrix(){

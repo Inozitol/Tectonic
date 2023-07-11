@@ -4,7 +4,7 @@
 
 Camera::Camera(float fov, float aspect, float z_near, float z_far):
         _fov(fov), _aspect(aspect), _z_far(z_far), _z_near(z_near),
-        _orientation(glm::quatLookAt(Axis::POS_Z, Axis::POS_Y)), _position(0.0f,0.0f,0.0f){
+        _orientation(glm::quatLookAt(Axis::POS_Z, Axis::POS_Y)), _position(0.0f,0.0f,0.0f) {
     _projection_matrix = glm::perspective(glm::radians(_fov), _aspect, _z_near, _z_far);
 }
 
@@ -19,6 +19,10 @@ const glm::mat4x4& Camera::projection_matrix() {
 
 const glm::vec3& Camera::position() {
     return _position;
+}
+
+glm::vec3 Camera::direction() {
+    return forward();
 }
 
 void Camera::keyboard_event(u_short key) {

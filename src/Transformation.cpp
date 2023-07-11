@@ -2,6 +2,7 @@
 
 void Transformation::set_scale(float scale) {
     _scale_matrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(scale, scale, scale));
+    _inv_scale_matrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(1/scale, 1/scale, 1/scale));
 }
 
 void Transformation::set_rotation(float x, float y, float z) {
@@ -47,7 +48,21 @@ const glm::mat4x4& Transformation::get_matrix() {
     return _world_matrix;
 }
 
+glm::mat4x4 Transformation::copy_matrix() const{
+    return _world_matrix;
+}
+
 const glm::mat4x4 &Transformation::get_inverse_matrix() {
     _inv_world_matrix = _inv_rotation_matrix * _inv_scale_matrix * _inv_translation_matrix;
     return _inv_world_matrix;
 }
+
+glm::mat4x4 Transformation::copy_inverse_matrix() const {
+    return _inv_world_matrix;
+}
+
+glm::vec3 Transformation::invert(const glm::vec3& pos) {
+    glm::vec4 inv_pos = get_inverse_matrix() * glm::vec4(pos, 1.0f);
+    return inv_pos;
+}
+

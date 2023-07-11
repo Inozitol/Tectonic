@@ -3,7 +3,7 @@
 
 #include <list>
 #include <fstream>
-#include "glad/glad.h"
+#include "extern/glad/glad.h"
 #include "exceptions.h"
 #include "utils.h"
 

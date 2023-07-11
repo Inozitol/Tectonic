@@ -94,7 +94,7 @@ GLint Technique::uniform_location(const char *uniform_name) const {
     GLint location = glGetUniformLocation(_shader_program, uniform_name);
 
     if(location == INVALID_UNIFORM_LOCATION){
-        throw technique_exception("Unable to get uniform location");
+        throw technique_exception("Unable to get uniform location\n", "Uniform: ", uniform_name);
     }
     return location;
 }

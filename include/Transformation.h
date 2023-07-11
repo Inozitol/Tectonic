@@ -17,7 +17,11 @@ public:
     void translate(float x, float y, float z);
 
     const glm::mat4x4& get_matrix();
+    [[nodiscard]] glm::mat4x4 copy_matrix() const;
     const glm::mat4x4& get_inverse_matrix();
+    [[nodiscard]] glm::mat4x4 copy_inverse_matrix() const;
+
+    glm::vec3 invert(const glm::vec3& pos);
 
 private:
     glm::mat4x4 _scale_matrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
@@ -31,6 +35,5 @@ private:
     glm::mat4x4 _world_matrix{};
     glm::mat4x4 _inv_world_matrix{};
 };
-
 
 #endif //TECTONIC_TRANSFORMATION_H
