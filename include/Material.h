@@ -5,20 +5,24 @@
 
 class PBRMaterial{
     float roughness = 0.0f;
-    bool is_metal = false;
+    bool isMetal = false;
     glm::vec3 color = glm::vec3(0.0f, 0.0f, 0.0f);
 };
 
-class Material{
+/**
+ * Class with information about material on a texture.
+ * Contains textures for diffusion and specular light information.
+ */
+class Material {
 public:
-    glm::vec3 ambient_color = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec3 diffuse_color = glm::vec3(0.0f, 0.0f, 0.0f);
-    glm::vec3 specular_color = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 ambientColor = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 diffuseColor = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 specularColor = glm::vec3(0.0f, 0.0f, 0.0f);
 
     Texture* diffuse = nullptr;
-    Texture* specular_exponent = nullptr;
+    Texture* specularExp = nullptr;
 
-    PBRMaterial pbr_mat;
+    PBRMaterial PBPMat;
 };
 
 #endif //TECTONIC_MATERIAL_H

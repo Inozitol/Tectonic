@@ -6,6 +6,9 @@
 #include <glm/gtx/quaternion.hpp>
 #include <GLFW/glfw3.h>
 
+/**
+ * Various constant normalized vectors of axis used in camera calculations.
+ */
 namespace Axis{
     static constexpr glm::vec3 POS_X(1.0f,0.0f,0.0f);
     static constexpr glm::vec3 POS_Y(0.0f,1.0f,0.0f);
@@ -15,51 +18,117 @@ namespace Axis{
     static constexpr glm::vec3 NEG_Z(0.0f,0.0f,-1.0f);
 }
 
+/**
+ * Holds information needed to create a projection matrix.
+ * Used as an input argument to a Camera object.
+ */
+struct PersProjInfo{
+    float fov;
+    float ratio;
+    float zNear;
+    float zFar;
+};
+
+/**
+ * Represents a general camera positioned in the world space.
+ * Provides a view and projection matrix.
+ * Can be used as a view point from a spot light for shadow mapping.
+ */
 class Camera {
 public:
-    explicit Camera(float fov, float aspect, float z_near, float z_far);
+    /**
+     * @brief Creates a Camera object.
+     * @param fov FOV in degrees.
+     * @param aspect Aspect ratio.
+     * @param z_near Position of near plane.
+     * @param z_far Position of far plane.
+     */
+    Camera(float fov, float aspect, float z_near, float z_far);
 
-    void keyboard_event(u_short key);
-    void mouse_event(double x, double y);
+    /**
+     * @brief Creates a Camera object.
+     * @param info Information needed to create a projection matrix.
+     */
+    explicit Camera(const PersProjInfo& info);
 
-    const glm::mat4x4& projection_matrix();
-    const glm::mat4x4& view_matrix();
+    /**
+     * Projection matrix is unchanged until the change of parameters in PersProjInfo.
+     * In case of change in those parameters, it is necessary to call createProjection before this method.
+     *
+     * @brief Returns a reference to projection matrix.
+     * @return Reference to generated projection matrix.
+     */
+    [[nodiscard]] const glm::mat4x4& getProjectionMatrix() const;
 
-    const glm::vec3& position();
-    glm::vec3 direction();
+    /**
+     * View matrix is changed with every change in orientation or getPosition.
+     * In case of change in those parameters, it is necessary to call createView before this method.
+     *
+     * @brief Returns a reference to previously created view matrix.
+     * @return Reference to generated projection matrix.
+     */
+    [[nodiscard]] const glm::mat4x4& getViewMatrix() const;
+
+    /**
+     * Creates a projection matrix and stores it.
+     * Should be called after a change to PersProjInfo parameters.
+     */
+    void createProjection();
+
+    /**
+     * Creates a view matrix and stores it.
+     * Should be called after a change to orientation or getPosition.
+     */
+    void createView();
+
+    /**
+     * @brief Returns a getPosition of the camera in world space.
+     * @return Reference to a getPosition in worlds space.
+     */
+    const glm::vec3& getPosition();
+
+    /**
+     * @brief Creates a normalized vector with the getDirection of the camera.
+     * @return Normalized vector with the getDirection of the camera.
+     */
+    glm::vec3 getDirection();
+
+    /**
+     * Sets the getPosition of the camera in world space.
+     * @param position Vector with getPosition in world space.
+     */
+    void setPosition(glm::vec3 position);
+
+    /**
+     * Sets the direction of the camera from a normalized getDirection vector.
+     * @param direction Normalized getDirection vector.
+     */
+    void setDirection(glm::vec3 direction);
+
+protected:
+    glm::vec3 m_position;
+    glm::quat m_orientation;
+
+    [[nodiscard]] glm::vec3 forward() const {return Axis::NEG_Z * m_orientation;}
+    [[nodiscard]] glm::vec3 back()    const {return Axis::POS_Z * m_orientation;}
+    [[nodiscard]] glm::vec3 left()    const {return Axis::NEG_X * m_orientation;}
+    [[nodiscard]] glm::vec3 right()   const {return Axis::POS_X * m_orientation;}
+    [[nodiscard]] glm::vec3 down()    const {return Axis::NEG_Y * m_orientation;}
+    [[nodiscard]] glm::vec3 up()      const {return Axis::POS_Y * m_orientation;}
 
 private:
-    inline glm::mat4x4 rotation_matrix(){
-        return glm::toMat4(_orientation);
+    inline glm::mat4x4 rotationMatrix(){
+        return glm::toMat4(m_orientation);
     }
 
-    inline glm::mat4x4 translation_matrix(){
-        return glm::translate(glm::identity<glm::mat4x4>(), -_position);
+    inline glm::mat4x4 translationMatrix(){
+        return glm::translate(glm::identity<glm::mat4x4>(), -m_position);
     }
 
-    [[nodiscard]] glm::vec3 forward() const {return Axis::NEG_Z * _orientation;}
-    [[nodiscard]] glm::vec3 back()    const {return Axis::POS_Z * _orientation;}
-    [[nodiscard]] glm::vec3 left()    const {return Axis::NEG_X * _orientation;}
-    [[nodiscard]] glm::vec3 right()   const {return Axis::POS_X * _orientation;}
-    [[nodiscard]] glm::vec3 down()    const {return Axis::NEG_Y * _orientation;}
-    [[nodiscard]] glm::vec3 up()      const {return Axis::POS_Y * _orientation;}
+    PersProjInfo m_persProjInfo;
 
-    float _fov;
-    float _aspect;
-    float _z_far;
-    float _z_near;
-
-    glm::vec3 _position;
-    glm::quat _orientation;
-
-    float _speed = 0.05f;
-    float _sensitivity = 0.001f;
-
-    glm::mat4x4 _view_matrix{};
-    glm::mat4x4 _projection_matrix{};
-
-    bool first_mouse = true;
-    glm::vec2 _last_mouse_pos{};
+    glm::mat4 m_viewMatrix = glm::identity<glm::mat4x4>();
+    glm::mat4 m_projectionMatrix = glm::identity<glm::mat4x4>();
 };
 
 #endif //TECTONIC_CAMERA_H

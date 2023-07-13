@@ -1,66 +1,47 @@
-#include <iostream>
 #include <glm/gtx/string_cast.hpp>
 #include "Camera.h"
 
-Camera::Camera(float fov, float aspect, float z_near, float z_far):
-        _fov(fov), _aspect(aspect), _z_far(z_far), _z_near(z_near),
-        _orientation(glm::quatLookAt(Axis::POS_Z, Axis::POS_Y)), _position(0.0f,0.0f,0.0f) {
-    _projection_matrix = glm::perspective(glm::radians(_fov), _aspect, _z_near, _z_far);
+Camera::Camera(float fov, float aspect, float z_near, float z_far): Camera(PersProjInfo{fov, aspect, z_near, z_far}){}
+
+Camera::Camera(const PersProjInfo &info): m_persProjInfo(info),
+                                          m_orientation(glm::quatLookAt(Axis::NEG_Z, Axis::POS_Y)),
+                                          m_position(0.0f, 0.0f, 0.0f){
+    // Initialize projection matrix
+    createProjection();
 }
 
-const glm::mat4x4& Camera::view_matrix() {
-    _view_matrix = rotation_matrix() * translation_matrix();
-    return _view_matrix;
+const glm::mat4x4& Camera::getViewMatrix() const {
+    return m_viewMatrix;
 }
 
-const glm::mat4x4& Camera::projection_matrix() {
-    return _projection_matrix;
+const glm::mat4x4& Camera::getProjectionMatrix() const {
+    return m_projectionMatrix;
 }
 
-const glm::vec3& Camera::position() {
-    return _position;
+void Camera::createProjection() {
+    m_projectionMatrix = glm::perspective(glm::radians(m_persProjInfo.fov),
+                                          m_persProjInfo.ratio,
+                                          m_persProjInfo.zNear,
+                                          m_persProjInfo.zFar);
 }
 
-glm::vec3 Camera::direction() {
-    return forward();
+void Camera::createView() {
+    m_viewMatrix = rotationMatrix() * translationMatrix();
 }
 
-void Camera::keyboard_event(u_short key) {
-    switch(key){
-        case GLFW_KEY_W:
-            _position += _speed * forward();
-            break;
-        case GLFW_KEY_S:
-            _position += _speed * back();
-            break;
-        case GLFW_KEY_A:
-            _position += _speed * left();
-            break;
-        case GLFW_KEY_D:
-            _position += _speed * right();
-            break;
-        case GLFW_KEY_SPACE:
-            _position.y += _speed;
-            break;
-        case GLFW_KEY_C:
-            _position.y -= _speed;
-            break;
-        default:
-            break;
-    }
+const glm::vec3& Camera::getPosition() {
+    return m_position;
 }
 
-void Camera::mouse_event(double x_in, double y_in) {
-    auto x = static_cast<float>(x_in);
-    auto y = static_cast<float>(y_in);
-
-    if(first_mouse){
-        _last_mouse_pos = {x, y};
-        first_mouse = false;
-    }
-
-    _orientation *= glm::angleAxis((float)(x - _last_mouse_pos.x) * _sensitivity, Axis::POS_Y);
-    _orientation *= glm::angleAxis((float)(y - _last_mouse_pos.y) * _sensitivity, right());
-
-    _last_mouse_pos = {x,y};
+glm::vec3 Camera::getDirection() {
+    return glm::normalize(forward());
 }
+
+void Camera::setDirection(glm::vec3 direction) {
+    m_orientation = glm::conjugate(glm::quatLookAt(direction, Axis::POS_Y));
+}
+
+void Camera::setPosition(glm::vec3 position) {
+    m_position = position;
+}
+

@@ -5,23 +5,73 @@
 #include <functional>
 #include "exceptions.h"
 
+/**
+ * Class representing the application window.
+ */
 class Window {
 public:
     explicit Window(const std::string& name);
     ~Window();
 
-    void make_current_context();
-    std::tuple<int, int> get_size();
-    void swap_buffers();
-    bool should_close();
-    void set_key_callback(void(*callback)(GLFWwindow *, int, int, int, int));
-    void set_mouse_callback(void(*callback)(GLFWwindow *, double, double));
-    float get_ratio();
-    void disable_cursor();
-    void enable_cursor();
-    void set_cursor_pos(double x, double y);
+    /**
+     * @brief Makes the window as the current context.
+     */
+    void makeCurrentContext();
+
+    /**
+     * @brief Gets the width and height of the window.
+     * @return Width and height.
+     */
+    std::tuple<int, int> getSize();
+
+    /**
+     * @brief Gets the window aspect ratio.
+     * @return Aspect ratio.
+     */
+    float getRatio();
+
+    /**
+     * Swaps the front and back buffers of the window.
+     * Should be called after every frame.
+     */
+    void swapBuffers();
+
+    /**
+     * Returns true if the window should close.
+     * @return True if window should close.
+     */
+    bool shouldClose();
+
+    /**
+     * @brief Sets the keyboard callback function.
+     * @param callback Callback function.
+     */
+    void setKeyCallback(void(*callback)(GLFWwindow *, int, int, int, int));
+
+    /**
+     * @brief Sets the mouse callback function.
+     * @param callback Callback function.
+     */
+    void setMouseCallback(void(*callback)(GLFWwindow *, double, double));
+
+    /**
+     * @brief Disables the cursor inside the window.
+     */
+    void disableCursor();
+
+    /**
+     * @brief Enables the cursor inside the window.
+     */
+    void enableCursor();
+
+    /**
+     * Sets the cursor position inside the window.
+     * @param x X coordinate.
+     * @param y Y coordinate.
+     */
+    void setCursorPos(double x, double y);
 private:
-    GLFWwindow* _window;
+    GLFWwindow* m_window;
 };
 
 #endif //TECTONIC_WINDOW_H

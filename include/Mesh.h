@@ -12,7 +12,7 @@
 #include "extern/glad/glad.h"
 
 #include "exceptions.h"
-#include "texture_defines.h"
+#include "TextureDefines.h"
 
 #include "Transformation.h"
 #include "Texture.h"
@@ -21,29 +21,48 @@
 #define ASSIMP_FLAGS (aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs | aiProcess_JoinIdenticalVertices)
 #define INVALID_MATERIAL 0xFFFFFFFF
 
+/**
+ * Used to load a mesh from file into the scene.
+ * Handles loading of vertices, indices, textures and rendering.
+ */
 class Mesh {
 public:
     Mesh() = default;
     ~Mesh();
 
-    void load_mesh(const std::string& filename);
+    /**
+     * @brief Loads mesh from a supported file.
+     * @param filename File containing a mesh.
+     */
+    void loadMesh(const std::string& filename);
+
+    /**
+     * Draws all the vertices by binding a VAO, binding material textures and calling OpenGL API to draw.
+     * @brief Renders the mesh.
+     */
     void render();
+
+    /**
+     * Returns a reference to mesh transformation that's used to position it inside the world.
+     * @return Reference to a transformation of the mesh.
+     */
     Transformation& transformation();
+
     Material material();
 
 private:
     void clear();
-    void init_from_scene(const aiScene* scene, const std::string& filename);
-    void init_meshes_indexes(const aiScene *scene);
-    void init_all_meshes(const aiScene* scene);
-    void init_single_mesh(const aiMesh* mesh);
-    void init_materials(const aiScene* scene, const std::string& filename);
-    void load_textures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
-    void load_colors(const aiMaterial* material, uint32_t index);
-    void load_diffuse_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+    void initFromScene(const aiScene* scene, const std::string& filename);
+    void initMeshesIndexes(const aiScene *scene);
+    void initAllMeshes(const aiScene* scene);
+    void initSingleMesh(const aiMesh* mesh);
+    void initMaterials(const aiScene* scene, const std::string& filename);
+    void loadTextures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+    void loadColors(const aiMaterial* material, uint32_t index);
+    void loadDiffuseTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
     void
-    load_specular_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
-    void buffer_data();
+    loadSpecularTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+    void bufferData();
 
     enum BUFFER_TYPE{
         INDEX_BUFFER = 0,
@@ -55,27 +74,27 @@ private:
         NUM_BUFFERS  = 6
     };
 
-    GLuint _vao = 0;
-    GLuint _buffers[NUM_BUFFERS] = {0};
+    GLuint m_vao = 0;
+    GLuint m_buffers[NUM_BUFFERS] = {0};
 
-    struct basic_mesh_entry{
-        uint32_t indices_count  = 0;
-        uint32_t base_vertex    = 0;
-        uint32_t base_index     = 0;
-        uint32_t material_index = INVALID_MATERIAL;
+    struct basicMeshEntry {
+        uint32_t indicesCount  = 0;
+        uint32_t baseVertex    = 0;
+        uint32_t baseIndex     = 0;
+        uint32_t materialIndex = INVALID_MATERIAL;
     };
 
-    std::vector<basic_mesh_entry> _meshes;
-    std::vector<Material> _materials;
+    std::vector<basicMeshEntry> m_meshes;
+    std::vector<Material> m_materials;
 
-    std::vector<glm::vec3> _positions;
-    std::vector<glm::vec3> _normals;
-    std::vector<glm::vec2> _tex_coords;
-    std::vector<uint32_t>  _indices;
+    std::vector<glm::vec3> m_positions;
+    std::vector<glm::vec3> m_normals;
+    std::vector<glm::vec2> m_texCoords;
+    std::vector<uint32_t>  m_indices;
 
-    Assimp::Importer _importer;
+    Assimp::Importer m_importer;
 
-    Transformation _transformation;
+    Transformation m_transformation;
 };
 
 

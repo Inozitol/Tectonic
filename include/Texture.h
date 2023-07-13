@@ -4,20 +4,22 @@
 #include "exceptions.h"
 #include <string>
 
+/**
+ * Class representing a texture. Stores texture data inside OpenGL buffers.
+ */
 class Texture {
 public:
     Texture(GLenum tex_target, std::string  file_name);
-    Texture(GLenum tex_target, u_char *data, uint32_t length, uint8_t channels);
+    Texture(GLenum tex_target, u_char *data, int32_t length, uint8_t channels);
 
-    void load();
     void bind(GLenum tex_unit) const;
 
 private:
-    void load_data(u_char* data, int width, int height, int bpp);
+    void loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp);
 
-    std::string _file_name;
-    GLenum _tex_target;
-    GLuint _tex_object;
+    std::string m_fileName;
+    GLenum m_texTarget = -1;
+    GLuint m_texObject = -1;
 };
 
 #endif //TECTONIC_TEXTURE_H

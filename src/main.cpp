@@ -2,34 +2,38 @@
 #include "extern/glad/glad.h"
 #include <GLFW/glfw3.h>
 #include <cstdio>
-#include <iostream>
-#include <fstream>
 #include <glm/glm.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/ext/matrix_clip_space.hpp>
 #include <glm/mat4x4.hpp>
-#include <cstring>
-#include <GL/glext.h>
 #include <glm/gtx/string_cast.hpp>
+#include <iostream>
 
 #include "exceptions.h"
-#include "texture_defines.h"
+#include "TextureDefines.h"
 
 #include "Window.h"
 #include "Transformation.h"
-#include "Camera.h"
+#include "GameCamera.h"
 #include "Mesh.h"
-#include "LightingTechnique.h"
+#include "LightingShader.h"
+#include "ShadowMapFBO.h"
+#include "ShadowMapShader.h"
+#include "ShaderDefines.h"
 
 Window* window;
 
 Transformation* world_transform;
-Camera* camera;
-Mesh* vase = nullptr;
-LightingTechnique* technique = nullptr;
+GameCamera* game_camera = nullptr;
+Mesh* cat1 = nullptr;
+Mesh* cat2 = nullptr;
+Mesh* terrain = nullptr;
+LightingShader* light_technique = nullptr;
 DirectionalLight* directional_light = nullptr;
-PointLight point_lights[LightingTechnique::MAX_POINT_LIGHTS];
-SpotLight spot_lights[LightingTechnique::MAX_SPOT_LIGHTS];
+PointLight point_lights[MAX_POINT_LIGHTS];
+SpotLight spot_lights[MAX_SPOT_LIGHTS];
+ShadowMapFBO shadow_map;
+ShadowMapShader shadow_technique;
+
+int win_width, win_height;
 
 void err_callback(int, const char* msg){
     fprintf(stderr, "Error: %s\n", msg);
@@ -48,7 +52,7 @@ void key_callback(GLFWwindow* win, int key, int scancode, int action, int mods){
                 case GLFW_KEY_D:
                 case GLFW_KEY_SPACE:
                 case GLFW_KEY_C:
-                    camera->keyboard_event(key);
+                    game_camera->handleKeyEvent(key);
                     break;
                 default:
                     break;
@@ -68,45 +72,108 @@ void init_gl(){
     glEnable(GL_DEPTH_TEST);
 }
 
-void main_loop(){
-    //world_transform->set_scale(2.0f);
-    //world_transform->set_translation(0.0f, -0.5f, 1.0f);
+void shadow_pass(){
+    shadow_map.bind4writing();
+    glClear(GL_DEPTH_BUFFER_BIT);
 
-    while(!window->should_close()){
-        //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    shadow_technique.enable();
 
-        static float delta = 0.01f;
-        static float counter = 0.0f;
-        counter += 0.01;
+    spot_lights[1].createViewMatrix();
 
-        //world_transform->rotate(0.0f,delta * 100, 0.0f);
-        //world_transform->set_translation(0.0f, -0.5f, 1.0f);
+    glm::mat4x4 world = cat1->transformation().getMatrix();
+    glm::mat4x4 wvp = spot_lights[1].getProjectionMatrix() *
+                      spot_lights[1].getViewMatrix() *
+                      world;
+    shadow_technique.setWVP(wvp);
+    cat1->render();
 
-        technique->set_world(world_transform->get_matrix());
-        technique->set_view(camera->view_matrix());
-        technique->set_projection(camera->projection_matrix());
+    world = cat2->transformation().getMatrix();
+    wvp = spot_lights[1].getProjectionMatrix() *
+          spot_lights[1].getViewMatrix() *
+          world;
+    shadow_technique.setWVP(wvp);
+    cat2->render();
+}
 
-        directional_light->calc_local_direction(*world_transform);
-        technique->set_directional_light(*directional_light);
+void render_mesh(Mesh& mesh){
+    glm::mat4x4 world = mesh.transformation().getMatrix();
 
-        spot_lights[0].direction = camera->direction();
-        spot_lights[0].position = camera->position();
-        spot_lights[0].calc_local_direction_position(*world_transform);
+    // Camera point of view
+    glm::mat4x4 wvp = game_camera->getProjectionMatrix() *
+                      game_camera->getViewMatrix() *
+                      world;
+    light_technique->setWVP(wvp);
 
-        point_lights[0].position = camera->position();
-        point_lights[0].calc_local_position(*world_transform);
+    // Light point of view
+    glm::mat4x4 light_wvp = spot_lights[1].getProjectionMatrix() *
+                            spot_lights[1].getViewMatrix() *
+                            world;
+    light_technique->setLightWVP(light_wvp);
 
-        technique->set_point_lights(1, point_lights);
-        technique->set_spot_lights(1, spot_lights);
+    // Setup directional light
+    //directional_light->calcLocalDirection(mesh.transformation());
+    //light_technique->setDirectionalLight(*directional_light);
 
-        technique->set_local_camera_pos(world_transform->invert(camera->position()));
+    light_technique->setLocalCameraPos(mesh.transformation().invert(game_camera->getPosition()));
 
-        technique->set_material(vase->material());
+    spot_lights[0].calcLocalDirectionPosition(mesh.transformation());
+    spot_lights[1].calcLocalDirectionPosition(mesh.transformation());
 
-        vase->render();
+    //light_technique->setPointLights(1, point_lights);
+    light_technique->setSpotLights(2, spot_lights);
+    light_technique->setMaterial(mesh.material());
 
-        window->swap_buffers();
+    mesh.render();
+}
+
+void lighting_pass(){
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0,0,win_width,win_height);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    light_technique->enable();
+
+    shadow_map.bind4reading(SHADOW_TEXTURE_UNIT);
+
+    static float delta = 0.01f;
+    static float counter = 0.0f;
+    counter += delta;
+
+    //world_transform->rotate(0.0f,delta * 100, 0.0f);
+    //world_transform->setTranslation(0.0f, -0.5f, 1.0f);
+
+    //if(counter >= 1.0f || counter <= 0.0f){
+    //    delta *= -1.0f;
+    //}
+
+    spot_lights[0].setDirection(game_camera->getDirection());
+    spot_lights[0].position = game_camera->getPosition();
+
+    spot_lights[1].position = glm::vec3(-sinf(counter), 1.0f, -cosf(counter));
+    spot_lights[1].setDirection(glm::normalize(glm::vec3(-0.1, 0, 0) - spot_lights[1].position));
+
+    game_camera->setPosition(spot_lights[1].position);
+    game_camera->setDirection(spot_lights[1].direction());
+
+    game_camera->createView();
+
+    //std::cout << "Light pos: " << glm::to_string(spot_lights[1].position) << std::endl;
+    //std::cout << "Light dir: " << glm::to_string(spot_lights[1].direction()) << std::endl;
+
+    //std::cout << "Camera pos: " << glm::to_string(game_camera->getPosition()) << std::endl;
+    //std::cout << "Camera dir: " << glm::to_string(game_camera->getDirection()) << std::endl;
+
+
+    render_mesh(*cat1);
+    render_mesh(*cat2);
+    render_mesh(*terrain);
+}
+
+void render(){
+    while(!window->shouldClose()){
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        shadow_pass();
+        lighting_pass();
+        window->swapBuffers();
         glfwPollEvents();
     }
 }
@@ -116,60 +183,80 @@ int main(){
     if (!glfwInit())
         return -1;
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
     try {
-
         try {
             window = new Window("Howdy World");
-        } catch (window_exception &we){
+        } catch (windowException &we){
             fprintf(stderr, "%s", we.what());
             exit(-1);
         }
 
-        window->set_key_callback(key_callback);
-        window->make_current_context();
-        window->disable_cursor();
+        window->setKeyCallback(key_callback);
+        window->makeCurrentContext();
+        window->disableCursor();
+        std::tie(win_width, win_height) = window->getSize();
 
         init_gl();
 
-        vase = new Mesh();
-        vase->load_mesh("meshes/wine_barrel.obj");
+        shadow_map.init(SHADOW_WIDTH, SHADOW_HEIGHT);
 
-        technique = new LightingTechnique();
-        technique->init();
-        technique->enable();
-        technique->set_diffuse_texture_unit(COLOR_TEXTURE_UNIT_INDEX);
-        technique->set_specular_texture_unit(SPECULAR_EXPONENT_UNIT_INDEX);
+        terrain = new Mesh();
+        terrain->loadMesh("meshes/dry_sand_terrain.glb");
+        cat1 = new Mesh();
+        cat1->loadMesh("meshes/concrete_cat.obj");
+        cat2 = new Mesh();
+        cat2->loadMesh("meshes/concrete_cat.obj");
+
+        cat1->transformation().setTranslation(-0.2, 0.0, 0.0);
+
+        light_technique = new LightingShader();
+        light_technique->init();
+        light_technique->enable();
+        light_technique->setDiffuseTextureUnit(COLOR_TEXTURE_UNIT_INDEX);
+        light_technique->setSpecularTextureUnit(SPECULAR_EXPONENT_UNIT_INDEX);
+        light_technique->setShadowTextureUnit(SHADOW_TEXTURE_UNIT_INDEX);
+
+        shadow_technique.init();
 
         world_transform = new Transformation();
-        camera = new Camera(60.0f, window->get_ratio(), 0.01f, 100.0f);
-        window->set_mouse_callback([](GLFWwindow*, double x, double y){camera->mouse_event(x,y);});
+        game_camera = new GameCamera(60.0f, window->getRatio(), 0.01f, 100.0f);
+        window->setMouseCallback([](GLFWwindow *, double x, double y) { game_camera->handleMouseEvent(x, y); });
 
         directional_light = new DirectionalLight();
-        directional_light->ambient_intensity = 0.1f;
-        directional_light->diffuse_intensity = 1.0f;
+        directional_light->ambientIntensity = 0.1f;
+        directional_light->diffuseIntensity = 1.0f;
         directional_light->direction = glm::vec3(1.0f, 0.0f, 0.0f);
 
-        spot_lights[0].diffuse_intensity = 20.0f;
+        spot_lights[0].diffuseIntensity = 1.0f;
         spot_lights[0].color = glm::vec3(1.0f, 1.0f, 1.0f);
-        spot_lights[0].attenuation.linear = 10.0f;
+        spot_lights[0].attenuation.linear = 0.2f;
         spot_lights[0].angle = 30.0f;
 
-        point_lights[0].diffuse_intensity = 0.0f;
+        spot_lights[1].diffuseIntensity = 1.0f;
+        spot_lights[1].color = glm::vec3(1.0f, 1.0f, 1.0f);
+        spot_lights[1].attenuation.linear = 0.2f;
+        //spot_lights[1].attenuation.exp = 0.2;
+        spot_lights[1].angle = 50.0f;
+
+        point_lights[0].diffuseIntensity = 0.0f;
         point_lights[0].color = glm::vec3(1.0f, 1.0f, 1.0f);
         point_lights[0].attenuation.linear = 10.0f;
 
-        main_loop();
-    } catch(tectonic_exception& te){
+        render();
+    } catch(tectonicException& te){
         fprintf(stderr, "%s", te.what());
     }
     delete(window);
     glfwTerminate();
     delete(world_transform);
-    delete(camera);
+    delete(game_camera);
     delete(directional_light);
+    delete(cat1);
+    delete(cat2);
+    delete(terrain);
     return 0;
 }

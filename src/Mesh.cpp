@@ -1,5 +1,6 @@
 #include <iostream>
 #include "Mesh.h"
+
 #include "utils.h"
 
 #define POSITION_LOCATION   0
@@ -10,74 +11,106 @@ Mesh::~Mesh() {
     clear();
 }
 
-void Mesh::load_mesh(const std::string &filename) {
-    // Clear previous vase
+void Mesh::loadMesh(const std::string &filename) {
+    // Clear previous cat1
     clear();
 
     // Create VAO
-    glGenVertexArrays(1, &_vao);
-    EmpheralBindVAO bind(_vao);
+    glGenVertexArrays(1, &m_vao);
+    Utils::EphemeralVAOBind bind(m_vao);
 
     // Create buffers for vertices
-    glGenBuffers(ARRAY_SIZE(_buffers), _buffers);
+    glGenBuffers(ARRAY_SIZE(m_buffers), m_buffers);
 
-    const aiScene* scene = _importer.ReadFile(filename.c_str(), ASSIMP_FLAGS);
+    const aiScene* scene = m_importer.ReadFile(filename.c_str(), ASSIMP_FLAGS);
     if(scene){
-        init_from_scene(scene, filename);
+        initFromScene(scene, filename);
     }else{
-        throw mesh_exception("Unable to parse file ", filename);
+        throw meshException("Unable to parse file ", filename);
     }
 }
 
-void Mesh::init_from_scene(const aiScene *scene, const std::string &filename) {
-    _meshes.resize(scene->mNumMeshes);
-    _materials.resize(scene->mNumMaterials);
+void Mesh::render() {
+    // Binding VAO for render
+    Utils::EphemeralVAOBind bind(m_vao);
+    for(const auto& mesh : m_meshes){
+        uint32_t material_index = mesh.materialIndex;
 
-    init_meshes_indexes(scene);
-    init_all_meshes(scene);
-    init_materials(scene, filename);
+        assert(material_index < m_materials.size());
 
-    buffer_data();
+        if(m_materials[material_index].diffuse){
+            m_materials[material_index].diffuse->bind(COLOR_TEXTURE_UNIT);
+        }
+        if(m_materials[material_index].specularExp){
+            m_materials[material_index].specularExp->bind(SPECULAR_EXPONENT_UNIT);
+        }
+
+        glDrawElementsBaseVertex(GL_TRIANGLES,
+                                 static_cast<GLsizei>(mesh.indicesCount),
+                                 GL_UNSIGNED_INT,
+                                 (void*)(sizeof(mesh.baseIndex) * mesh.baseIndex),
+                                 static_cast<GLsizei>(mesh.baseVertex));
+    }
+}
+
+Material Mesh::material() {
+    for(const auto& material : m_materials){
+        if(material.ambientColor != glm::vec3(0.0f, 0.0f, 0.0f)){
+            return material;
+        }
+    }
+    return Material({glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f)});
+}
+
+void Mesh::initFromScene(const aiScene *scene, const std::string &filename) {
+    m_meshes.resize(scene->mNumMeshes);
+    m_materials.resize(scene->mNumMaterials);
+
+    initMeshesIndexes(scene);
+    initAllMeshes(scene);
+    initMaterials(scene, filename);
+
+    bufferData();
 }
 
 void Mesh::clear(){
     {
-        EmpheralBindVAO bind(_vao);
+        Utils::EphemeralVAOBind bind(m_vao);
 
         // Delete OpenGL buffers
-        glDeleteBuffers(1, &_buffers[POS_VB]);
-        glDeleteBuffers(1, &_buffers[TEXCOORD_VB]);
-        glDeleteBuffers(1, &_buffers[NORMAL_VB]);
-        glDeleteBuffers(1, &_buffers[INDEX_BUFFER]);
+        glDeleteBuffers(1, &m_buffers[POS_VB]);
+        glDeleteBuffers(1, &m_buffers[TEXCOORD_VB]);
+        glDeleteBuffers(1, &m_buffers[NORMAL_VB]);
+        glDeleteBuffers(1, &m_buffers[INDEX_BUFFER]);
     }
 
     // Delete VAO
-    glDeleteVertexArrays(1, &_vao);
+    glDeleteVertexArrays(1, &m_vao);
 }
 
-void Mesh::init_meshes_indexes(const aiScene *scene) {
+void Mesh::initMeshesIndexes(const aiScene *scene) {
     uint32_t c_vertices = 0, c_indices = 0;
 
     // Init indexes to vertices and indices
-    for(uint32_t i = 0; i < _meshes.size(); i++){
-        _meshes[i].material_index = scene->mMeshes[i]->mMaterialIndex;
-        _meshes[i].indices_count  = scene->mMeshes[i]->mNumFaces*3;
-        _meshes[i].base_vertex    = c_vertices;
-        _meshes[i].base_index     = c_indices;
+    for(uint32_t i = 0; i < m_meshes.size(); i++){
+        m_meshes[i].materialIndex = scene->mMeshes[i]->mMaterialIndex;
+        m_meshes[i].indicesCount  = scene->mMeshes[i]->mNumFaces * 3;
+        m_meshes[i].baseVertex    = c_vertices;
+        m_meshes[i].baseIndex     = c_indices;
 
         c_vertices += scene->mMeshes[i]->mNumVertices;
-        c_indices  += _meshes[i].indices_count;
+        c_indices  += m_meshes[i].indicesCount;
     }
 }
 
-void Mesh::init_all_meshes(const aiScene *scene) {
-    for(uint32_t i = 0; i < _meshes.size(); i++){
+void Mesh::initAllMeshes(const aiScene *scene) {
+    for(uint32_t i = 0; i < m_meshes.size(); i++){
         const aiMesh* mesh = scene->mMeshes[i];
-        init_single_mesh(mesh);
+        initSingleMesh(mesh);
     }
 }
 
-void Mesh::init_single_mesh(const aiMesh *mesh) {
+void Mesh::initSingleMesh(const aiMesh *mesh) {
     const aiVector3D zero3D(0.0f, 0.0f, 0.0f);
 
     // Init vertices
@@ -86,22 +119,22 @@ void Mesh::init_single_mesh(const aiMesh *mesh) {
         const aiVector3D& normal    = mesh->mNormals[i];
         const aiVector3D& tex_coord = mesh->HasTextureCoords(0) ? mesh->mTextureCoords[0][i] : zero3D;
 
-        _positions.emplace_back(pos.x, pos.y, pos.z);
-        _normals.emplace_back(normal.x, normal.y, normal.z);
-        _tex_coords.emplace_back(tex_coord.x, tex_coord.y);
+        m_positions.emplace_back(pos.x, pos.y, pos.z);
+        m_normals.emplace_back(normal.x, normal.y, normal.z);
+        m_texCoords.emplace_back(tex_coord.x, tex_coord.y);
     }
 
     // Init indices
     for(uint32_t i = 0; i < mesh->mNumFaces; i++){
         const aiFace& face = mesh->mFaces[i];
         assert(face.mNumIndices == 3);
-        _indices.emplace_back(face.mIndices[0]);
-        _indices.emplace_back(face.mIndices[1]);
-        _indices.emplace_back(face.mIndices[2]);
+        m_indices.emplace_back(face.mIndices[0]);
+        m_indices.emplace_back(face.mIndices[1]);
+        m_indices.emplace_back(face.mIndices[2]);
     }
 }
 
-void Mesh::init_materials(const aiScene *scene, const std::string &filename) {
+void Mesh::initMaterials(const aiScene *scene, const std::string &filename) {
     std::string::size_type slash_index = filename.find_last_of('/');
     std::string dir;
 
@@ -115,77 +148,45 @@ void Mesh::init_materials(const aiScene *scene, const std::string &filename) {
 
     for(uint32_t i = 0; i < scene->mNumMaterials; i++){
         const aiMaterial* material = scene->mMaterials[i];
-        load_textures(dir, material, i, scene);
-        load_colors(material, i);
+        loadTextures(dir, material, i, scene);
+        loadColors(material, i);
     }
 }
 
-void Mesh::buffer_data() {
+void Mesh::bufferData() {
     // Buffers for vertices
-    glBindBuffer(GL_ARRAY_BUFFER, _buffers[POS_VB]);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(_positions[0]) * _positions.size()), &_positions[0], GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, m_buffers[POS_VB]);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(m_positions[0]) * m_positions.size()), &m_positions[0], GL_STATIC_DRAW);
     glEnableVertexAttribArray(POSITION_LOCATION);
     glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
 
     // Buffers for texture coordinates
-    glBindBuffer(GL_ARRAY_BUFFER, _buffers[TEXCOORD_VB]);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(_tex_coords[0]) * _tex_coords.size()), &_tex_coords[0], GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, m_buffers[TEXCOORD_VB]);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(m_texCoords[0]) * m_texCoords.size()), &m_texCoords[0], GL_STATIC_DRAW);
     glEnableVertexAttribArray(TEX_COORD_LOCATION);
     glVertexAttribPointer(TEX_COORD_LOCATION, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
 
     // Buffers for normals
-    glBindBuffer(GL_ARRAY_BUFFER, _buffers[NORMAL_VB]);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(_normals[0]) * _normals.size()), &_normals[0], GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, m_buffers[NORMAL_VB]);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(m_normals[0]) * m_normals.size()), &m_normals[0], GL_STATIC_DRAW);
     glEnableVertexAttribArray(NORMAL_LOCATION);
     glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
 
     // Buffers for indices
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _buffers[INDEX_BUFFER]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(_indices[0]) * _indices.size()), &_indices[0], GL_STATIC_DRAW);
-}
-
-void Mesh::render() {
-    // Binding VAO for render
-    EmpheralBindVAO bind(_vao);
-    for(const auto& mesh : _meshes){
-        uint32_t material_index = mesh.material_index;
-
-        assert(material_index < _materials.size());
-
-        if(_materials[material_index].diffuse){
-            _materials[material_index].diffuse->bind(COLOR_TEXTURE_UNIT);
-        }
-        if(_materials[material_index].specular_exponent){
-            _materials[material_index].specular_exponent->bind(SPECULAR_EXPONENT_UNIT);
-        }
-
-        glDrawElementsBaseVertex(GL_TRIANGLES,
-                                 static_cast<GLsizei>(mesh.indices_count),
-                                 GL_UNSIGNED_INT,
-                                 (void*)(sizeof(mesh.base_index) * mesh.base_index),
-                                 static_cast<GLsizei>(mesh.base_vertex));
-    }
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_buffers[INDEX_BUFFER]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(m_indices[0]) * m_indices.size()), &m_indices[0], GL_STATIC_DRAW);
 }
 
 Transformation& Mesh::transformation() {
-    return _transformation;
+    return m_transformation;
 }
 
-Material Mesh::material() {
-    for(const auto& material : _materials){
-        if(material.ambient_color != glm::vec3(0.0f, 0.0f, 0.0f)){
-            return material;
-        }
-    }
-    return Material({glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f)});
+void Mesh::loadTextures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
+    loadDiffuseTexture(dir, material, index, scene);
+    loadSpecularTexture(dir, material, index, scene);
 }
 
-void Mesh::load_textures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
-    load_diffuse_texture(dir, material, index, scene);
-    load_specular_texture(dir, material, index, scene);
-}
-
-void Mesh::load_diffuse_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
+void Mesh::loadDiffuseTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
     if(material->GetTextureCount(aiTextureType_DIFFUSE) > 0){
         aiString path;
         if(material->GetTexture(aiTextureType_DIFFUSE, 0, &path, nullptr, nullptr, nullptr, nullptr, nullptr) == AI_SUCCESS){
@@ -195,9 +196,9 @@ void Mesh::load_diffuse_texture(const std::string &dir, const aiMaterial *materi
                 std::string hint = texture->achFormatHint;
                 if(hint == "png" || hint == "jpg"){
                     if(texture->mHeight == 0) {
-                        _materials[index].diffuse = new Texture(GL_TEXTURE_2D, (u_char *) texture->pcData,
-                                                                texture->mWidth, 3);
-                        _materials[index].diffuse->load();
+                        m_materials[index].diffuse = new Texture(GL_TEXTURE_2D, (u_char *) texture->pcData,
+                                                                 texture->mWidth, 3);
+                        //m_materials[index].diffuse->load();
                     }
                 }
             }else{
@@ -206,14 +207,13 @@ void Mesh::load_diffuse_texture(const std::string &dir, const aiMaterial *materi
                 }
                 std::string fullpath;
                 fullpath.append(dir).append("/").append(p);
-                _materials[index].diffuse = new Texture(GL_TEXTURE_2D, fullpath);
-                _materials[index].diffuse->load();
+                m_materials[index].diffuse = new Texture(GL_TEXTURE_2D, fullpath);
             }
         }
     }
 }
 
-void Mesh::load_specular_texture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
+void Mesh::loadSpecularTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene) {
     if(material->GetTextureCount(aiTextureType_SHININESS) > 0){
         aiString path;
         if(material->GetTexture(aiTextureType_SHININESS, 0, &path, nullptr, nullptr, nullptr, nullptr, nullptr) == AI_SUCCESS){
@@ -223,8 +223,7 @@ void Mesh::load_specular_texture(const std::string &dir, const aiMaterial *mater
                 std::string hint = texture->achFormatHint;
                 if(hint == "png" || hint == "jpg"){
                     if(texture->mHeight == 0){
-                        _materials[index].specular_exponent = new Texture(GL_TEXTURE_2D, (u_char*)texture->pcData, texture->mWidth, 1);
-                        _materials[index].specular_exponent->load();
+                        m_materials[index].specularExp = new Texture(GL_TEXTURE_2D, (u_char*)texture->pcData, texture->mWidth, 1);
                     }
                 }
             }else {
@@ -233,35 +232,31 @@ void Mesh::load_specular_texture(const std::string &dir, const aiMaterial *mater
                 }
                 std::string fullpath;
                 fullpath.append(dir).append("/").append(p);
-                _materials[index].specular_exponent = new Texture(GL_TEXTURE_2D, fullpath);
-                _materials[index].specular_exponent->load();
+                m_materials[index].specularExp = new Texture(GL_TEXTURE_2D, fullpath);
             }
         }
     }
 }
 
-void Mesh::load_colors(const aiMaterial *material, uint32_t index) {
+void Mesh::loadColors(const aiMaterial *material, uint32_t index) {
     aiColor3D ambient_color(0.0f, 0.0f, 0.0f);
     if(material->Get(AI_MATKEY_COLOR_AMBIENT, ambient_color) == AI_SUCCESS){
-        printf("Loaded ambient color [%f | %f | %f]\n", ambient_color.r, ambient_color.g, ambient_color.b);
-        _materials[index].ambient_color.r = ambient_color.r;
-        _materials[index].ambient_color.g = ambient_color.g;
-        _materials[index].ambient_color.b = ambient_color.b;
+        m_materials[index].ambientColor.r = ambient_color.r;
+        m_materials[index].ambientColor.g = ambient_color.g;
+        m_materials[index].ambientColor.b = ambient_color.b;
     }
 
     aiColor3D diffuse_color(0.0f, 0.0f, 0.0f);
     if(material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse_color) == AI_SUCCESS){
-        printf("Loaded diffuse color [%f | %f | %f]\n", diffuse_color.r, diffuse_color.g, diffuse_color.b);
-        _materials[index].diffuse_color.r = diffuse_color.r;
-        _materials[index].diffuse_color.g = diffuse_color.g;
-        _materials[index].diffuse_color.b = diffuse_color.b;
+        m_materials[index].diffuseColor.r = diffuse_color.r;
+        m_materials[index].diffuseColor.g = diffuse_color.g;
+        m_materials[index].diffuseColor.b = diffuse_color.b;
     }
 
     aiColor3D specular_color(0.0f, 0.0f, 0.0f);
     if(material->Get(AI_MATKEY_COLOR_SPECULAR, specular_color) == AI_SUCCESS){
-        printf("Loaded specular color [%f | %f | %f]\n", specular_color.r, specular_color.g, specular_color.b);
-        _materials[index].specular_color.r = specular_color.r;
-        _materials[index].specular_color.g = specular_color.g;
-        _materials[index].specular_color.b = specular_color.b;
+        m_materials[index].specularColor.r = specular_color.r;
+        m_materials[index].specularColor.g = specular_color.g;
+        m_materials[index].specularColor.b = specular_color.b;
     }
 }

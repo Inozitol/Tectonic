@@ -5,14 +5,14 @@
 #include <utility>
 #include <cstdarg>
 
-class tectonic_exception : public std::exception{
+class tectonicException : public std::exception{
 public:
     template<typename T>
-    explicit tectonic_exception(T str){
+    explicit tectonicException(T str){
         _msg.append(str);
     }
     template<typename T, typename ...Types>
-    explicit tectonic_exception(T str, Types... rest){
+    explicit tectonicException(T str, Types... rest){
         _msg.append(str);
         load_rest(rest...);
     }
@@ -34,27 +34,33 @@ private:
     std::string _msg;
 };
 
-class window_exception : public tectonic_exception {
+class windowException : public tectonicException {
 public:
     template<typename ...T>
-    explicit window_exception(T... args) : tectonic_exception(args...){}
+    explicit windowException(T... args) : tectonicException(args...){}
 };
 
-class texture_exception : public tectonic_exception {
+class textureException : public tectonicException {
 public:
     template<typename ...T>
-    explicit texture_exception(T... args) : tectonic_exception(args...) {};
+    explicit textureException(T... args) : tectonicException(args...) {};
 };
 
-class mesh_exception : public tectonic_exception {
+class meshException : public tectonicException {
 public:
     template<typename ...T>
-    explicit mesh_exception(T... args) : tectonic_exception(args...){}
+    explicit meshException(T... args) : tectonicException(args...){}
 };
 
-class technique_exception : public tectonic_exception {
+class shaderException : public tectonicException {
 public:
     template<typename ...T>
-    explicit technique_exception(T... args) : tectonic_exception(args...){}
+    explicit shaderException(T... args) : tectonicException(args...){}
+};
+
+class shadowMapException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit shadowMapException(T... args) : tectonicException(args...){}
 };
 #endif //TECTONIC_EXCEPTIONS_H

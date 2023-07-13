@@ -3,65 +3,59 @@
 #include <utility>
 #include <GL/gl.h>
 #include "Texture.h"
-#include "stb_image.h"
+#include "extern/stb_image.h"
 
 Texture::Texture(GLenum tex_target, std::string  file_name)
-:_tex_target(tex_target), _file_name(std::move(file_name)){}
+: m_texTarget(tex_target), m_fileName(std::move(file_name)){
+    int width = 0, height = 0, bpp = 0;
+    u_char* image_data = stbi_load(m_fileName.c_str(), &width, &height, &bpp, 0);
+    if(!image_data){
+        throw textureException("Unable to load texture [", m_fileName, "]");
+    }
+    std::cout << "Loaded texture [" << m_fileName << "]" << std::endl;
+    loadData(image_data, width, height, bpp);
+    stbi_image_free(image_data);
+}
 
-Texture::Texture(GLenum tex_target, u_char *data, uint32_t length, uint8_t channels) :_tex_target(tex_target) {
+Texture::Texture(GLenum tex_target, u_char *data, int32_t length, uint8_t channels) : m_texTarget(tex_target) {
     int x=0,y=0,bpp=0;
     u_char* image_data = stbi_load_from_memory(data, length, &x, &y, &bpp, channels);
     if(!image_data){
-        throw texture_exception("Unable to load texture from memory");
+        throw textureException("Unable to load texture from memory");
     }
-    load_data(image_data, x, y, bpp);
+    loadData(image_data, x, y, bpp);
     stbi_image_free(image_data);
 }
 
-void Texture::load() {
-    //stbi_set_flip_vertically_on_load(1);
-    int width = 0, height = 0, bpp = 0;
-    u_char* image_data = stbi_load(_file_name.c_str(), &width, &height, &bpp, 0);
-    if(!image_data){
-        throw texture_exception("Unable to load texture [", _file_name, "]");
-    }
-
-    std::cout << "Loaded texture [" << _file_name << "]" << std::endl;
-
-    load_data(image_data, width, height, bpp);
-
-    stbi_image_free(image_data);
-}
-
-void Texture::load_data(u_char* image_data, int width, int height, int bpp) {
-    glGenTextures(1, &_tex_object);
-    glBindTexture(_tex_target, _tex_object);
-    if(_tex_target == GL_TEXTURE_2D){
+void Texture::loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp) {
+    glGenTextures(1, &m_texObject);
+    glBindTexture(m_texTarget, m_texObject);
+    if(m_texTarget == GL_TEXTURE_2D){
         switch(bpp){
             case 1:
-                glTexImage2D(_tex_target, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, image_data);
+                glTexImage2D(m_texTarget, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data);
                 break;
             case 3:
             case 4:
-                glTexImage2D(_tex_target, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image_data);
+                glTexImage2D(m_texTarget, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
                 break;
             default:
-                throw texture_exception("Texture type not implemented");
+                throw textureException("Texture type not implemented");
         }
     }else{
-        throw texture_exception("Support for texture target is not implemented");
+        throw textureException("Support for texture target is not implemented");
     }
 
-    glTexParameterf(_tex_target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(_tex_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(_tex_target, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameterf(_tex_target, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glTexParameterf(m_texTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameterf(m_texTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameterf(m_texTarget, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameterf(m_texTarget, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-    glBindTexture(_tex_target, 0);
+    glBindTexture(m_texTarget, 0);
 }
 
 void Texture::bind(GLenum tex_unit) const {
     glActiveTexture(tex_unit);
-    glBindTexture(_tex_target, _tex_object);
+    glBindTexture(m_texTarget, m_texObject);
 }
 
