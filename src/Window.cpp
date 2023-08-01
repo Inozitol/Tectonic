@@ -38,7 +38,7 @@ void Window::setMouseCallback(void (*callback)(GLFWwindow *, double, double)) {
     glfwSetCursorPosCallback(m_window, callback);
 }
 
-std::tuple<int, int> Window::getSize() {
+std::pair<int32_t, int32_t> Window::getSize() {
     int width, height;
     glfwGetWindowSize(m_window, &width, &height);
     return {width, height};

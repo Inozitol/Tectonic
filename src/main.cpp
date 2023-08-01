@@ -5,38 +5,77 @@
 #include <glm/glm.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtx/string_cast.hpp>
-#include <iostream>
 
 #include "exceptions.h"
-#include "TextureDefines.h"
+#include "defs/TextureDefs.h"
 
 #include "Window.h"
 #include "Transformation.h"
-#include "GameCamera.h"
+#include "camera/GameCamera.h"
 #include "Mesh.h"
-#include "LightingShader.h"
-#include "ShadowMapFBO.h"
-#include "ShadowMapShader.h"
-#include "ShaderDefines.h"
+#include "shader/LightingShader.h"
+#include "shader/shadow/ShadowMapFBO.h"
+#include "shader/shadow/ShadowCubeMapFBO.h"
+#include "shader/shadow/ShadowMapShader.h"
+#include "defs/ShaderDefines.h"
+#include "Terrain.h"
+#include "Scene.h"
 
 Window* window;
 
-Transformation* world_transform;
-GameCamera* game_camera = nullptr;
-Mesh* cat1 = nullptr;
-Mesh* cat2 = nullptr;
-Mesh* terrain = nullptr;
-LightingShader* light_technique = nullptr;
-DirectionalLight* directional_light = nullptr;
-PointLight point_lights[MAX_POINT_LIGHTS];
-SpotLight spot_lights[MAX_SPOT_LIGHTS];
-ShadowMapFBO shadow_map;
-ShadowMapShader shadow_technique;
+Scene g_catScene;
+Scene::objectIndex_t cat1_i;
+Scene::objectIndex_t cat2_i;
+Scene::objectIndex_t terrain_i;
+
 
 int win_width, win_height;
 
 void err_callback(int, const char* msg){
     fprintf(stderr, "Error: %s\n", msg);
+}
+
+void GLAPIENTRY
+MessageCallback( GLenum source,
+                 GLenum type,
+                 GLuint id,
+                 GLenum severity,
+                 GLsizei length,
+                 const GLchar* message,
+                 const void* userParam )
+{
+    switch(severity){
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+        case GL_DEBUG_SEVERITY_LOW:
+            break;
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = MEDIUM, message = %s\n",
+                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
+                     type, message );
+            break;
+        case GL_DEBUG_SEVERITY_HIGH:
+            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = HIGH, message = %s\n",
+                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
+                     type, message );
+            break;
+        default:
+            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = UNKNOWN, message = %s\n",
+                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
+                     type, message );
+            break;
+    }
+}
+
+void switchPolygonMode(){
+    static bool isFill = true;
+
+    isFill = !isFill;
+
+    if(isFill){
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }else{
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
 }
 
 void key_callback(GLFWwindow* win, int key, int scancode, int action, int mods){
@@ -52,9 +91,16 @@ void key_callback(GLFWwindow* win, int key, int scancode, int action, int mods){
                 case GLFW_KEY_D:
                 case GLFW_KEY_SPACE:
                 case GLFW_KEY_C:
-                    game_camera->handleKeyEvent(key);
+                    g_catScene.handleKeyEvent(key);
                     break;
                 default:
+                    break;
+                case GLFW_KEY_X:
+                    g_catScene.getGameCamera()->toggleProjection();
+                    g_catScene.getGameCamera()->createProjectionMatrix();
+                    break;
+                case GLFW_KEY_Z:
+                    switchPolygonMode();
                     break;
             }
             break;
@@ -66,116 +112,141 @@ void key_callback(GLFWwindow* win, int key, int scancode, int action, int mods){
 void init_gl(){
     gladLoadGL();
     glfwSwapInterval(1);
+
+    // Enable culling
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
+
+    // Enable depth buffer
     glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    // Enable error callback
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(MessageCallback, nullptr);
 }
 
-void shadow_pass(){
-    shadow_map.bind4writing();
-    glClear(GL_DEPTH_BUFFER_BIT);
-
-    shadow_technique.enable();
-
-    spot_lights[1].createViewMatrix();
-
-    glm::mat4x4 world = cat1->transformation().getMatrix();
-    glm::mat4x4 wvp = spot_lights[1].getProjectionMatrix() *
-                      spot_lights[1].getViewMatrix() *
-                      world;
-    shadow_technique.setWVP(wvp);
-    cat1->render();
-
-    world = cat2->transformation().getMatrix();
-    wvp = spot_lights[1].getProjectionMatrix() *
-          spot_lights[1].getViewMatrix() *
-          world;
-    shadow_technique.setWVP(wvp);
-    cat2->render();
-}
-
-void render_mesh(Mesh& mesh){
-    glm::mat4x4 world = mesh.transformation().getMatrix();
-
-    // Camera point of view
-    glm::mat4x4 wvp = game_camera->getProjectionMatrix() *
-                      game_camera->getViewMatrix() *
-                      world;
-    light_technique->setWVP(wvp);
-
-    // Light point of view
-    glm::mat4x4 light_wvp = spot_lights[1].getProjectionMatrix() *
-                            spot_lights[1].getViewMatrix() *
-                            world;
-    light_technique->setLightWVP(light_wvp);
-
-    // Setup directional light
-    //directional_light->calcLocalDirection(mesh.transformation());
-    //light_technique->setDirectionalLight(*directional_light);
-
-    light_technique->setLocalCameraPos(mesh.transformation().invert(game_camera->getPosition()));
-
-    spot_lights[0].calcLocalDirectionPosition(mesh.transformation());
-    spot_lights[1].calcLocalDirectionPosition(mesh.transformation());
-
-    //light_technique->setPointLights(1, point_lights);
-    light_technique->setSpotLights(2, spot_lights);
-    light_technique->setMaterial(mesh.material());
-
-    mesh.render();
-}
-
-void lighting_pass(){
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0,0,win_width,win_height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    light_technique->enable();
-
-    shadow_map.bind4reading(SHADOW_TEXTURE_UNIT);
-
-    static float delta = 0.01f;
-    static float counter = 0.0f;
-    counter += delta;
-
-    //world_transform->rotate(0.0f,delta * 100, 0.0f);
-    //world_transform->setTranslation(0.0f, -0.5f, 1.0f);
-
-    //if(counter >= 1.0f || counter <= 0.0f){
-    //    delta *= -1.0f;
-    //}
-
-    spot_lights[0].setDirection(game_camera->getDirection());
-    spot_lights[0].position = game_camera->getPosition();
-
-    spot_lights[1].position = glm::vec3(-sinf(counter), 1.0f, -cosf(counter));
-    spot_lights[1].setDirection(glm::normalize(glm::vec3(-0.1, 0, 0) - spot_lights[1].position));
-
-    game_camera->setPosition(spot_lights[1].position);
-    game_camera->setDirection(spot_lights[1].direction());
-
-    game_camera->createView();
-
-    //std::cout << "Light pos: " << glm::to_string(spot_lights[1].position) << std::endl;
-    //std::cout << "Light dir: " << glm::to_string(spot_lights[1].direction()) << std::endl;
-
-    //std::cout << "Camera pos: " << glm::to_string(game_camera->getPosition()) << std::endl;
-    //std::cout << "Camera dir: " << glm::to_string(game_camera->getDirection()) << std::endl;
-
-
-    render_mesh(*cat1);
-    render_mesh(*cat2);
-    render_mesh(*terrain);
-}
-
-void render(){
+void render_loop(){
     while(!window->shouldClose()){
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        shadow_pass();
-        lighting_pass();
+        static float delta = 0.01f;
+        static float counter = 0.0f;
+        counter += delta;
+
+        static glm::vec3 circleCoefs = {0.0f, 0.5f, 0.0f};
+        circleCoefs.x = -sinf(counter);
+        circleCoefs.z = -cosf(counter);
+
+        //directional_light->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
+        g_catScene.getDirectionalLight()->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
+
+        //g_catScene.getSpotLight(0)->setWorldPosition(circleCoefs);
+        //g_catScene.getSpotLight(0)->setDirection(glm::normalize(glm::vec3(0.0, 0.0, 0.0) - circleCoefs));
+
+        //cat1->transformation().setTranslation(counter, 0.0f, 0.0f);
+        //g_catScene.getObject(cat1_i).setTranslation(0.0f, 0.0f, counter);
+
+        //point_lights[0].setWorldPosition(circleCoefs);
+        //point_lights[0].setWorldPosition(g_gameCamera->getPosition());
+
+        //g_gameCamera->setWorldPosition(spot_lights[1].getWorldPosition());
+        //g_gameCamera->setDirection(spot_lights[1].getDirection());
+
+        g_catScene.renderScene();
+
         window->swapBuffers();
         glfwPollEvents();
     }
+}
+
+void initCatScene(){
+    std::shared_ptr<LightingShader> lightingShader(new LightingShader);
+    std::shared_ptr<ShadowMapShader> shadowShader(new ShadowMapShader);
+    std::shared_ptr<ShadowMapFBO> shadowMapFBO(new ShadowMapFBO);
+    std::shared_ptr<ShadowCubeMapFBO> shadowCubeMapFBO(new ShadowCubeMapFBO);
+
+    lightingShader->init();
+    lightingShader->enable();
+    lightingShader->setDiffuseTextureUnit(COLOR_TEXTURE_UNIT_INDEX);
+    lightingShader->setSpecularTextureUnit(SPECULAR_EXPONENT_UNIT_INDEX);
+    lightingShader->setShadowMapTextureUnit(SHADOW_TEXTURE_UNIT_INDEX);
+    lightingShader->setShadowCubeMapTextureUnit(SHADOW_CUBE_MAP_TEXTURE_UNIT_INDEX);
+
+    shadowShader->init();
+
+    shadowMapFBO->init(SHADOW_WIDTH, SHADOW_HEIGHT);
+
+    shadowCubeMapFBO->init(1000);
+
+    g_catScene.setLightingShader(lightingShader);
+    g_catScene.setShadowShader(shadowShader);
+    g_catScene.setShadowMapFBO(shadowMapFBO);
+    g_catScene.setShadowCubeMapFBO(shadowCubeMapFBO);
+
+    std::shared_ptr<Mesh> catMesh(new Mesh);
+    std::shared_ptr<Terrain> terrainMesh(new Terrain);
+    catMesh->loadMesh("meshes/concrete_cat.obj");
+    terrainMesh->createTerrain(50,50,"meshes/textures/bricks.jpg");
+    Scene::meshIndex_t catMesh_i = g_catScene.insertMesh(catMesh);
+    Scene::meshIndex_t terrainMesh_i = g_catScene.insertMesh(terrainMesh);
+
+    cat1_i = g_catScene.createObject(catMesh_i);
+    cat2_i = g_catScene.createObject(catMesh_i);
+    terrain_i = g_catScene.createObject(terrainMesh_i);
+
+    g_catScene.getObject(cat1_i).setTranslation(-0.2, 0.0, 0.0);
+    g_catScene.getObject(terrain_i).setTranslation(-25.0, 0.0, -25.0);
+
+    std::shared_ptr<GameCamera> gameCamera(new GameCamera);
+    gameCamera->switchPerspective();
+    gameCamera->setPerspectiveInfo({CAMERA_PPROJ_FOV,
+                                    window->getRatio(),
+                                    CAMERA_PPROJ_NEAR,
+                                    CAMERA_PPROJ_FAR});
+    gameCamera->setOrthographicInfo({SHADOW_OPROJ_LEFT,
+                                     SHADOW_OPROJ_RIGHT,
+                                     SHADOW_OPROJ_BOTTOM,
+                                     SHADOW_OPROJ_TOP,
+                                     SHADOW_OPROJ_NEAR,
+                                     SHADOW_OPROJ_FAR});
+    gameCamera->createProjectionMatrix();
+    gameCamera->setPosition({0.0f, 0.1, 0.5});
+    window->setMouseCallback([](GLFWwindow *, double x, double y) { g_catScene.handleMouseEvent(x, y); });
+    g_catScene.setGameCamera(gameCamera);
+
+    std::shared_ptr<DirectionalLight> directionalLight(new DirectionalLight);
+    directionalLight->ambientIntensity = 0.1f;
+    directionalLight->diffuseIntensity = 1.0f;
+    directionalLight->setDirection(glm::vec3(1.0f, 0.0f, 0.0f));
+
+    std::shared_ptr<SpotLight> spotLights[MAX_SPOT_LIGHTS];
+    spotLights[0] = std::make_shared<SpotLight>();
+    spotLights[0]->diffuseIntensity = 1.0f;
+    spotLights[0]->ambientIntensity = 0.0f;
+    spotLights[0]->color = glm::vec3(1.0f, 1.0f, 1.0f);
+    spotLights[0]->attenuation.linear = 0.2f;
+    spotLights[0]->angle = 30.0f;
+
+    spotLights[1] = std::make_shared<SpotLight>();
+    spotLights[1]->diffuseIntensity = 2.0f;
+    spotLights[1]->color = glm::vec3(1.0f, 1.0f, 1.0f);
+    spotLights[1]->attenuation.linear = 0.01f;
+    spotLights[1]->angle = 30.0f;
+    spotLights[1]->setWorldPosition({0.0f, 0.1, 0.5});
+    spotLights[1]->setDirection({0.0f, 0.0f, -1.0f});
+
+    std::shared_ptr<PointLight> pointLight(new PointLight);
+    pointLight->diffuseIntensity = 1.0f;
+    pointLight->color = {1.0f, 1.0f, 1.0f};
+    pointLight->attenuation.linear = 0.2;
+
+    g_catScene.insertDirectionalLight(directionalLight);
+    g_catScene.insertSpotLight(spotLights[0]);
+    //g_catScene.insertSpotLight(spotLights[1]);
+    //g_catScene.insertPointLight(pointLight);
+
+    g_catScene.setWindowDimension(window->getSize());
 }
 
 int main(){
@@ -184,9 +255,11 @@ int main(){
         return -1;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+
     try {
         try {
             window = new Window("Howdy World");
@@ -201,62 +274,13 @@ int main(){
         std::tie(win_width, win_height) = window->getSize();
 
         init_gl();
+        initCatScene();
 
-        shadow_map.init(SHADOW_WIDTH, SHADOW_HEIGHT);
-
-        terrain = new Mesh();
-        terrain->loadMesh("meshes/dry_sand_terrain.glb");
-        cat1 = new Mesh();
-        cat1->loadMesh("meshes/concrete_cat.obj");
-        cat2 = new Mesh();
-        cat2->loadMesh("meshes/concrete_cat.obj");
-
-        cat1->transformation().setTranslation(-0.2, 0.0, 0.0);
-
-        light_technique = new LightingShader();
-        light_technique->init();
-        light_technique->enable();
-        light_technique->setDiffuseTextureUnit(COLOR_TEXTURE_UNIT_INDEX);
-        light_technique->setSpecularTextureUnit(SPECULAR_EXPONENT_UNIT_INDEX);
-        light_technique->setShadowTextureUnit(SHADOW_TEXTURE_UNIT_INDEX);
-
-        shadow_technique.init();
-
-        world_transform = new Transformation();
-        game_camera = new GameCamera(60.0f, window->getRatio(), 0.01f, 100.0f);
-        window->setMouseCallback([](GLFWwindow *, double x, double y) { game_camera->handleMouseEvent(x, y); });
-
-        directional_light = new DirectionalLight();
-        directional_light->ambientIntensity = 0.1f;
-        directional_light->diffuseIntensity = 1.0f;
-        directional_light->direction = glm::vec3(1.0f, 0.0f, 0.0f);
-
-        spot_lights[0].diffuseIntensity = 1.0f;
-        spot_lights[0].color = glm::vec3(1.0f, 1.0f, 1.0f);
-        spot_lights[0].attenuation.linear = 0.2f;
-        spot_lights[0].angle = 30.0f;
-
-        spot_lights[1].diffuseIntensity = 1.0f;
-        spot_lights[1].color = glm::vec3(1.0f, 1.0f, 1.0f);
-        spot_lights[1].attenuation.linear = 0.2f;
-        //spot_lights[1].attenuation.exp = 0.2;
-        spot_lights[1].angle = 50.0f;
-
-        point_lights[0].diffuseIntensity = 0.0f;
-        point_lights[0].color = glm::vec3(1.0f, 1.0f, 1.0f);
-        point_lights[0].attenuation.linear = 10.0f;
-
-        render();
+        render_loop();
     } catch(tectonicException& te){
         fprintf(stderr, "%s", te.what());
     }
     delete(window);
     glfwTerminate();
-    delete(world_transform);
-    delete(game_camera);
-    delete(directional_light);
-    delete(cat1);
-    delete(cat2);
-    delete(terrain);
     return 0;
 }

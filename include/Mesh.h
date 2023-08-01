@@ -12,7 +12,7 @@
 #include "extern/glad/glad.h"
 
 #include "exceptions.h"
-#include "TextureDefines.h"
+#include "defs/TextureDefs.h"
 
 #include "Transformation.h"
 #include "Texture.h"
@@ -43,25 +43,15 @@ public:
     void render();
 
     /**
-     * Returns a reference to mesh transformation that's used to position it inside the world.
+     * Returns a reference to mesh transformation that's used to local_position it inside the world.
      * @return Reference to a transformation of the mesh.
      */
     Transformation& transformation();
 
     Material material();
 
-private:
+protected:
     void clear();
-    void initFromScene(const aiScene* scene, const std::string& filename);
-    void initMeshesIndexes(const aiScene *scene);
-    void initAllMeshes(const aiScene* scene);
-    void initSingleMesh(const aiMesh* mesh);
-    void initMaterials(const aiScene* scene, const std::string& filename);
-    void loadTextures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
-    void loadColors(const aiMaterial* material, uint32_t index);
-    void loadDiffuseTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
-    void
-    loadSpecularTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
     void bufferData();
 
     enum BUFFER_TYPE{
@@ -74,15 +64,15 @@ private:
         NUM_BUFFERS  = 6
     };
 
-    GLuint m_vao = 0;
-    GLuint m_buffers[NUM_BUFFERS] = {0};
-
     struct basicMeshEntry {
         uint32_t indicesCount  = 0;
         uint32_t baseVertex    = 0;
         uint32_t baseIndex     = 0;
         uint32_t materialIndex = INVALID_MATERIAL;
     };
+
+    GLuint m_vao = 0;
+    GLuint m_buffers[NUM_BUFFERS] = {0};
 
     std::vector<basicMeshEntry> m_meshes;
     std::vector<Material> m_materials;
@@ -92,9 +82,20 @@ private:
     std::vector<glm::vec2> m_texCoords;
     std::vector<uint32_t>  m_indices;
 
-    Assimp::Importer m_importer;
-
     Transformation m_transformation;
+
+private:
+    void initFromScene(const aiScene* scene, const std::string& filename);
+    void initMeshesIndexes(const aiScene *scene);
+    void initAllMeshes(const aiScene* scene);
+    void initSingleMesh(const aiMesh* mesh);
+    void initMaterials(const aiScene* scene, const std::string& filename);
+    void loadTextures(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+    void loadColors(const aiMaterial* material, uint32_t index);
+    void loadDiffuseTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+    void loadSpecularTexture(const std::string &dir, const aiMaterial *material, uint32_t index, const aiScene *scene);
+
+    Assimp::Importer m_importer;
 };
 
 

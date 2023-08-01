@@ -22,11 +22,11 @@ public:
      * @brief Gets the width and height of the window.
      * @return Width and height.
      */
-    std::tuple<int, int> getSize();
+    std::pair<int32_t, int32_t> getSize();
 
     /**
-     * @brief Gets the window aspect ratio.
-     * @return Aspect ratio.
+     * @brief Gets the window aspect aspect.
+     * @return Aspect aspect.
      */
     float getRatio();
 
@@ -65,7 +65,7 @@ public:
     void enableCursor();
 
     /**
-     * Sets the cursor position inside the window.
+     * Sets the cursor local_position inside the window.
      * @param x X coordinate.
      * @param y Y coordinate.
      */

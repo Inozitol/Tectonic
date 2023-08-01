@@ -1,7 +1,7 @@
 #ifndef TECTONIC_GAMECAMERA_H
 #define TECTONIC_GAMECAMERA_H
 
-#include "Camera.h"
+#include "camera/Camera.h"
 
 /**
  * Represents a controllable game camera. Usually only one per scene.
@@ -11,20 +11,7 @@
  */
 class GameCamera : public Camera {
 public:
-    /**
-     * @brief Creates a controllable GameCamera object.
-     * @param fov FOV in degrees.
-     * @param aspect Aspect ratio.
-     * @param z_near Position of near plane.
-     * @param z_far Position of far plane.
-     */
-    GameCamera(float fov, float aspect, float z_near, float z_far);
-
-    /**
-     * @brief Creates a controllable GameCamera object.
-     * @param info Information needed to create a projection matrix.
-     */
-    GameCamera(const PersProjInfo& info);
+    GameCamera() = default;
 
     /**
      * @brief Handles an incoming key event and moves the camera accordingly.
@@ -34,12 +21,12 @@ public:
 
     /**
      * Calculates a new angle for the camera to rotate to.
-     * The class stores the previous mouse position and by calculating a difference with the current position
+     * The class stores the previous mouse local_position and by calculating a difference with the current local_position
      * it gets a new angle of the camera.
      *
      * @brief Handles a mouse movement and orients the camera accordingly.
-     * @param x Current mouse X position.
-     * @param y Current mouse Y position.
+     * @param x Current mouse X local_position.
+     * @param y Current mouse Y local_position.
      */
     void handleMouseEvent(double x, double y);
 private:

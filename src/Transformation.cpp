@@ -53,7 +53,14 @@ const glm::mat4x4 &Transformation::getInverseMatrix() {
     return m_invWorldMatrix;
 }
 
-glm::vec3 Transformation::invert(const glm::vec3& pos) {
+glm::vec3 Transformation::invertPosition(const glm::vec3& pos) {
     glm::vec4 inv_pos = getInverseMatrix() * glm::vec4(pos, 1.0f);
     return inv_pos;
 }
+
+glm::vec3 Transformation::invertDirection(const glm::vec3 dir) {
+    glm::mat3 world3(getMatrix());
+    world3 = glm::transpose(world3);
+    return glm::normalize(world3 * dir);
+}
+

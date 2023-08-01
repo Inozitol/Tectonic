@@ -1,7 +1,4 @@
-#include "GameCamera.h"
-
-GameCamera::GameCamera(float fov, float aspect, float z_near, float z_far) : Camera(fov, aspect, z_near, z_far){}
-GameCamera::GameCamera(const PersProjInfo& info) : Camera(info){}
+#include "camera/GameCamera.h"
 
 void GameCamera::handleKeyEvent(u_short key) {
     switch(key){

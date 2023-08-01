@@ -1,4 +1,4 @@
-#include "Shader.h"
+#include "shader/Shader.h"
 
 #include "utils.h"
 
@@ -27,7 +27,7 @@ void Shader::enable() const {
 void Shader::addShader(GLenum type, const char* filename, const char* prefix = nullptr) {
     std::string s;
     if(!Utils::readFile(filename, s)){
-        throw shaderException("Unable to open shader file:", filename);
+        throw shaderException("Unable to open shader file: ", filename);
     }
 
     // Used to insert various preprocessor information

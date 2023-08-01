@@ -6,7 +6,7 @@
 
 /**
  * Represents a transformation.
- * Can be used to represent a position in arbitrary space.
+ * Can be used to represent a local_position in arbitrary space.
  * Generates a transformation matrix, as well as inverse transformation matrix.
  */
 class Transformation {
@@ -69,7 +69,8 @@ public:
      */
     const glm::mat4x4& getInverseMatrix();
 
-    glm::vec3 invert(const glm::vec3& pos);
+    glm::vec3 invertPosition(const glm::vec3& pos);
+    glm::vec3 invertDirection(const glm::vec3 dir);
 
 private:
     glm::mat4 m_scaleMatrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));

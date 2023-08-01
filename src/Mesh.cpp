@@ -19,6 +19,7 @@ void Mesh::loadMesh(const std::string &filename) {
     glGenVertexArrays(1, &m_vao);
     Utils::EphemeralVAOBind bind(m_vao);
 
+    glBindVertexArray(m_vao);
     // Create buffers for vertices
     glGenBuffers(ARRAY_SIZE(m_buffers), m_buffers);
 
@@ -32,7 +33,7 @@ void Mesh::loadMesh(const std::string &filename) {
 
 void Mesh::render() {
     // Binding VAO for render
-    Utils::EphemeralVAOBind bind(m_vao);
+    glBindVertexArray(m_vao);
     for(const auto& mesh : m_meshes){
         uint32_t material_index = mesh.materialIndex;
 

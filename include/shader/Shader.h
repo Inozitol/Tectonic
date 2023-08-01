@@ -5,7 +5,7 @@
 #include "extern/glad/glad.h"
 #include "exceptions.h"
 
-static const char* versionString = "#version 460 core\n";
+static const char* versionString = "#version 450 core\n";
 
 /**
  * @brief Base class for managing shader code.

@@ -40,6 +40,12 @@ public:
     explicit windowException(T... args) : tectonicException(args...){}
 };
 
+class cameraException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit cameraException(T... args) : tectonicException(args...){}
+};
+
 class textureException : public tectonicException {
 public:
     template<typename ...T>
@@ -62,5 +68,11 @@ class shadowMapException : public tectonicException {
 public:
     template<typename ...T>
     explicit shadowMapException(T... args) : tectonicException(args...){}
+};
+
+class sceneException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit sceneException(T... args) : tectonicException(args...){}
 };
 #endif //TECTONIC_EXCEPTIONS_H

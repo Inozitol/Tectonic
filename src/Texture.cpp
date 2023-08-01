@@ -48,8 +48,8 @@ void Texture::loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp)
 
     glTexParameterf(m_texTarget, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameterf(m_texTarget, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameterf(m_texTarget, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameterf(m_texTarget, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    glTexParameterf(m_texTarget, GL_TEXTURE_WRAP_S,  GL_REPEAT);
+    glTexParameterf(m_texTarget, GL_TEXTURE_WRAP_T,  GL_REPEAT);
 
     glBindTexture(m_texTarget, 0);
 }

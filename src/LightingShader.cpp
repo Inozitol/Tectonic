@@ -1,22 +1,46 @@
 #include <iostream>
 #include <glm/gtx/string_cast.hpp>
-#include "LightingShader.h"
+#include "shader/LightingShader.h"
 
 #include "utils.h"
 
 void DirectionalLight::calcLocalDirection(Transformation& transform) {
     glm::mat3x3 world3(transform.getMatrix());
     glm::mat3x3 world2local = glm::transpose(world3);   // Assuming uniform scaling
-    m_localDirection = glm::normalize(world2local * direction);
+    m_localDirection = glm::normalize(world2local * getDirection());
+}
+
+DirectionalLight::DirectionalLight() {
+    m_lightView.switchOrthographic();
+    m_lightView.setOrthographicInfo(shadowOrthoInfo);
+    m_lightView.createProjectionMatrix();
+}
+
+void DirectionalLight::updateTightOrthoProjection(const Camera& gameCamera) {
+    shadowOrthoInfo = Utils::createTightOrthographicInfo(m_lightView, gameCamera);
+    m_lightView.setOrthographicInfo(shadowOrthoInfo);
+    m_lightView.createProjectionMatrix();
 }
 
 void PointLight::calcLocalPosition(Transformation& transform) {
-    m_localPos = transform.invert(position);
+    m_localPos = transform.invertPosition(getWorldPosition());
+}
+
+PointLight::PointLight() {
+    m_lightView.switchPerspective();
+    m_lightView.setPerspectiveInfo(shadowPersInfo);
+    m_lightView.createProjectionMatrix();
 }
 
 void SpotLight::calcLocalDirectionPosition(Transformation &transform) {
     PointLight::calcLocalPosition(transform);
-    m_localDirection = transform.invert(m_lightView.getDirection());
+    m_localDirection = transform.invertDirection(m_lightView.getDirection());
+}
+
+SpotLight::SpotLight() {
+    m_lightView.switchPerspective();
+    m_lightView.setPerspectiveInfo(shadowPersInfo);
+    m_lightView.createProjectionMatrix();
 }
 
 void LightingShader::init() {
@@ -25,7 +49,7 @@ void LightingShader::init() {
 
     std::string defines;
 
-    if(!Utils::readFile("include/ShaderDefines.h", defines)){
+    if(!Utils::readFile("include/defs/ShaderDefines.h", defines)){
         throw shaderException("Unable to load ShaderDefines.h file.");
     }
 
@@ -37,10 +61,12 @@ void LightingShader::init() {
 
     loc_wvp                         = uniformLocation("u_WVP");
     loc_light_wvp                   = uniformLocation("u_LightWVP");
+    loc_world                       = uniformLocation("u_world");
 
     loc_sampler.diffuse             = uniformLocation("u_samplers.diffuse");
     loc_sampler.specular            = uniformLocation("u_samplers.specular");
-    loc_sampler.shadow              = uniformLocation("u_samplers.shadow");
+    loc_sampler.shadow_map          = uniformLocation("u_samplers.shadowMap");
+    loc_sampler.shadow_cube_map     = uniformLocation("u_samplers.shadowCubeMap");
 
     loc_material.ambient_color      = uniformLocation("u_material.ambientColor");
     loc_material.diffuse_color      = uniformLocation("u_material.diffuseColor");
@@ -57,7 +83,7 @@ void LightingShader::init() {
     if(loc_wvp == 0xFFFFFFFF ||
        loc_sampler.diffuse == 0xFFFFFFFF ||
        loc_sampler.specular == 0xFFFFFFFF ||
-       loc_sampler.shadow == 0xFFFFFFFF ||
+       loc_sampler.shadow_map == 0xFFFFFFFF ||
        loc_material.ambient_color == 0xFFFFFFFF ||
        loc_material.diffuse_color == 0xFFFFFFFF ||
        loc_material.specular_color == 0xFFFFFFFF ||
@@ -82,7 +108,10 @@ void LightingShader::init() {
         loc_point_lights[i].diffuse_intensity = uniformLocation(name);
 
         snprintf(name, sizeof(name), "u_pointLights[%d].localPos", i);
-        loc_point_lights[i].position = uniformLocation(name);
+        loc_point_lights[i].local_position = uniformLocation(name);
+
+        snprintf(name, sizeof(name), "u_pointLights[%d].worldPos", i);
+        loc_point_lights[i].world_position = uniformLocation(name);
 
         snprintf(name, sizeof(name), "u_pointLights[%d].atten.constant", i);
         loc_point_lights[i].atten.constant = uniformLocation(name);
@@ -96,7 +125,7 @@ void LightingShader::init() {
         if(loc_point_lights[i].color == 0xFFFFFFFF ||
            loc_point_lights[i].ambient_intensity == 0xFFFFFFFF ||
            loc_point_lights[i].diffuse_intensity == 0xFFFFFFFF ||
-           loc_point_lights[i].position == 0xFFFFFFFF ||
+           loc_point_lights[i].local_position == 0xFFFFFFFF ||
            loc_point_lights[i].atten.constant == 0xFFFFFFFF ||
            loc_point_lights[i].atten.linear == 0xFFFFFFFF ||
            loc_point_lights[i].atten.exp == 0xFFFFFFFF){
@@ -153,9 +182,12 @@ void LightingShader::setWVP(const glm::mat4x4 &wvp) const {
     glUniformMatrix4fv(loc_wvp, 1, GL_FALSE, glm::value_ptr(wvp));
 }
 
-
 void LightingShader::setLightWVP(const glm::mat4x4 &light_wvp) const {
     glUniformMatrix4fv(loc_light_wvp, 1, GL_FALSE, glm::value_ptr(light_wvp));
+}
+
+void LightingShader::setWorld(const glm::mat4 &world) const {
+    glUniformMatrix4fv(loc_world, 1, GL_FALSE, glm::value_ptr(world));
 }
 
 void LightingShader::setDiffuseTextureUnit(GLint tex_unit) const {
@@ -166,8 +198,12 @@ void LightingShader::setSpecularTextureUnit(GLint tex_unit) const{
     glUniform1i(loc_sampler.specular, tex_unit);
 }
 
-void LightingShader::setShadowTextureUnit(GLint tex_unit) const{
-    glUniform1i(loc_sampler.shadow, tex_unit);
+void LightingShader::setShadowMapTextureUnit(GLint tex_unit) const{
+    glUniform1i(loc_sampler.shadow_map, tex_unit);
+}
+
+void LightingShader::setShadowCubeMapTextureUnit(GLint tex_unit) const {
+    glUniform1i(loc_sampler.shadow_cube_map, tex_unit);
 }
 
 void LightingShader::setDirectionalLight(const DirectionalLight &light) const {
@@ -188,33 +224,35 @@ void LightingShader::setMaterial(const Material &material) const {
     glUniform3f(loc_material.specular_color, material.specularColor.r, material.specularColor.g, material.specularColor.b);
 }
 
-void LightingShader::setPointLights(GLint num_lights, const PointLight* light) const {
+void LightingShader::setPointLights(GLint num_lights, const std::shared_ptr<PointLight> *light) const {
     glUniform1i(loc_num_point_lights, num_lights);
     for(int32_t i = 0; i < num_lights; i++){
-        glUniform3f(loc_point_lights[i].color, light[i].color.r, light[i].color.g, light[i].color.b);
-        glUniform1f(loc_point_lights[i].ambient_intensity, light[i].ambientIntensity);
-        glUniform1f(loc_point_lights[i].diffuse_intensity, light[i].diffuseIntensity);
-        const glm::vec3 local_pos = light[i].localPosition();
-        glUniform3f(loc_point_lights[i].position, local_pos.x, local_pos.y, local_pos.z);
-        glUniform1f(loc_point_lights[i].atten.constant, light[i].attenuation.constant);
-        glUniform1f(loc_point_lights[i].atten.linear, light[i].attenuation.linear);
-        glUniform1f(loc_point_lights[i].atten.exp, light[i].attenuation.exp);
+        glUniform3f(loc_point_lights[i].color, light[i]->color.r, light[i]->color.g, light[i]->color.b);
+        glUniform1f(loc_point_lights[i].ambient_intensity, light[i]->ambientIntensity);
+        glUniform1f(loc_point_lights[i].diffuse_intensity, light[i]->diffuseIntensity);
+        const glm::vec3 local_pos = light[i]->getLocalPosition();
+        glUniform3f(loc_point_lights[i].local_position, local_pos.x, local_pos.y, local_pos.z);
+        const glm::vec3 world_pos = light[i]->getWorldPosition();
+        glUniform3f(loc_point_lights[i].world_position, world_pos.x, world_pos.y, world_pos.z);
+        glUniform1f(loc_point_lights[i].atten.constant, light[i]->attenuation.constant);
+        glUniform1f(loc_point_lights[i].atten.linear, light[i]->attenuation.linear);
+        glUniform1f(loc_point_lights[i].atten.exp, light[i]->attenuation.exp);
     }
 }
 
-void LightingShader::setSpotLights(GLint num_lights, const SpotLight* light) const {
+void LightingShader::setSpotLights(GLint num_lights, const std::shared_ptr<SpotLight> *light) const {
     glUniform1i(loc_num_spot_light, num_lights);
     for(int32_t i = 0; i < num_lights; i++){
-        glUniform3f(loc_spot_lights[i].color, light[i].color.r, light[i].color.g, light[i].color.b);
-        glUniform1f(loc_spot_lights[i].ambient_intensity, light[i].ambientIntensity);
-        glUniform1f(loc_spot_lights[i].diffuse_intensity, light[i].diffuseIntensity);
-        const glm::vec3 local_pos = light[i].localPosition();
+        glUniform3f(loc_spot_lights[i].color, light[i]->color.r, light[i]->color.g, light[i]->color.b);
+        glUniform1f(loc_spot_lights[i].ambient_intensity, light[i]->ambientIntensity);
+        glUniform1f(loc_spot_lights[i].diffuse_intensity, light[i]->diffuseIntensity);
+        const glm::vec3 local_pos = light[i]->getLocalPosition();
         glUniform3f(loc_spot_lights[i].position, local_pos.x, local_pos.y, local_pos.z);
-        const glm::vec3 local_dir = glm::normalize(light[i].localDirection());
+        const glm::vec3 local_dir = glm::normalize(light[i]->localDirection());
         glUniform3f(loc_spot_lights[i].direction, local_dir.x, local_dir.y, local_dir.z);
-        glUniform1f(loc_spot_lights[i].angle, cosf(glm::radians(light[i].angle)));
-        glUniform1f(loc_spot_lights[i].atten.constant, light[i].attenuation.constant);
-        glUniform1f(loc_spot_lights[i].atten.linear, light[i].attenuation.linear);
-        glUniform1f(loc_spot_lights[i].atten.exp, light[i].attenuation.exp);
+        glUniform1f(loc_spot_lights[i].angle, cosf(glm::radians(light[i]->angle)));
+        glUniform1f(loc_spot_lights[i].atten.constant, light[i]->attenuation.constant);
+        glUniform1f(loc_spot_lights[i].atten.linear, light[i]->attenuation.linear);
+        glUniform1f(loc_spot_lights[i].atten.exp, light[i]->attenuation.exp);
     }
 }
