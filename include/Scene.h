@@ -16,6 +16,12 @@
 #include "camera/GameCamera.h"
 #include "exceptions.h"
 #include "defs/ShaderDefines.h"
+#include "Animation.h"
+
+struct ObjectData{
+    Transformation transformation;
+    Animation animation;
+};
 
 class Scene {
 public:
@@ -40,7 +46,7 @@ public:
     void eraseMesh(meshIndex_t meshIndex);
 
     [[nodiscard]] objectIndex_t createObject(meshIndex_t meshIndex);
-    Transformation& getObject(objectIndex_t objectIndex);
+    ObjectData & getObject(objectIndex_t objectIndex);
     void eraseObject(objectIndex_t objectIndex);
 
     using spotLightIndex_t = uint32_t;
@@ -71,7 +77,7 @@ private:
     void renderMeshShadow(const std::shared_ptr<Model>& mesh, Transformation& transformation);
 
     std::unordered_map<meshIndex_t, std::shared_ptr<Model>> m_meshMap;
-    std::unordered_map<objectIndex_t, std::pair<Transformation, meshIndex_t>> m_objectMap;
+    std::unordered_map<objectIndex_t, std::pair<ObjectData, meshIndex_t>> m_objectMap;
 
     std::shared_ptr<LightingShader>     m_lightingShader;
     std::shared_ptr<ShadowMapShader>    m_shadowShader;

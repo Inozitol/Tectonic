@@ -44,7 +44,7 @@ Scene::objectIndex_t Scene::createObject(Scene::meshIndex_t meshIndex) {
 
     for(objectIndex_t index = std::numeric_limits<objectIndex_t>::min(); ; index++){
         if(!m_usedObjectIndexes.contains(index)){
-            m_objectMap.insert({index, {Transformation(), meshIndex}});
+            m_objectMap.insert({index, {{Transformation(),Animation()}, meshIndex}});
             m_usedObjectIndexes.insert(index);
             return index;
         }
@@ -55,7 +55,7 @@ std::shared_ptr<Model> Scene::getMesh(Scene::meshIndex_t meshIndex) {
     return m_meshMap.at(meshIndex);
 }
 
-Transformation &Scene::getObject(Scene::objectIndex_t objectIndex) {
+ObjectData & Scene::getObject(Scene::objectIndex_t objectIndex) {
     return m_objectMap.at(objectIndex).first;
 }
 
@@ -124,7 +124,7 @@ void Scene::shadowPass() {
 
     for(auto &object : m_objectMap){
         std::shared_ptr<Model> mesh = m_meshMap.at(object.second.second);
-        Transformation& transformation = object.second.first;
+        Transformation& transformation = object.second.first.transformation;
         renderMeshShadow(mesh, transformation);
     }
 }
@@ -145,7 +145,7 @@ void Scene::lightingPass() {
 
     for(auto &object : m_objectMap){
         std::shared_ptr<Model> mesh = m_meshMap.at(object.second.second);
-        Transformation& transformation = object.second.first;
+        Transformation& transformation = object.second.first.transformation;
         renderMeshLight(mesh, transformation);
     }
 }

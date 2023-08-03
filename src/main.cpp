@@ -20,11 +20,13 @@
 #include "defs/ShaderDefines.h"
 #include "Terrain.h"
 #include "Scene.h"
+#include "Animator.h"
 
 Window* window;
 
 Scene g_catScene;
 Scene g_boneScene;
+std::shared_ptr<LightingShader> g_lightShader;
 Scene::objectIndex_t cat1_i;
 Scene::objectIndex_t cat2_i;
 Scene::objectIndex_t terrainCat_i;
@@ -132,17 +134,29 @@ void init_gl(){
 }
 
 void render_loop(){
+    ObjectData& bobObject = g_boneScene.getObject(bone_i);
+    Animator bobAnimator(&bobObject.animation);
     while(!window->shouldClose()){
-        static float delta = 0.01f;
-        static float counter = 0.0f;
-        counter += delta;
+        static float deltaTime = 0.0f;
+        static float lastFrame = 0.0f;
 
-        static glm::vec3 circleCoefs = {0.0f, 0.5f, 0.0f};
-        circleCoefs.x = -sinf(counter);
-        circleCoefs.z = -cosf(counter);
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        bobAnimator.updateAnimation(deltaTime);
+
+        auto transforms = bobAnimator.getFinalBoneMatrices();
+        for(int32_t i = 0; i < transforms.size(); i++) {
+            g_lightShader->setBoneTransform(i, transforms[i]);
+        }
+
+        //static glm::vec3 circleCoefs = {0.0f, 0.5f, 0.0f};
+        //circleCoefs.x = -sinf(counter);
+        //circleCoefs.z = -cosf(counter);
 
         //directional_light->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
-        g_boneScene.getDirectionalLight()->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
+        //g_boneScene.getDirectionalLight()->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
 
         //g_catScene.getSpotLight(0)->setWorldPosition(circleCoefs);
         //g_catScene.getSpotLight(0)->setDirection(glm::normalize(glm::vec3(0.0, 0.0, 0.0) - circleCoefs));
@@ -187,6 +201,8 @@ void initScenes(){
     g_catScene.setShadowMapFBO(shadowMapFBO);
     g_catScene.setShadowCubeMapFBO(shadowCubeMapFBO);
 
+    g_lightShader = lightingShader;
+
     std::shared_ptr<Model> catMesh(new Model);
     std::shared_ptr<Terrain> terrainMesh(new Terrain);
     catMesh->loadModelFromFile("meshes/concrete_cat.obj");
@@ -198,8 +214,8 @@ void initScenes(){
     cat2_i = g_catScene.createObject(catMesh_i);
     terrainCat_i = g_catScene.createObject(terrainMesh_i);
 
-    g_catScene.getObject(cat1_i).setTranslation(-0.2, 0.0, 0.0);
-    g_catScene.getObject(terrainCat_i).setTranslation(-25.0, 0.0, -25.0);
+    g_catScene.getObject(cat1_i).transformation.setTranslation(-0.2, 0.0, 0.0);
+    g_catScene.getObject(terrainCat_i).transformation.setTranslation(-25.0, 0.0, -25.0);
 
     std::shared_ptr<GameCamera> gameCamera(new GameCamera);
     gameCamera->switchPerspective();
@@ -259,14 +275,16 @@ void initScenes(){
 
     Scene::meshIndex_t terrainMeshBone_i = g_boneScene.insertMesh(terrainMesh);
     terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
-    g_boneScene.getObject(terrainBone_i).setTranslation(-25.0, 0.0, -25.0);
+    g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-25.0, 0.0, -25.0);
     std::shared_ptr<Model> boneMesh(new Model);
     boneMesh->loadModelFromFile("meshes/boblampclean.md5mesh");
     Scene::meshIndex_t boneMesh_i = g_boneScene.insertMesh(boneMesh);
     bone_i = g_boneScene.createObject(boneMesh_i);
-    g_boneScene.getObject(bone_i).setScale(0.005);
-    g_boneScene.getObject(bone_i).setRotation(-90.0f, 0.0f, 0.0f);
-    g_boneScene.getObject(bone_i).setTranslation(0.0f, 0.0f, 0.0f);
+    ObjectData& bobObject = g_boneScene.getObject(bone_i);
+    bobObject.transformation.setScale(0.005);
+    //bobObject.transformation.setRotation(-90.0f, 0.0f, 0.0f);
+    bobObject.transformation.setTranslation(0.0f, 0.0f, 0.0f);
+    bobObject.animation = Animation("meshes/boblampclean.md5anim", boneMesh.get());
     g_boneScene.insertDirectionalLight(directionalLight);
     g_boneScene.setGameCamera(gameCamera);
 

@@ -20,8 +20,9 @@ out vec4 Weights0;
 void main(){
     vec4 totalPos = vec4(0.0f);
     for(int i = 0; i < MAX_BONES_INFLUENCE; i++){
-        if(BoneID[i] == -1)
+        if(BoneID[i] == -1){
             continue;
+        }
         if(BoneID[i] >= MAX_BONES){
             totalPos = vec4(Position, 1.0f);
             break;

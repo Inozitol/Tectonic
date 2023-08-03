@@ -120,7 +120,7 @@ namespace Utils{
         return OrthoProjInfo{min.x, max.x, min.y, max.y, min.z, max.z};
     }
 
-    glm::mat4 aiToGLM(aiMatrix4x4t<ai_real> assimpMat) {
+    glm::mat4 aiMatToGLM(const aiMatrix4x4t<ai_real>& assimpMat) {
         glm::mat4 glmMat;
         glmMat[0][0] = assimpMat.a1;
         glmMat[0][1] = assimpMat.b1;
@@ -140,5 +140,12 @@ namespace Utils{
         glmMat[3][3] = assimpMat.d4;
 
         return glmMat;
+    }
+    glm::vec3 aiVecToGLM(const aiVector3D& vec){
+        return {vec.x, vec.y, vec.z};
+    }
+
+    glm::quat aiQuatToGLM(const aiQuaternion& orientation){
+        return {orientation.w, orientation.x, orientation.y, orientation.z};
     }
 }

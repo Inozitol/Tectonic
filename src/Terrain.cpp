@@ -19,7 +19,11 @@ void Terrain::createTerrain(uint32_t dimX, uint32_t dimZ, const char* textureFil
         uint32_t x = i % m_dimX;
         uint32_t z = i / m_dimZ;
 
-        vertices[i] = {glm::vec3(x, 0.0f, z), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec2(x,z)};
+        Vertex vertex;
+        vertex.m_position = {x, 0.0f, z};
+        vertex.m_normal = {0.0f, 1.0f, 0.0f};
+        vertex.m_texCoord = {x, z};
+        vertices[i] = vertex;
     }
 
     // Generate indices for vertices

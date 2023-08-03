@@ -27,14 +27,18 @@
 #define MAX_NUM_BONES_PER_VERTEX 4
 
 struct Vertex{
+    Vertex(){
+        m_boneIds.fill(-1);
+        m_weights.fill(0.0f);
+    }
     glm::vec3 m_position = {0.0f, 0.0f, 0.0f};
     glm::vec3 m_normal = {0.0f, 0.0f, 0.0f};
     glm::vec2 m_texCoord = {0.0f, 0.0f};
-    glm::vec3 m_tangent;
-    glm::vec3 m_bitangent;
+    glm::vec3 m_tangent = {0.0f, 0.0f, 0.0f};
+    glm::vec3 m_bitangent = {0.0f, 0.0f, 0.0f};
 
-    int m_boneIds[MAX_BONES_INFLUENCE];
-    float m_weights[MAX_BONES_INFLUENCE];
+    std::array<int32_t, MAX_BONES_INFLUENCE> m_boneIds{};
+    std::array<float, MAX_BONES_INFLUENCE> m_weights{};
 };
 
 class Mesh{
@@ -48,6 +52,11 @@ public:
 private:
     GLuint m_VAO, m_VBO, m_EBO;
     void initMesh();
+};
+
+struct BoneInfo{
+    int id;
+    glm::mat4 offset;
 };
 
 /**
@@ -72,12 +81,19 @@ public:
 
     Material material();
 
+    auto& getBoneInfoMap() { return m_boneInfoMap; }
+    int32_t& getBoneCount() { return m_boneCounter; }
+
 protected:
 
     std::vector<Mesh> m_meshes;
     std::vector<Material> m_materials;
 
 private:
+
+    std::unordered_map<std::string, BoneInfo> m_boneInfoMap;
+    int32_t m_boneCounter = 0;
+
     std::string m_modelDirectory;
 
     void loadModel(const std::string& filename);
@@ -89,6 +105,8 @@ private:
     void loadSpecularTexture(const aiMaterial *aiMat, Material& material, const aiScene *scene);
     void loadColors(const aiMaterial* aiMat, Material& material);
 
+    void setVertexBoneData(Vertex& vertex, int32_t boneId, float weight);
+    void extractBoneWeightForVertices(std::vector<Vertex>& vertices, aiMesh* mesh, const aiScene* scene);
 };
 
 
