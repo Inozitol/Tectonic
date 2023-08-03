@@ -12,7 +12,7 @@
 #include "Window.h"
 #include "Transformation.h"
 #include "camera/GameCamera.h"
-#include "Mesh.h"
+#include "Model.h"
 #include "shader/LightingShader.h"
 #include "shader/shadow/ShadowMapFBO.h"
 #include "shader/shadow/ShadowCubeMapFBO.h"
@@ -24,9 +24,12 @@
 Window* window;
 
 Scene g_catScene;
+Scene g_boneScene;
 Scene::objectIndex_t cat1_i;
 Scene::objectIndex_t cat2_i;
-Scene::objectIndex_t terrain_i;
+Scene::objectIndex_t terrainCat_i;
+Scene::objectIndex_t bone_i;
+Scene::objectIndex_t terrainBone_i;
 
 
 int win_width, win_height;
@@ -91,13 +94,13 @@ void key_callback(GLFWwindow* win, int key, int scancode, int action, int mods){
                 case GLFW_KEY_D:
                 case GLFW_KEY_SPACE:
                 case GLFW_KEY_C:
-                    g_catScene.handleKeyEvent(key);
+                    g_boneScene.handleKeyEvent(key);
                     break;
                 default:
                     break;
                 case GLFW_KEY_X:
-                    g_catScene.getGameCamera()->toggleProjection();
-                    g_catScene.getGameCamera()->createProjectionMatrix();
+                    g_boneScene.getGameCamera()->toggleProjection();
+                    g_boneScene.getGameCamera()->createProjectionMatrix();
                     break;
                 case GLFW_KEY_Z:
                     switchPolygonMode();
@@ -139,7 +142,7 @@ void render_loop(){
         circleCoefs.z = -cosf(counter);
 
         //directional_light->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
-        g_catScene.getDirectionalLight()->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
+        g_boneScene.getDirectionalLight()->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
 
         //g_catScene.getSpotLight(0)->setWorldPosition(circleCoefs);
         //g_catScene.getSpotLight(0)->setDirection(glm::normalize(glm::vec3(0.0, 0.0, 0.0) - circleCoefs));
@@ -153,14 +156,14 @@ void render_loop(){
         //g_gameCamera->setWorldPosition(spot_lights[1].getWorldPosition());
         //g_gameCamera->setDirection(spot_lights[1].getDirection());
 
-        g_catScene.renderScene();
+        g_boneScene.renderScene();
 
         window->swapBuffers();
         glfwPollEvents();
     }
 }
 
-void initCatScene(){
+void initScenes(){
     std::shared_ptr<LightingShader> lightingShader(new LightingShader);
     std::shared_ptr<ShadowMapShader> shadowShader(new ShadowMapShader);
     std::shared_ptr<ShadowMapFBO> shadowMapFBO(new ShadowMapFBO);
@@ -184,19 +187,19 @@ void initCatScene(){
     g_catScene.setShadowMapFBO(shadowMapFBO);
     g_catScene.setShadowCubeMapFBO(shadowCubeMapFBO);
 
-    std::shared_ptr<Mesh> catMesh(new Mesh);
+    std::shared_ptr<Model> catMesh(new Model);
     std::shared_ptr<Terrain> terrainMesh(new Terrain);
-    catMesh->loadMesh("meshes/concrete_cat.obj");
+    catMesh->loadModelFromFile("meshes/concrete_cat.obj");
     terrainMesh->createTerrain(50,50,"meshes/textures/bricks.jpg");
     Scene::meshIndex_t catMesh_i = g_catScene.insertMesh(catMesh);
     Scene::meshIndex_t terrainMesh_i = g_catScene.insertMesh(terrainMesh);
 
     cat1_i = g_catScene.createObject(catMesh_i);
     cat2_i = g_catScene.createObject(catMesh_i);
-    terrain_i = g_catScene.createObject(terrainMesh_i);
+    terrainCat_i = g_catScene.createObject(terrainMesh_i);
 
     g_catScene.getObject(cat1_i).setTranslation(-0.2, 0.0, 0.0);
-    g_catScene.getObject(terrain_i).setTranslation(-25.0, 0.0, -25.0);
+    g_catScene.getObject(terrainCat_i).setTranslation(-25.0, 0.0, -25.0);
 
     std::shared_ptr<GameCamera> gameCamera(new GameCamera);
     gameCamera->switchPerspective();
@@ -212,7 +215,7 @@ void initCatScene(){
                                      SHADOW_OPROJ_FAR});
     gameCamera->createProjectionMatrix();
     gameCamera->setPosition({0.0f, 0.1, 0.5});
-    window->setMouseCallback([](GLFWwindow *, double x, double y) { g_catScene.handleMouseEvent(x, y); });
+    window->setMouseCallback([](GLFWwindow *, double x, double y) { g_boneScene.handleMouseEvent(x, y); });
     g_catScene.setGameCamera(gameCamera);
 
     std::shared_ptr<DirectionalLight> directionalLight(new DirectionalLight);
@@ -247,6 +250,27 @@ void initCatScene(){
     //g_catScene.insertPointLight(pointLight);
 
     g_catScene.setWindowDimension(window->getSize());
+
+    // Bone Scene
+    g_boneScene.setLightingShader(lightingShader);
+    g_boneScene.setShadowShader(shadowShader);
+    g_boneScene.setShadowMapFBO(shadowMapFBO);
+    g_boneScene.setShadowCubeMapFBO(shadowCubeMapFBO);
+
+    Scene::meshIndex_t terrainMeshBone_i = g_boneScene.insertMesh(terrainMesh);
+    terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
+    g_boneScene.getObject(terrainBone_i).setTranslation(-25.0, 0.0, -25.0);
+    std::shared_ptr<Model> boneMesh(new Model);
+    boneMesh->loadModelFromFile("meshes/boblampclean.md5mesh");
+    Scene::meshIndex_t boneMesh_i = g_boneScene.insertMesh(boneMesh);
+    bone_i = g_boneScene.createObject(boneMesh_i);
+    g_boneScene.getObject(bone_i).setScale(0.005);
+    g_boneScene.getObject(bone_i).setRotation(-90.0f, 0.0f, 0.0f);
+    g_boneScene.getObject(bone_i).setTranslation(0.0f, 0.0f, 0.0f);
+    g_boneScene.insertDirectionalLight(directionalLight);
+    g_boneScene.setGameCamera(gameCamera);
+
+    g_boneScene.setWindowDimension(window->getSize());
 }
 
 int main(){
@@ -274,7 +298,7 @@ int main(){
         std::tie(win_width, win_height) = window->getSize();
 
         init_gl();
-        initCatScene();
+        initScenes();
 
         render_loop();
     } catch(tectonicException& te){

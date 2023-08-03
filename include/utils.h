@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include <glm/vec4.hpp>
+#include <assimp/matrix4x4.h>
 
 #include "extern/glad/glad.h"
 #include "camera/Camera.h"
@@ -42,6 +43,7 @@ namespace Utils{
     };
     OrthoProjInfo createTightOrthographicInfo(Camera &lightCamera, const Camera &gameCamera);
     bool readFile(const char* filename, std::string& content);
+    glm::mat4 aiToGLM(aiMatrix4x4t<ai_real> mat);
 }
 
 #endif //TECTONIC_UTILS_H

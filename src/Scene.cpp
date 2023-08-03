@@ -28,8 +28,8 @@ void Scene::setWindowDimension(std::pair<int32_t, int32_t> dimensions) {
     m_winDimensions = dimensions;
 }
 
-Scene::meshIndex_t Scene::insertMesh(const std::shared_ptr<Mesh>& mesh) {
-    for(meshIndex_t index = std::numeric_limits<meshIndex_t>::max();;index++){
+Scene::meshIndex_t Scene::insertMesh(const std::shared_ptr<Model>& mesh) {
+    for(meshIndex_t index = std::numeric_limits<meshIndex_t>::min();;index++){
         if(!m_usedMeshIndexes.contains(index)){
             m_meshMap.insert({index, mesh});
             m_usedMeshIndexes.insert(index);
@@ -42,7 +42,7 @@ Scene::objectIndex_t Scene::createObject(Scene::meshIndex_t meshIndex) {
     if(!m_meshMap.contains(meshIndex))
         throw sceneException("Scene doesn't contain provided mesh index");
 
-    for(objectIndex_t index = std::numeric_limits<objectIndex_t>::max(); ; index++){
+    for(objectIndex_t index = std::numeric_limits<objectIndex_t>::min(); ; index++){
         if(!m_usedObjectIndexes.contains(index)){
             m_objectMap.insert({index, {Transformation(), meshIndex}});
             m_usedObjectIndexes.insert(index);
@@ -51,7 +51,7 @@ Scene::objectIndex_t Scene::createObject(Scene::meshIndex_t meshIndex) {
     }
 }
 
-std::shared_ptr<Mesh> Scene::getMesh(Scene::meshIndex_t meshIndex) {
+std::shared_ptr<Model> Scene::getMesh(Scene::meshIndex_t meshIndex) {
     return m_meshMap.at(meshIndex);
 }
 
@@ -108,7 +108,7 @@ void Scene::erasePointLight(Scene::pointLightIndex_t pointLightIndex) {
 }
 
 void Scene::renderScene() {
-    shadowPass();
+    //shadowPass();
     lightingPass();
 }
 
@@ -117,14 +117,13 @@ void Scene::shadowPass() {
     glClear(GL_DEPTH_BUFFER_BIT);
     m_shadowShader->enable();
     glCullFace(GL_FRONT);
-    m_spotLights[0]->createView();
     m_gameCamera->createView();
     m_dirLight->updateTightOrthoProjection(*m_gameCamera);
     m_gameCamera->setOrthographicInfo(m_dirLight->shadowOrthoInfo);
     m_dirLight->createView();
 
     for(auto &object : m_objectMap){
-        std::shared_ptr<Mesh> mesh = m_meshMap.at(object.second.second);
+        std::shared_ptr<Model> mesh = m_meshMap.at(object.second.second);
         Transformation& transformation = object.second.first;
         renderMeshShadow(mesh, transformation);
     }
@@ -141,17 +140,17 @@ void Scene::lightingPass() {
 
     m_shadowMapFBO->bind4reading(SHADOW_TEXTURE_UNIT);
     //m_shadowCubeMapFBO->bind4reading(SHADOW_CUBE_MAP_TEXTURE_UNIT);
-
     m_gameCamera->createView();
 
+
     for(auto &object : m_objectMap){
-        std::shared_ptr<Mesh> mesh = m_meshMap.at(object.second.second);
+        std::shared_ptr<Model> mesh = m_meshMap.at(object.second.second);
         Transformation& transformation = object.second.first;
         renderMeshLight(mesh, transformation);
     }
 }
 
-void Scene::renderMeshLight(const std::shared_ptr<Mesh>& mesh, Transformation &transformation) {
+void Scene::renderMeshLight(const std::shared_ptr<Model>& mesh, Transformation &transformation) {
     glm::mat4 mashMatrix = transformation.getMatrix();
 
     // Camera point of view
@@ -177,10 +176,17 @@ void Scene::renderMeshLight(const std::shared_ptr<Mesh>& mesh, Transformation &t
     //m_lightingShader->setSpotLights(1, m_spotLights);
 
     m_lightingShader->setMaterial(mesh->material());
+
+    //std::vector<glm::mat4> transforms;
+    //mesh->getBoneTransforms(transforms);
+    //for(uint32_t i = 0; i < transforms.size(); i++){
+    //    m_lightingShader->setBoneTransform(i, transforms[i]);
+    //}
+
     mesh->render();
 }
 
-void Scene::renderMeshShadow(const std::shared_ptr<Mesh> &mesh, Transformation &transformation) {
+void Scene::renderMeshShadow(const std::shared_ptr<Model> &mesh, Transformation &transformation) {
     glm::mat4 mashMatrix = transformation.getMatrix();
 
     glm::mat4 wvp = m_dirLight->getWVP(mashMatrix);

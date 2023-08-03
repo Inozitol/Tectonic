@@ -13,6 +13,7 @@ public:
     Texture(GLenum tex_target, u_char *data, int32_t length, uint8_t channels);
 
     void bind(GLenum tex_unit) const;
+    void unbind(GLenum tex_unit) const;
 
 private:
     void loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp);

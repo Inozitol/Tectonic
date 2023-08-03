@@ -166,6 +166,7 @@ public:
     void setDirectionalLight(const DirectionalLight &light) const;
     void setLocalCameraPos(const glm::vec3& pos) const;
     void setMaterial(const Material& material) const;
+    void setBoneTransform(uint32_t boneId, glm::mat4 transform) const;
     void setPointLights(GLint num_lights, const std::shared_ptr<PointLight> *light) const;
     void setSpotLights(GLint num_lights, const std::shared_ptr<SpotLight> *light) const;
 
@@ -235,6 +236,8 @@ private:
         } atten;
     } loc_spot_lights[MAX_SPOT_LIGHTS];
     GLint loc_num_spot_light = -1;
+
+    GLint loc_bone[MAX_BONES];
 };
 
 

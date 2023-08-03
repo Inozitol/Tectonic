@@ -1,10 +1,9 @@
 #ifndef TECTONIC_TERRAIN_H
 #define TECTONIC_TERRAIN_H
 
-#include "utils.h"
-#include "Mesh.h"
+#include "Model.h"
 
-class Terrain : public Mesh {
+class Terrain : public Model {
 public:
     Terrain() = default;
     ~Terrain() = default;

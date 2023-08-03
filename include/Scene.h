@@ -7,7 +7,7 @@
 #include <limits>
 #include <utility>
 
-#include "Mesh.h"
+#include "Model.h"
 #include "Transformation.h"
 #include "shader/LightingShader.h"
 #include "shader/shadow/ShadowMapFBO.h"
@@ -35,8 +35,8 @@ public:
     using meshIndex_t = uint32_t;
     using objectIndex_t = uint32_t;
 
-    [[nodiscard]] meshIndex_t insertMesh(const std::shared_ptr<Mesh>& mesh);
-    std::shared_ptr<Mesh> getMesh(meshIndex_t meshIndex);
+    [[nodiscard]] meshIndex_t insertMesh(const std::shared_ptr<Model>& mesh);
+    std::shared_ptr<Model> getMesh(meshIndex_t meshIndex);
     void eraseMesh(meshIndex_t meshIndex);
 
     [[nodiscard]] objectIndex_t createObject(meshIndex_t meshIndex);
@@ -67,10 +67,10 @@ private:
     void lightingPass();
     void shadowPass();
 
-    void renderMeshLight(const std::shared_ptr<Mesh>& mesh, Transformation& transformation);
-    void renderMeshShadow(const std::shared_ptr<Mesh>& mesh, Transformation& transformation);
+    void renderMeshLight(const std::shared_ptr<Model>& mesh, Transformation& transformation);
+    void renderMeshShadow(const std::shared_ptr<Model>& mesh, Transformation& transformation);
 
-    std::unordered_map<meshIndex_t, std::shared_ptr<Mesh>> m_meshMap;
+    std::unordered_map<meshIndex_t, std::shared_ptr<Model>> m_meshMap;
     std::unordered_map<objectIndex_t, std::pair<Transformation, meshIndex_t>> m_objectMap;
 
     std::shared_ptr<LightingShader>     m_lightingShader;

@@ -59,3 +59,10 @@ void Texture::bind(GLenum tex_unit) const {
     glBindTexture(m_texTarget, m_texObject);
 }
 
+void Texture::unbind(GLenum tex_unit) const {
+    glActiveTexture(tex_unit);
+    glBindTexture(m_texTarget, 0);
+}
+
+
+

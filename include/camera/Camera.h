@@ -158,7 +158,7 @@ private:
     }
 
     inline glm::mat4x4 translationMatrix(){
-        return glm::translate(glm::identity<glm::mat4x4>(), -m_position);
+        return glm::translate(glm::identity<glm::mat4>(), -m_position);
     }
 
     std::unique_ptr<PerspProjInfo> m_perspProjInfo;

@@ -176,6 +176,13 @@ void LightingShader::init() {
         }
     }
 
+    for(uint32_t i = 0; i < ARRAY_SIZE(loc_bone); i++){
+        char name[128];
+        memset(name, 0, sizeof(name));
+        snprintf(name, sizeof(name), "u_bonesMatrices[%d]", i);
+        loc_bone[i] = uniformLocation(name);
+    }
+
 }
 
 void LightingShader::setWVP(const glm::mat4x4 &wvp) const {
@@ -255,4 +262,8 @@ void LightingShader::setSpotLights(GLint num_lights, const std::shared_ptr<SpotL
         glUniform1f(loc_spot_lights[i].atten.linear, light[i]->attenuation.linear);
         glUniform1f(loc_spot_lights[i].atten.exp, light[i]->attenuation.exp);
     }
+}
+
+void LightingShader::setBoneTransform(uint32_t boneId, glm::mat4 transform) const {
+    glUniformMatrix4fv(loc_bone[boneId], 1, GL_FALSE, glm::value_ptr(transform));
 }
