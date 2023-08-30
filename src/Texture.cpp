@@ -2,11 +2,11 @@
 #include <iostream>
 #include <utility>
 #include <GL/gl.h>
-#include "Texture.h"
+#include "model/Texture.h"
 #include "extern/stb_image.h"
 
-Texture::Texture(GLenum tex_target, std::string  file_name)
-: m_texTarget(tex_target), m_fileName(std::move(file_name)){
+Texture::Texture(GLenum tex_target, const std::string&  file_name)
+: m_texTarget(tex_target), m_fileName(file_name){
     int width = 0, height = 0, bpp = 0;
     u_char* image_data = stbi_load(m_fileName.c_str(), &width, &height, &bpp, 0);
     if(!image_data){
@@ -17,7 +17,8 @@ Texture::Texture(GLenum tex_target, std::string  file_name)
     stbi_image_free(image_data);
 }
 
-Texture::Texture(GLenum tex_target, u_char *data, int32_t length, uint8_t channels) : m_texTarget(tex_target) {
+Texture::Texture(GLenum tex_target, u_char *data, int32_t length, uint8_t channels)
+: m_texTarget(tex_target) {
     int x=0,y=0,bpp=0;
     u_char* image_data = stbi_load_from_memory(data, length, &x, &y, &bpp, channels);
     if(!image_data){
@@ -36,8 +37,10 @@ void Texture::loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp)
                 glTexImage2D(m_texTarget, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, data);
                 break;
             case 3:
-            case 4:
                 glTexImage2D(m_texTarget, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+                break;
+            case 4:
+                glTexImage2D(m_texTarget, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
                 break;
             default:
                 throw textureException("Texture type not implemented");
@@ -63,6 +66,3 @@ void Texture::unbind(GLenum tex_unit) const {
     glActiveTexture(tex_unit);
     glBindTexture(m_texTarget, 0);
 }
-
-
-

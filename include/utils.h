@@ -5,8 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include <glm/vec4.hpp>
-#include <assimp/matrix4x4.h>
-#include <assimp/quaternion.h>
+#include <assimp/types.h>
 
 #include "extern/glad/glad.h"
 #include "camera/Camera.h"
@@ -47,6 +46,7 @@ namespace Utils{
     glm::mat4 aiMatToGLM(const aiMatrix4x4t<ai_real>& mat);
     glm::vec3 aiVecToGLM(const aiVector3D& vec);
     glm::quat aiQuatToGLM(const aiQuaternion& orientation);
+    glm::vec3 aiColToGLM(const aiColor3D& col);
 }
 
 #endif //TECTONIC_UTILS_H

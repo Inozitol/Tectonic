@@ -61,28 +61,24 @@ public:
      * @brief Calculates and returns a reference to transformation matrix.
      * @return Reference to transformation matrix.
      */
-    const glm::mat4x4& getMatrix();
+    const glm::mat4& getMatrix() const;
 
     /**
      * @brief Calculates and returns a reference to inverse transformation matrix.
      * @return Reference to inverse transformation matrix.
      */
-    const glm::mat4x4& getInverseMatrix();
+    [[nodiscard]] glm::mat4 getInverseMatrix() const;
 
-    glm::vec3 invertPosition(const glm::vec3& pos);
-    glm::vec3 invertDirection(const glm::vec3 dir);
+    [[nodiscard]] glm::vec3 invertPosition(const glm::vec3& pos) const;
+    [[nodiscard]] glm::vec3 invertDirection(const glm::vec3& dir) const;
 
 private:
     glm::mat4 m_scaleMatrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
     glm::mat4 m_rotationMatrix = glm::rotate(glm::mat4x4(1.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f));
     glm::mat4 m_translationMatrix = glm::translate(glm::mat4x4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
 
-    glm::mat4 m_invScaleMatrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
-    glm::mat4 m_invRotationMatrix = glm::rotate(glm::mat4x4(1.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f));
-    glm::mat4 m_invTranslationMatrix = glm::translate(glm::mat4x4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-
-    glm::mat4 m_worldMatrix{};
-    glm::mat4 m_invWorldMatrix{};
+    mutable bool worldCurrent = false;
+    mutable glm::mat4 m_worldMatrix{};
 };
 
 #endif //TECTONIC_TRANSFORMATION_H

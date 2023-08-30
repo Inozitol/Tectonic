@@ -1,81 +1,89 @@
-#include "Bone.h"
+#include <utility>
 
-Bone::Bone(const std::string &name, int32_t id, const aiNodeAnim *channel)
-    :m_name(name), m_id(id), m_localTransform(1.0f){
+#include "model/Bone.h"
+
+Bone::Bone(std::string name, int32_t id, const aiNodeAnim *channel)
+    :m_name(std::move(name)), m_id(id), m_localTransform(1.0f){
 
     m_positionCount = channel->mNumPositionKeys;
     for(uint32_t posIndex = 0; posIndex < m_positionCount; posIndex++){
         aiVector3D aiPos = channel->mPositionKeys[posIndex].mValue;
-        float timestamp = channel->mPositionKeys[posIndex].mTime;
+        double timestamp = channel->mPositionKeys[posIndex].mTime;
         KeyPosition key{
             Utils::aiVecToGLM(aiPos),
             timestamp
         };
         m_positions.push_back(key);
     }
+    m_lastTimestamp = fmax(m_lastTimestamp, m_positions.back().timestamp);
 
     m_rotationCount = channel->mNumRotationKeys;
     for(uint32_t rotIndex = 0; rotIndex < m_rotationCount; rotIndex++){
         aiQuaternion aiOrient = channel->mRotationKeys[rotIndex].mValue;
-        float timestamp = channel->mRotationKeys[rotIndex].mTime;
+        double timestamp = channel->mRotationKeys[rotIndex].mTime;
         KeyRotation key{
             Utils::aiQuatToGLM(aiOrient),
             timestamp
         };
         m_rotations.push_back(key);
     }
+    m_lastTimestamp = fmax(m_lastTimestamp, m_rotations.back().timestamp);
 
     m_scalingCount = channel->mNumScalingKeys;
     for(uint32_t scaleIndex = 0; scaleIndex < m_scalingCount; scaleIndex++){
         aiVector3D aiScale = channel->mScalingKeys[scaleIndex].mValue;
-        float timestamp = channel->mScalingKeys[scaleIndex].mTime;
+        double timestamp = channel->mScalingKeys[scaleIndex].mTime;
         KeyScale key{
             Utils::aiVecToGLM(aiScale),
             timestamp
         };
         m_scales.push_back(key);
     }
+    m_lastTimestamp = fmax(m_lastTimestamp, m_scales.back().timestamp);
 }
 
-void Bone::update(float animTime) {
+void Bone::update(double animTime) {
     glm::mat4 translation = interpolatePosition(animTime);
     glm::mat4 rotation = interpolateRotation(animTime);
     glm::mat4 scale = interpolateScaling(animTime);
     m_localTransform = translation * rotation * scale;
 }
 
-uint32_t Bone::getPositionIndex(float animTime) {
+uint32_t Bone::getPositionIndex(double animTime) {
     for(uint32_t index = 0; index < m_positionCount - 1; index++){
         if(animTime < m_positions[index + 1].timestamp)
             return index;
     }
+    return m_positionCount - 1;
     assert(false);
 }
-uint32_t Bone::getRotationIndex(float animTime) {
+uint32_t Bone::getRotationIndex(double animTime) {
     for(uint32_t index = 0; index < m_rotationCount - 1; index++){
         if(animTime < m_rotations[index + 1].timestamp)
             return index;
     }
+    return m_rotationCount - 1;
     assert(false);
 }
 
-uint32_t Bone::getScaleIndex(float animTime) {
+uint32_t Bone::getScaleIndex(double animTime) {
     for(uint32_t index = 0; index < m_scalingCount- 1; index++){
         if(animTime < m_scales[index + 1].timestamp)
             return index;
     }
+    return m_scalingCount - 1;
     assert(false);
 }
 
-float Bone::getScaleFactor(float lastTimestamp, float nextTimeStamp, float animTime) {
-    float scaleFactor = 0.0f;
-    float midWayLen = animTime - lastTimestamp;
-    float framesDiff = nextTimeStamp - lastTimestamp;
+double Bone::getScaleFactor(double lastTimestamp, double nextTimeStamp, double animTime) {
+    double scaleFactor;
+    double midWayLen = animTime - lastTimestamp;
+    double framesDiff = nextTimeStamp - lastTimestamp;
     scaleFactor = midWayLen / framesDiff;
     return scaleFactor;
 }
 
-glm::mat4 Bone::interpolatePosition(float animTime) {
+glm::mat4 Bone::interpolatePosition(double animTime) {
     if(1 == m_positionCount)
         return glm::translate(glm::mat4(1.0f), m_positions[0].position);
 
@@ -86,7 +94,7 @@ glm::mat4 Bone::interpolatePosition(float animTime) {
     return glm::translate(glm::mat4(1.0f), finalPosition);
 }
 
-glm::mat4 Bone::interpolateRotation(float animTime) {
+glm::mat4 Bone::interpolateRotation(double animTime) {
     if(1 == m_rotationCount) {
         auto rotation = glm::normalize(m_rotations[0].orientation);
         return glm::toMat4(rotation);
@@ -99,7 +107,7 @@ glm::mat4 Bone::interpolateRotation(float animTime) {
     return glm::toMat4(finalRotation);
 }
 
-glm::mat4 Bone::interpolateScaling(float animTime) {
+glm::mat4 Bone::interpolateScaling(double animTime) {
     if(1 == m_scalingCount)
         return glm::scale(glm::mat4(1.0f), m_scales[0].scale);
 

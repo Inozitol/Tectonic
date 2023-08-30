@@ -52,10 +52,10 @@ public:
     explicit textureException(T... args) : tectonicException(args...) {};
 };
 
-class meshException : public tectonicException {
+class modelException : public tectonicException {
 public:
     template<typename ...T>
-    explicit meshException(T... args) : tectonicException(args...){}
+    explicit modelException(T... args) : tectonicException(args...){}
 };
 
 class shaderException : public tectonicException {
@@ -74,5 +74,17 @@ class sceneException : public tectonicException {
 public:
     template<typename ...T>
     explicit sceneException(T... args) : tectonicException(args...){}
+};
+
+class keyboardException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit keyboardException(T... args) : tectonicException(args...){}
+};
+
+class rendererException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit rendererException(T... args) : tectonicException(args...){}
 };
 #endif //TECTONIC_EXCEPTIONS_H

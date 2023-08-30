@@ -12,27 +12,25 @@
 #include "Window.h"
 #include "Transformation.h"
 #include "camera/GameCamera.h"
-#include "Model.h"
+#include "model/Model.h"
 #include "shader/LightingShader.h"
-#include "shader/shadow/ShadowMapFBO.h"
-#include "shader/shadow/ShadowCubeMapFBO.h"
-#include "shader/shadow/ShadowMapShader.h"
 #include "defs/ShaderDefines.h"
-#include "Terrain.h"
+#include "model/Terrain.h"
 #include "Scene.h"
-#include "Animator.h"
+#include "Cursor.h"
+#include "Keyboard.h"
+#include "shader/PickingShader.h"
 
-Window* window;
+Cursor g_cursor;
+Keyboard g_keyboard;
 
-Scene g_catScene;
+Renderer& g_renderer = Renderer::getInstance();
+std::shared_ptr<Window> window;
+
 Scene g_boneScene;
-std::shared_ptr<LightingShader> g_lightShader;
-Scene::objectIndex_t cat1_i;
-Scene::objectIndex_t cat2_i;
-Scene::objectIndex_t terrainCat_i;
-Scene::objectIndex_t bone_i;
-Scene::objectIndex_t terrainBone_i;
-
+meshIndex_t boneM_i;
+objectIndex_t bone_i;
+objectIndex_t terrainBone_i;
 
 int win_width, win_height;
 
@@ -71,6 +69,32 @@ MessageCallback( GLenum source,
     }
 }
 
+void switchAnimation(uint32_t key){
+    ObjectData& bobObject = g_boneScene.getObject(bone_i);
+    switch(key){
+        case GLFW_KEY_0:
+            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(0));
+            break;
+        case GLFW_KEY_1:
+            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(1));
+            break;
+        case GLFW_KEY_2:
+            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(2));
+            break;
+        case GLFW_KEY_3:
+            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(3));
+            break;
+        case GLFW_KEY_4:
+            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(4));
+            break;
+        case GLFW_KEY_5:
+            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(5));
+            break;
+    }
+}
+
+Slot<int32_t> g_slt_animationChange{[](uint32_t key){ switchAnimation(key);}};
+
 void switchPolygonMode(){
     static bool isFill = true;
 
@@ -83,92 +107,54 @@ void switchPolygonMode(){
     }
 }
 
-void key_callback(GLFWwindow* win, int key, int scancode, int action, int mods){
-    switch(action){
-        case GLFW_PRESS:
-        case GLFW_REPEAT:
-            switch(key){
-                case GLFW_KEY_ESCAPE:
-                    glfwSetWindowShouldClose(win, GLFW_TRUE);
-                case GLFW_KEY_W:
-                case GLFW_KEY_S:
-                case GLFW_KEY_A:
-                case GLFW_KEY_D:
-                case GLFW_KEY_SPACE:
-                case GLFW_KEY_C:
-                    g_boneScene.handleKeyEvent(key);
-                    break;
-                default:
-                    break;
-                case GLFW_KEY_X:
-                    g_boneScene.getGameCamera()->toggleProjection();
-                    g_boneScene.getGameCamera()->createProjectionMatrix();
-                    break;
-                case GLFW_KEY_Z:
-                    switchPolygonMode();
-                    break;
-            }
-            break;
-        default:
-            break;
-    }
-}
+Slot<> g_slt_switchPolygonMode{[](){ switchPolygonMode(); }};
 
-void init_gl(){
-    gladLoadGL();
-    glfwSwapInterval(1);
-
-    // Enable culling
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
-
-    // Enable depth buffer
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-
-    // Enable error callback
-    glEnable(GL_DEBUG_OUTPUT);
-    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(MessageCallback, nullptr);
-}
-
-void render_loop(){
+void renderLoop(){
     ObjectData& bobObject = g_boneScene.getObject(bone_i);
-    Animator bobAnimator(&bobObject.animation);
+    bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(0));
     while(!window->shouldClose()){
-        static float deltaTime = 0.0f;
-        static float lastFrame = 0.0f;
+        static double deltaTime = 0.0f;
+        static double animPrevTime = glfwGetTime();
+        static double fpsPrevTime = glfwGetTime();
+        static uint32_t frameCounter = 0;
 
-        float currentFrame = glfwGetTime();
-        deltaTime = currentFrame - lastFrame;
-        lastFrame = currentFrame;
-
-        bobAnimator.updateAnimation(deltaTime);
-
-        auto transforms = bobAnimator.getFinalBoneMatrices();
-        for(int32_t i = 0; i < transforms.size(); i++) {
-            g_lightShader->setBoneTransform(i, transforms[i]);
+        double currentTime = glfwGetTime();
+        deltaTime = currentTime - animPrevTime;
+        animPrevTime = currentTime;
+        frameCounter++;
+        if(currentTime - fpsPrevTime > 1.0) {
+            std::cout << "FPS: " << frameCounter << " | " << (fpsPrevTime-1) << "ms" << std::endl;
+            fpsPrevTime = currentTime;
+            frameCounter = 0;
         }
 
-        //static glm::vec3 circleCoefs = {0.0f, 0.5f, 0.0f};
-        //circleCoefs.x = -sinf(counter);
-        //circleCoefs.z = -cosf(counter);
+        bobObject.animator.updateAnimation(deltaTime);
+        auto transforms = bobObject.animator.getFinalBoneMatrices();
 
-        //directional_light->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
-        //g_boneScene.getDirectionalLight()->setDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 0.0f) - circleCoefs));
+        g_renderer.m_lightingShader.enable();
+        for(int32_t i = 0; i < transforms.size(); i++) {
+            g_renderer.m_lightingShader.setBoneTransform(i, transforms[i]);
+        }
 
-        //g_catScene.getSpotLight(0)->setWorldPosition(circleCoefs);
-        //g_catScene.getSpotLight(0)->setDirection(glm::normalize(glm::vec3(0.0, 0.0, 0.0) - circleCoefs));
+        g_renderer.m_pickingShader.enable();
+        for(int32_t i = 0; i < transforms.size(); i++) {
+            g_renderer.m_pickingShader.setBoneTransform(i, transforms[i]);
+        }
 
-        //cat1->transformation().setTranslation(counter, 0.0f, 0.0f);
-        //g_catScene.getObject(cat1_i).setTranslation(0.0f, 0.0f, counter);
+        g_renderer.m_shadowMapShader.enable();
+        for(int32_t i = 0; i < transforms.size(); i++) {
+            g_renderer.m_shadowMapShader.setBoneTransform(i, transforms[i]);
+        }
 
-        //point_lights[0].setWorldPosition(circleCoefs);
-        //point_lights[0].setWorldPosition(g_gameCamera->getPosition());
+        g_renderer.m_debugShader.enable();
+        for(int32_t i = 0; i < transforms.size(); i++) {
+            g_renderer.m_debugShader.setBoneTransform(i, transforms[i]);
+        }
 
-        //g_gameCamera->setWorldPosition(spot_lights[1].getWorldPosition());
-        //g_gameCamera->setDirection(spot_lights[1].getDirection());
+        glUseProgram(0);
+
+        g_boneScene.getSpotLight(0).setPosition(g_boneScene.getGameCamera()->getPosition());
+        g_boneScene.getSpotLight(0).setDirection(g_boneScene.getGameCamera()->getDirection());
 
         g_boneScene.renderScene();
 
@@ -178,44 +164,6 @@ void render_loop(){
 }
 
 void initScenes(){
-    std::shared_ptr<LightingShader> lightingShader(new LightingShader);
-    std::shared_ptr<ShadowMapShader> shadowShader(new ShadowMapShader);
-    std::shared_ptr<ShadowMapFBO> shadowMapFBO(new ShadowMapFBO);
-    std::shared_ptr<ShadowCubeMapFBO> shadowCubeMapFBO(new ShadowCubeMapFBO);
-
-    lightingShader->init();
-    lightingShader->enable();
-    lightingShader->setDiffuseTextureUnit(COLOR_TEXTURE_UNIT_INDEX);
-    lightingShader->setSpecularTextureUnit(SPECULAR_EXPONENT_UNIT_INDEX);
-    lightingShader->setShadowMapTextureUnit(SHADOW_TEXTURE_UNIT_INDEX);
-    lightingShader->setShadowCubeMapTextureUnit(SHADOW_CUBE_MAP_TEXTURE_UNIT_INDEX);
-
-    shadowShader->init();
-
-    shadowMapFBO->init(SHADOW_WIDTH, SHADOW_HEIGHT);
-
-    shadowCubeMapFBO->init(1000);
-
-    g_catScene.setLightingShader(lightingShader);
-    g_catScene.setShadowShader(shadowShader);
-    g_catScene.setShadowMapFBO(shadowMapFBO);
-    g_catScene.setShadowCubeMapFBO(shadowCubeMapFBO);
-
-    g_lightShader = lightingShader;
-
-    std::shared_ptr<Model> catMesh(new Model);
-    std::shared_ptr<Terrain> terrainMesh(new Terrain);
-    catMesh->loadModelFromFile("meshes/concrete_cat.obj");
-    terrainMesh->createTerrain(50,50,"meshes/textures/bricks.jpg");
-    Scene::meshIndex_t catMesh_i = g_catScene.insertMesh(catMesh);
-    Scene::meshIndex_t terrainMesh_i = g_catScene.insertMesh(terrainMesh);
-
-    cat1_i = g_catScene.createObject(catMesh_i);
-    cat2_i = g_catScene.createObject(catMesh_i);
-    terrainCat_i = g_catScene.createObject(terrainMesh_i);
-
-    g_catScene.getObject(cat1_i).transformation.setTranslation(-0.2, 0.0, 0.0);
-    g_catScene.getObject(terrainCat_i).transformation.setTranslation(-25.0, 0.0, -25.0);
 
     std::shared_ptr<GameCamera> gameCamera(new GameCamera);
     gameCamera->switchPerspective();
@@ -231,98 +179,128 @@ void initScenes(){
                                      SHADOW_OPROJ_FAR});
     gameCamera->createProjectionMatrix();
     gameCamera->setPosition({0.0f, 0.1, 0.5});
-    window->setMouseCallback([](GLFWwindow *, double x, double y) { g_boneScene.handleMouseEvent(x, y); });
-    g_catScene.setGameCamera(gameCamera);
+    window->sig_cursorEnabled.connect(gameCamera->slt_cursorEnabled);
 
-    std::shared_ptr<DirectionalLight> directionalLight(new DirectionalLight);
-    directionalLight->ambientIntensity = 0.1f;
-    directionalLight->diffuseIntensity = 1.0f;
-    directionalLight->setDirection(glm::vec3(1.0f, 0.0f, 0.0f));
+    g_cursor.sig_updatePos.connect(g_boneScene.slt_updateMousePosition);
+    g_keyboard.connectKeyGroup("controls", g_boneScene.slt_receiveKeyboardButton);
 
-    std::shared_ptr<SpotLight> spotLights[MAX_SPOT_LIGHTS];
-    spotLights[0] = std::make_shared<SpotLight>();
-    spotLights[0]->diffuseIntensity = 1.0f;
-    spotLights[0]->ambientIntensity = 0.0f;
-    spotLights[0]->color = glm::vec3(1.0f, 1.0f, 1.0f);
-    spotLights[0]->attenuation.linear = 0.2f;
-    spotLights[0]->angle = 30.0f;
+    DirectionalLight& directionalLight = g_boneScene.getDirectionalLight();
+    directionalLight.ambientIntensity = 0.2f;
+    directionalLight.diffuseIntensity = 1.0f;
+    directionalLight.setDirection(glm::vec3(0.0f, -1.0f, 0.0f));
 
-    spotLights[1] = std::make_shared<SpotLight>();
-    spotLights[1]->diffuseIntensity = 2.0f;
-    spotLights[1]->color = glm::vec3(1.0f, 1.0f, 1.0f);
-    spotLights[1]->attenuation.linear = 0.01f;
-    spotLights[1]->angle = 30.0f;
-    spotLights[1]->setWorldPosition({0.0f, 0.1, 0.5});
-    spotLights[1]->setDirection({0.0f, 0.0f, -1.0f});
+    spotLightIndex_t spotLightIndex = g_boneScene.createSpotLight();
+    SpotLight& spotLight = g_boneScene.getSpotLight(spotLightIndex);
+    spotLight.diffuseIntensity = 40.0f;
+    spotLight.ambientIntensity = 0.1f;
+    spotLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
+    spotLight.attenuation.linear = 0.2f;
+    spotLight.attenuation.exp = 0.1f;
+    spotLight.angle = 30.0f;
 
-    std::shared_ptr<PointLight> pointLight(new PointLight);
-    pointLight->diffuseIntensity = 1.0f;
-    pointLight->color = {1.0f, 1.0f, 1.0f};
-    pointLight->attenuation.linear = 0.2;
+    /*
+    pointLightIndex_t pointLightIndex = g_boneScene.createPointLight();
+    PointLight& pointLight = g_boneScene.getPointLight(pointLightIndex);
+    pointLight.diffuseIntensity = 10.0f;
+    pointLight.color = {1.0f, 1.0f, 1.0f};
+    pointLight.attenuation.linear = 0.2;
+    pointLight.attenuation.exp = 0.1;
+    */
 
-    g_catScene.insertDirectionalLight(directionalLight);
-    g_catScene.insertSpotLight(spotLights[0]);
-    //g_catScene.insertSpotLight(spotLights[1]);
-    //g_catScene.insertPointLight(pointLight);
-
-    g_catScene.setWindowDimension(window->getSize());
-
-    // Bone Scene
-    g_boneScene.setLightingShader(lightingShader);
-    g_boneScene.setShadowShader(shadowShader);
-    g_boneScene.setShadowMapFBO(shadowMapFBO);
-    g_boneScene.setShadowCubeMapFBO(shadowCubeMapFBO);
-
-    Scene::meshIndex_t terrainMeshBone_i = g_boneScene.insertMesh(terrainMesh);
+    std::shared_ptr<Terrain> terrainMesh(new Terrain);
+    terrainMesh->createTerrain(10,10,
+                               "meshes/textures/brickwall.jpg",
+                               "meshes/textures/brickwall_normal.jpg");
+    meshIndex_t terrainMeshBone_i = g_boneScene.insertMesh(terrainMesh);
     terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
-    g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-25.0, 0.0, -25.0);
+    g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-5.0, 0.0, -5.0);
+
     std::shared_ptr<Model> boneMesh(new Model);
-    boneMesh->loadModelFromFile("meshes/boblampclean.md5mesh");
-    Scene::meshIndex_t boneMesh_i = g_boneScene.insertMesh(boneMesh);
-    bone_i = g_boneScene.createObject(boneMesh_i);
+    boneMesh->loadModelFromFile("meshes/shibahu.glb");
+    boneM_i = g_boneScene.insertMesh(boneMesh);
+    bone_i = g_boneScene.createObject(boneM_i);
     ObjectData& bobObject = g_boneScene.getObject(bone_i);
-    bobObject.transformation.setScale(0.005);
+    bobObject.transformation.setScale(0.01);
     //bobObject.transformation.setRotation(-90.0f, 0.0f, 0.0f);
-    bobObject.transformation.setTranslation(0.0f, 0.0f, 0.0f);
-    bobObject.animation = Animation("meshes/boblampclean.md5anim", boneMesh.get());
-    g_boneScene.insertDirectionalLight(directionalLight);
+    bobObject.transformation.setTranslation(-1.0f, 0.0f, 0.0f);
+
+    //std::shared_ptr<Model> barrelModel(new Model);
+    //barrelModel->loadModelFromFile("meshes/wine_barrel.obj");
+    //meshIndex_t barrel_i = g_boneScene.insertMesh(barrelModel);
+    //objectIndex_t barrelObj_i = g_boneScene.createObject(barrel_i);
+    //g_boneScene.getObject(barrelObj_i).transformation.setTranslation(1.0f, 0.0f, 0.0f);
+
+    //objectIndex_t bob2 = g_boneScene.createObject(boneMesh_i);
+    //ObjectData& bob2Object = g_boneScene.getObject(bob2);
+    //bob2Object.transformation.setScale(0.008);
+    //bob2Object.transformation.setTranslation(0.2f, 0.0f, 0.0f);
+
+    /*
+    for(int32_t x = -10; x < 10; x++){
+        for(int32_t y = -10; y < 10; y++){
+            objectIndex_t obj = g_boneScene.createObject(barrel_i);
+            g_boneScene.getObject(obj).transformation.setTranslation(x/2, 0,y/2);
+            //g_boneScene.getObject(obj).transformation.setScale(0.008);
+            g_boneScene.getObject(obj).transformation.setScale(0.8);
+        }
+    }
+    */
+
     g_boneScene.setGameCamera(gameCamera);
 
     g_boneScene.setWindowDimension(window->getSize());
+
+    g_cursor.sig_updatePos.connect(g_boneScene.slt_updateCursorPos);
+    g_cursor.sig_cursorPressedPos.connect(g_renderer.slt_updateCursorPressedPos);
+    g_renderer.sig_objectClicked.connect(g_boneScene.slt_objectClicked);
+}
+
+void initKeyGroups(){
+    g_keyboard.addKeyGroup("controls", {
+            GLFW_KEY_W,
+            GLFW_KEY_S,
+            GLFW_KEY_A,
+            GLFW_KEY_D,
+            GLFW_KEY_SPACE,
+            GLFW_KEY_C
+    });
+    g_keyboard.addKeyGroup("close", {GLFW_KEY_ESCAPE});
+    g_keyboard.addKeyGroup("cursorToggle", {
+            GLFW_KEY_LEFT_CONTROL,
+            GLFW_KEY_RIGHT_CONTROL});
+    g_keyboard.addKeyGroup("polygonToggle", {GLFW_KEY_Z});
+    g_keyboard.addKeyGroup("perspectiveToggle", {GLFW_KEY_X});
+    g_keyboard.addKeyGroup("debugToggle", {GLFW_KEY_V});
+    g_keyboard.addKeyGroup("alphaNumerics", {
+        GLFW_KEY_0,
+        GLFW_KEY_1,
+        GLFW_KEY_2,
+        GLFW_KEY_3,
+        GLFW_KEY_4,
+        GLFW_KEY_5
+    });
+
+    g_keyboard.connectKeyGroup("close", window->slt_setClose);
+    g_keyboard.connectKeyGroup("cursorToggle", window->slt_toggleCursor);
+    g_keyboard.connectKeyGroup("polygonToggle", g_slt_switchPolygonMode);
+    g_keyboard.connectKeyGroup("perspectiveToggle", g_boneScene.slt_togglePerspective);
+    g_keyboard.connectKeyGroup("debugToggle", g_renderer.slt_toggleDebug);
+    g_keyboard.connectKeyGroup("alphaNumerics", g_slt_animationChange);
 }
 
 int main(){
-    glfwSetErrorCallback(err_callback);
-    if (!glfwInit())
-        return -1;
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+    window = g_renderer.window;
 
     try {
-        try {
-            window = new Window("Howdy World");
-        } catch (windowException &we){
-            fprintf(stderr, "%s", we.what());
-            exit(-1);
-        }
+        window->connectKeyboard(g_keyboard);
+        window->connectCursor(g_cursor);
 
-        window->setKeyCallback(key_callback);
-        window->makeCurrentContext();
-        window->disableCursor();
-        std::tie(win_width, win_height) = window->getSize();
-
-        init_gl();
+        initKeyGroups();
         initScenes();
 
-        render_loop();
+        renderLoop();
     } catch(tectonicException& te){
         fprintf(stderr, "%s", te.what());
     }
-    delete(window);
-    glfwTerminate();
     return 0;
 }

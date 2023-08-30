@@ -4,7 +4,10 @@
 
 namespace Utils{
     bool readFile(const char* filename, std::string& content){
-        std::ifstream f(filename);
+        std::ifstream f;
+
+        f.open(filename);
+
         bool ret = false;
 
         if(f.is_open()){
@@ -16,8 +19,10 @@ namespace Utils{
             f.close();
             ret = true;
         }
+
         return ret;
     }
+
 
     void Frustum::calcCorners(const Camera &camera) {
         const PerspProjInfo perspInfo = camera.getPerspectiveInfo();
@@ -122,23 +127,10 @@ namespace Utils{
 
     glm::mat4 aiMatToGLM(const aiMatrix4x4t<ai_real>& assimpMat) {
         glm::mat4 glmMat;
-        glmMat[0][0] = assimpMat.a1;
-        glmMat[0][1] = assimpMat.b1;
-        glmMat[0][2] = assimpMat.c1;
-        glmMat[0][3] = assimpMat.d1;
-        glmMat[1][0] = assimpMat.a2;
-        glmMat[1][1] = assimpMat.b2;
-        glmMat[1][2] = assimpMat.c2;
-        glmMat[1][3] = assimpMat.d2;
-        glmMat[2][0] = assimpMat.a3;
-        glmMat[2][1] = assimpMat.b3;
-        glmMat[2][2] = assimpMat.c3;
-        glmMat[2][3] = assimpMat.d3;
-        glmMat[3][0] = assimpMat.a4;
-        glmMat[3][1] = assimpMat.b4;
-        glmMat[3][2] = assimpMat.c4;
-        glmMat[3][3] = assimpMat.d4;
-
+        glmMat[0][0] = assimpMat.a1; glmMat[1][0] = assimpMat.a2; glmMat[2][0] = assimpMat.a3; glmMat[3][0] = assimpMat.a4;
+        glmMat[0][1] = assimpMat.b1; glmMat[1][1] = assimpMat.b2; glmMat[2][1] = assimpMat.b3; glmMat[3][1] = assimpMat.b4;
+        glmMat[0][2] = assimpMat.c1; glmMat[1][2] = assimpMat.c2; glmMat[2][2] = assimpMat.c3; glmMat[3][2] = assimpMat.c4;
+        glmMat[0][3] = assimpMat.d1; glmMat[1][3] = assimpMat.d2; glmMat[2][3] = assimpMat.d3; glmMat[3][3] = assimpMat.d4;
         return glmMat;
     }
     glm::vec3 aiVecToGLM(const aiVector3D& vec){
@@ -147,5 +139,9 @@ namespace Utils{
 
     glm::quat aiQuatToGLM(const aiQuaternion& orientation){
         return {orientation.w, orientation.x, orientation.y, orientation.z};
+    }
+
+    glm::vec3 aiColToGLM(const aiColor3D& col){
+        return {col.r, col.g, col.b};
     }
 }

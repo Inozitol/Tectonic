@@ -24,18 +24,23 @@ void Shader::enable() const {
     glUseProgram(m_shaderProgram);
 }
 
-void Shader::addShader(GLenum type, const char* filename, const char* prefix = nullptr) {
-    std::string s;
-    if(!Utils::readFile(filename, s)){
+void Shader::addShader(GLenum type, const char *filename) {
+
+    std::string shaderText;
+    if(!Utils::readFile(filename, shaderText)){
         throw shaderException("Unable to open shader file: ", filename);
     }
 
-    // Used to insert various preprocessor information
-    if(prefix){
-        s.insert(0, prefix);
+    // We can inject defines used in C++ into GLSL by prefixing the source code with them
+    std::string prefix;
+    if(!Utils::readFile("include/defs/ShaderDefines.h", prefix)){
+        throw shaderException("Unable to load ShaderDefines.h file");
     }
 
-    s.insert(0, versionString);
+    replaceIncludes(shaderText);
+
+    shaderText.insert(0, prefix);
+    shaderText.insert(0, versionString);
 
     GLuint shader_obj = glCreateShader(type);
     if(!shader_obj){
@@ -44,8 +49,8 @@ void Shader::addShader(GLenum type, const char* filename, const char* prefix = n
     m_shaderObjList.push_back(shader_obj);
 
     const GLchar* p[1];
-    p[0] = s.c_str();
-    GLint lengths[1] = {static_cast<GLint>(s.size()) };
+    p[0] = shaderText.c_str();
+    GLint lengths[1] = {static_cast<GLint>(shaderText.size()) };
 
     glShaderSource(shader_obj, 1, p, lengths);
     glCompileShader(shader_obj);
@@ -88,7 +93,20 @@ GLint Shader::uniformLocation(const char *uniformName) const {
     GLint location = glGetUniformLocation(m_shaderProgram, uniformName);
 
     if(location == INVALID_UNIFORM_LOC){
-        throw shaderException("Unable to get uniform location\n", "Uniform: ", uniformName);
+        fprintf(stderr, "Unable to get uniform location [%s]\n", uniformName);
+        //throw shaderException("Unable to get uniform location\n", "Uniform: ", uniformName);
     }
     return location;
+}
+
+void Shader::replaceIncludes(std::string &codeString, std::string prefix) {
+    std::smatch match;
+    prefix.append(R"(\s+(.+)\n)");
+
+    while(std::regex_search(codeString, match, std::regex(prefix))){
+        const std::string path = match[1];
+        std::string code;
+        Utils::readFile(path.c_str(), code);
+        codeString.replace(match.position(),match.length(),code);
+    }
 }

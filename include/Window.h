@@ -5,6 +5,10 @@
 #include <functional>
 #include "exceptions.h"
 
+#include "meta/Signal.h"
+#include "Cursor.h"
+#include "Keyboard.h"
+
 /**
  * Class representing the application window.
  */
@@ -12,6 +16,46 @@ class Window {
 public:
     explicit Window(const std::string& name);
     ~Window();
+
+    /**
+     * @brief Emitted on every mouse button press.
+     */
+    Signal<mouseButtonInfo> sig_updateMouseButtonInfo;
+
+    /**
+     * @brief Emitted on every keyboard button press.
+     */
+    Signal<keyboardButtonInfo> sig_updateKeyboardButtonInfo;
+
+    /**
+     * @brief Emitted with every new mouse position.
+     */
+    Signal<double, double> sig_updateMousePos;
+
+    /**
+     * @brief Emitted when cursor becomes enabled/disabled.
+     */
+    Signal<bool> sig_cursorEnabled;
+
+    /**
+     * @brief Emitted when window dimensions are changed.
+     * Returns width and height.
+     */
+    Signal<int32_t, int32_t> sig_widowDimensions;
+
+    /**
+     * @brief Closes the window.
+     */
+    Slot<> slt_setClose{[this](){
+        close();
+    }};
+
+    /**
+     * @brief Toggles between cursor being enabled/disabled.
+     */
+    Slot<> slt_toggleCursor{[this](){
+        toggleCursor();
+    }};
 
     /**
      * @brief Makes the window as the current context.
@@ -43,18 +87,6 @@ public:
     bool shouldClose();
 
     /**
-     * @brief Sets the keyboard callback function.
-     * @param callback Callback function.
-     */
-    void setKeyCallback(void(*callback)(GLFWwindow *, int, int, int, int));
-
-    /**
-     * @brief Sets the mouse callback function.
-     * @param callback Callback function.
-     */
-    void setMouseCallback(void(*callback)(GLFWwindow *, double, double));
-
-    /**
      * @brief Disables the cursor inside the window.
      */
     void disableCursor();
@@ -65,12 +97,32 @@ public:
     void enableCursor();
 
     /**
-     * Sets the cursor local_position inside the window.
-     * @param x X coordinate.
-     * @param y Y coordinate.
+     * @brief Toggles cursor being enabled/disabled.
      */
-    void setCursorPos(double x, double y);
+    void toggleCursor();
+
+    /**
+     * @brief Sets the window to shouldClose state.
+     */
+    void close();
+
+    /**
+     * @brief Connects the appropriate signals and slots between this Window and provided Cursor.
+     * @param cursor Cursor object.
+     */
+    void connectCursor(Cursor& cursor);
+
+    /**
+     * @brief Connects the appropriate signals and slots between this Window and provided Keyboard.
+     * @param keyboard Keyboard object.
+     */
+    void connectKeyboard(Keyboard& keyboard);
+
+    static Window* getContextFromWindow(GLFWwindow* window);
+
 private:
+    void initSignals();
+
     GLFWwindow* m_window;
 };
 

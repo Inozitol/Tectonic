@@ -2,6 +2,8 @@
 #define TECTONIC_SHADER_H
 
 #include <list>
+#include <regex>
+
 #include "extern/glad/glad.h"
 #include "exceptions.h"
 
@@ -32,7 +34,7 @@ protected:
      * @param type Type of shader being created.
      * @param filename Path to a file with the GLSL shader code.
      */
-    void addShader(GLenum type, const char* filename, const char* prefix);
+    void addShader(GLenum type, const char *filename);
 
     /**
      * Links and validates the shader program.
@@ -48,6 +50,9 @@ protected:
     GLint uniformLocation(const char* uniformName) const;
 
 private:
+
+    static void replaceIncludes(std::string& codeString, std::string prefix = "#include");
+
     std::list<GLuint> m_shaderObjList;
     GLuint m_shaderProgram = -1;
 };

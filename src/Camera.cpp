@@ -47,7 +47,7 @@ const glm::vec3 & Camera::getPosition() const {
     return m_position;
 }
 
-glm::vec3 Camera::getDirection() {
+glm::vec3 Camera::getDirection() const {
     return glm::normalize(forward());
 }
 

@@ -1,53 +1,6 @@
 #include <iostream>
-#include "Model.h"
-
-Mesh::Mesh(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices, const Material& material):
-    m_vertices(vertices), m_indices(indices), m_material(material){
-    initMesh();
-}
-
-void Mesh::initMesh() {
-    glGenVertexArrays(1, &m_VAO);
-    glGenBuffers(1, &m_VBO);
-    glGenBuffers(1, &m_EBO);
-
-    glBindVertexArray(m_VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizei>(m_vertices.size() * sizeof(Vertex)), &m_vertices[0], GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizei>(m_indices.size() * sizeof(uint32_t)), &m_indices[0], GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(POSITION_LOCATION);
-    glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-
-    glEnableVertexAttribArray(NORMAL_LOCATION);
-    glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_normal));
-
-    glEnableVertexAttribArray(TEX_COORD_LOCATION);
-    glVertexAttribPointer(TEX_COORD_LOCATION, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_texCoord));
-
-    glEnableVertexAttribArray(BONE_ID_LOCATION);
-    glVertexAttribIPointer(BONE_ID_LOCATION, 4, GL_INT, sizeof(Vertex), (void*) offsetof(Vertex, m_boneIds));
-
-    glEnableVertexAttribArray(BONE_WEIGHT_LOCATION);
-    glVertexAttribPointer(BONE_WEIGHT_LOCATION, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_weights));
-
-    glBindVertexArray(0);
-}
-
-void Mesh::render() const{
-    if(m_material.diffuse){
-        m_material.diffuse->bind(COLOR_TEXTURE_UNIT);
-    }
-    if(m_material.specularExp){
-        m_material.specularExp->bind(SPECULAR_EXPONENT_UNIT);
-    }
-
-    glBindVertexArray(m_VAO);
-    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(m_indices.size()), GL_UNSIGNED_INT, 0);
-    glBindVertexArray(0);
-}
+#include <set>
+#include "model/Model.h"
 
 void Model::loadModelFromFile(const std::string &filename) {
     loadModel(filename);
@@ -57,27 +10,82 @@ void Model::loadModel(const std::string &filename) {
     Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(filename, ASSIMP_FLAGS);
     if(!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode){
-        throw meshException("Unable to load model ", importer.GetErrorString());
+        throw modelException("Unable to load model ", importer.GetErrorString());
     }
     m_modelDirectory = filename.substr(0, filename.find_last_of('/'));
-    processNode(scene->mRootNode, scene);
+    loadMaterials(scene);
+    processNode(scene->mRootNode, scene, m_rootNode);
+    bufferMeshes();
+
+    if(scene->HasAnimations())
+        loadAnimations(scene);
 }
 
-void Model::processNode(aiNode *node, const aiScene *scene) {
+void Model::loadAnimations(const aiScene *scene) {
+    m_animations.reserve(scene->mNumAnimations);
+    for(uint32_t i = 0; i < scene->mNumAnimations; i++){
+        const aiAnimation* anim = scene->mAnimations[i];
+        m_animations.emplace_back(anim);
+        readMissingBoneData(anim);
+    }
+}
+
+void Model::readMissingBoneData(const aiAnimation* animation){
+    assert(animation);
+    for(uint32_t i = 0; i < animation->mNumChannels; i++){
+        const aiNodeAnim* channel = animation->mChannels[i];
+        std::string boneName = channel->mNodeName.C_Str();
+        if(m_boneInfoMap.find(boneName) == m_boneInfoMap.end()){
+            m_boneInfoMap[boneName].id = m_boneCounter;
+            m_boneCounter++;
+        }
+        Bone bone(channel->mNodeName.C_Str(), m_boneInfoMap.at(channel->mNodeName.C_Str()).id, channel);
+        m_animations.back().insertBone(bone);
+    }
+}
+
+void Model::loadMaterials(const aiScene *scene) {
+    if(!scene->HasMaterials())
+        return;
+
+    m_materials.reserve(scene->mNumMaterials);
+
+    for(uint32_t i = 0; i < scene->mNumMaterials; i++){
+        auto material = scene->mMaterials[i];
+        m_materials.emplace_back(material, scene, m_modelDirectory);
+    }
+}
+
+void Model::processNode(const aiNode *node, const aiScene *scene, NodeData &nodeDest) {
+    assert(node);
+
+    // Load node metadata and transformation matrix
+    nodeDest.name = node->mName.C_Str();
+    nodeDest.transformation = Utils::aiMatToGLM(node->mTransformation);
+    nodeDest.childCount = node->mNumChildren;
+
+    // Load node meshes
     for(uint32_t i = 0; i < node->mNumMeshes; i++){
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        m_meshes.push_back(processMesh(mesh, scene));
+        addMesh(mesh, scene);
     }
 
+    // Load children of node
     for(uint32_t i = 0; i < node->mNumChildren; i++){
-        processNode(node->mChildren[i], scene);
+        NodeData newNode;
+        processNode(node->mChildren[i], scene, newNode);
+        nodeDest.children.push_back(newNode);
     }
 }
 
-Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene) {
+void Model::addMesh(aiMesh *mesh, const aiScene *scene) {
+    Mesh meshInfo;
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-    Material material;
+
+    vertices.reserve(mesh->mNumVertices);
+    indices.reserve(mesh->mNumFaces*3);
+
     for(uint32_t i = 0; i < mesh->mNumVertices; i++){
         Vertex vertex{};
         vertex.m_position.x = mesh->mVertices[i].x;
@@ -100,8 +108,10 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene) {
             vertex.m_bitangent.y = mesh->mBitangents[i].y;
             vertex.m_bitangent.z = mesh->mBitangents[i].z;
         }
+
         vertices.push_back(vertex);
     }
+
     extractBoneWeightForVertices(vertices, mesh, scene);
 
     for(uint32_t i = 0; i < mesh->mNumFaces; i++){
@@ -112,139 +122,49 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene) {
     }
 
     if(mesh->mMaterialIndex >= 0){
-        uint32_t matIndex = mesh->mMaterialIndex;
-        aiMaterial* mat = scene->mMaterials[matIndex];
-        loadTextures(mat, material, scene);
-        loadColors(mat, material);
+        meshInfo.matIndex = mesh->mMaterialIndex;
     }
 
-    return {vertices, indices, material};
-}
+    meshInfo.indicesOffset = m_indicesCount;
+    meshInfo.verticesOffset = m_verticesCount;
+    meshInfo.indicesCount = indices.size();
 
-void Model::render() const {
-    for(const auto& mesh : m_meshes){
-        mesh.render();
-    }
-}
+    m_indicesCount += indices.size();
+    m_verticesCount += vertices.size();
 
-Material Model::material() {
-    for(const auto& mesh : m_meshes){
-        auto& material = mesh.m_material;
-        if(material.ambientColor != glm::vec3(0.0f, 0.0f, 0.0f)){
-            return material;
-        }
-    }
-    return Material({glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f)});
-}
+    m_vertices.insert(m_vertices.end(), vertices.begin(), vertices.end());
+    m_indices.insert(m_indices.end(), indices.begin(), indices.end());
 
-void Model::loadTextures(const aiMaterial *aiMat, Material& material, const aiScene *scene) {
-    loadDiffuseTexture(aiMat, material, scene);
-    loadSpecularTexture(aiMat, material, scene);
-}
-
-void Model::loadDiffuseTexture(const aiMaterial *aiMat, Material& material, const aiScene *scene) {
-    if(aiMat->GetTextureCount(aiTextureType_DIFFUSE) > 0){
-        aiString path;
-        if(aiMat->GetTexture(aiTextureType_DIFFUSE, 0, &path, nullptr, nullptr, nullptr, nullptr, nullptr) == AI_SUCCESS){
-            std::string p(path.data);
-            const aiTexture* texture;
-            if((texture = scene->GetEmbeddedTexture(path.C_Str()))){
-                std::string hint = texture->achFormatHint;
-                if(hint == "png" || hint == "jpg"){
-                    if(texture->mHeight == 0) {
-                        material.diffuse = new Texture(GL_TEXTURE_2D, (u_char *) texture->pcData,
-                                                                 texture->mWidth, 3);
-                        //m_materials[index].diffuse->load();
-                    }
-                }
-            }else{
-                if(p.substr(0, 2) == ".\\") {
-                    p = p.substr(2, p.size() - 2);
-                }
-                std::string fullpath;
-                fullpath.append(m_modelDirectory).append("/").append(p);
-                material.diffuse = new Texture(GL_TEXTURE_2D, fullpath);
-            }
-        }
-    }
-}
-
-void Model::loadSpecularTexture(const aiMaterial *aiMat, Material& material, const aiScene *scene) {
-    if(aiMat->GetTextureCount(aiTextureType_SHININESS) > 0){
-        aiString path;
-        if(aiMat->GetTexture(aiTextureType_SHININESS, 0, &path, nullptr, nullptr, nullptr, nullptr, nullptr) == AI_SUCCESS){
-            std::string p(path.data);
-            const aiTexture* texture;
-            if((texture = scene->GetEmbeddedTexture(path.C_Str()))){
-                std::string hint = texture->achFormatHint;
-                if(hint == "png" || hint == "jpg"){
-                    if(texture->mHeight == 0){
-                        material.specularExp = new Texture(GL_TEXTURE_2D, (u_char*)texture->pcData, texture->mWidth, 1);
-                    }
-                }
-            }else {
-                if (p.substr(0, 2) == ".\\") {
-                    p = p.substr(2, p.size() - 2);
-                }
-                std::string fullpath;
-                fullpath.append(m_modelDirectory).append("/").append(p);
-                material.specularExp = new Texture(GL_TEXTURE_2D, fullpath);
-            }
-        }
-    }
-}
-
-void Model::loadColors(const aiMaterial *aiMat, Material& material) {
-    aiColor3D ambient_color(0.0f, 0.0f, 0.0f);
-    if(aiMat->Get(AI_MATKEY_COLOR_AMBIENT, ambient_color) == AI_SUCCESS){
-        material.ambientColor.r = ambient_color.r;
-        material.ambientColor.g = ambient_color.g;
-        material.ambientColor.b = ambient_color.b;
-    }
-
-    aiColor3D diffuse_color(0.0f, 0.0f, 0.0f);
-    if(aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, diffuse_color) == AI_SUCCESS){
-        material.diffuseColor.r = diffuse_color.r;
-        material.diffuseColor.g = diffuse_color.g;
-        material.diffuseColor.b = diffuse_color.b;
-    }
-
-    aiColor3D specular_color(0.0f, 0.0f, 0.0f);
-    if(aiMat->Get(AI_MATKEY_COLOR_SPECULAR, specular_color) == AI_SUCCESS){
-        material.specularColor.r = specular_color.r;
-        material.specularColor.g = specular_color.g;
-        material.specularColor.b = specular_color.b;
-    }
+    m_meshes.push_back(meshInfo);
 }
 
 void Model::setVertexBoneData(Vertex &vertex, int32_t boneId, float weight) {
-    for(uint32_t i = 0; i < MAX_NUM_BONES_PER_VERTEX; i++){
+    //assert(weight != 0.0f);
+    if(weight == 0.0f)
+        return;
+    for(uint32_t i = 0; i < MAX_BONES_INFLUENCE; i++){
+        assert(vertex.m_boneIds[i] != boneId);
+
         if(vertex.m_boneIds[i] < 0){
             vertex.m_boneIds[i] = boneId;
             vertex.m_weights[i] = weight;
-            break;
+            return;
         }
     }
+    throw modelException("Exceeded maximum amount of bones per vertex");
 }
 
 void Model::extractBoneWeightForVertices(std::vector<Vertex> &vertices, aiMesh *mesh, const aiScene *scene) {
+    assert(mesh->mNumBones <= MAX_BONES);
+
     for(int32_t boneIndex = 0; boneIndex < mesh->mNumBones; boneIndex++){
-        int boneId = -1;
-        std::string boneName = mesh->mBones[boneIndex]->mName.C_Str();
-        if(m_boneInfoMap.find(boneName) == m_boneInfoMap.end()){
-            BoneInfo newBoneInfo{
-                m_boneCounter,
-                Utils::aiMatToGLM(mesh->mBones[boneIndex]->mOffsetMatrix)
-            };
-            m_boneInfoMap[boneName] = newBoneInfo;
-            boneId = m_boneCounter;
-            m_boneCounter++;
-        }else{
-            boneId = m_boneInfoMap[boneName].id;
-        }
-        assert(boneId != -1);
-        auto weights = mesh->mBones[boneIndex]->mWeights;
-        uint32_t numWeights = mesh->mBones[boneIndex]->mNumWeights;
+        const aiBone* bone = mesh->mBones[boneIndex];
+
+        int boneId = getBoneId(bone);
+        assert(boneId >= 0);
+
+        auto weights = bone->mWeights;
+        uint32_t numWeights = bone->mNumWeights;
 
         for(uint32_t weightIndex = 0; weightIndex < numWeights; weightIndex++){
             uint32_t vertexId = weights[weightIndex].mVertexId;
@@ -252,6 +172,86 @@ void Model::extractBoneWeightForVertices(std::vector<Vertex> &vertices, aiMesh *
             assert(vertexId <= vertices.size());
             setVertexBoneData(vertices[vertexId], boneId, weight);
         }
+    }
+}
+
+int32_t Model::getBoneId(const aiBone* bone) {
+    int32_t boneId;
+    std::string boneName = bone->mName.C_Str();
+    if(m_boneInfoMap.find(boneName) == m_boneInfoMap.end()){
+        BoneInfo newBoneInfo{
+            m_boneCounter,
+            Utils::aiMatToGLM(bone->mOffsetMatrix)
+        };
+        m_boneInfoMap[boneName] = newBoneInfo;
+        boneId = m_boneCounter;
+        m_boneCounter++;
+    }else{
+        boneId = m_boneInfoMap.at(boneName).id;
+    }
+
+    return boneId;
+}
+
+
+void Model::bufferMeshes() {
+
+    glGenVertexArrays(1, &m_VAO);
+
+    glBindVertexArray(m_VAO);
+
+    glGenBuffers(ARRAY_SIZE(m_buffers), m_buffers);
+
+    glBindBuffer(GL_ARRAY_BUFFER, m_buffers[POS_VB]);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizei>(m_vertices.size() * sizeof(Vertex)), &m_vertices[0], GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(POSITION_LOCATION);
+    glVertexAttribPointer(POSITION_LOCATION, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+
+    glEnableVertexAttribArray(TEX_COORD_LOCATION);
+    glVertexAttribPointer(TEX_COORD_LOCATION, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_texCoord));
+
+    glEnableVertexAttribArray(NORMAL_LOCATION);
+    glVertexAttribPointer(NORMAL_LOCATION, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_normal));
+
+    glEnableVertexAttribArray(TANGENT_LOCATION);
+    glVertexAttribPointer(TANGENT_LOCATION, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_tangent));
+
+    glEnableVertexAttribArray(BITANGENT_LOCATION);
+    glVertexAttribPointer(BITANGENT_LOCATION, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_bitangent));
+
+    glEnableVertexAttribArray(BONE_ID_LOCATION);
+    glVertexAttribIPointer(BONE_ID_LOCATION, 4, GL_INT, sizeof(Vertex), (void*) offsetof(Vertex, m_boneIds));
+
+    glEnableVertexAttribArray(BONE_WEIGHT_LOCATION);
+    glVertexAttribPointer(BONE_WEIGHT_LOCATION, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) offsetof(Vertex, m_weights));
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_buffers[INDEX_BUFFER]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizei>(m_indices.size() * sizeof(uint32_t)), &m_indices[0], GL_STATIC_DRAW);
+
+    glBindVertexArray(0);
+}
+
+void Model::calcBoneTransform(const NodeData *node, glm::mat4 parentTransform) {
+    std::string nodeName = node->name;
+    glm::mat4 nodeTransform = node->transformation;
+
+    Bone* bone = m_animations.at(m_currentAnim).findBone(nodeName);
+
+    if(bone){
+        bone->update(m_currentAnimTime);
+        nodeTransform = bone->getLocalTransform();
+    }
+
+    glm::mat4 globalTransform = parentTransform * nodeTransform;
+    if(m_boneInfoMap.find(nodeName) != m_boneInfoMap.end()){
+        int32_t boneId = m_boneInfoMap.at(nodeName).id;
+        glm::mat4 offset = m_boneInfoMap.at(nodeName).offset;
+        m_finalBoneMatrices.at(boneId) = globalTransform * offset;
+    }
+
+    for(int i = 0; i < node->childCount; i++){
+        calcBoneTransform(&node->children.at(i), globalTransform);
     }
 }
 

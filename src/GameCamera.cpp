@@ -26,6 +26,9 @@ void GameCamera::handleKeyEvent(u_short key) {
 }
 
 void GameCamera::handleMouseEvent(double x_in, double y_in) {
+    if(m_cursorEnabled)
+        return;
+
     auto x = static_cast<float>(x_in);
     auto y = static_cast<float>(y_in);
 

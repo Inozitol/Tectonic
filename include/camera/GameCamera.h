@@ -2,6 +2,8 @@
 #define TECTONIC_GAMECAMERA_H
 
 #include "camera/Camera.h"
+#include "meta/Signal.h"
+#include "meta/Slot.h"
 
 /**
  * Represents a controllable game camera. Usually only one per scene.
@@ -29,12 +31,24 @@ public:
      * @param y Current mouse Y local_position.
      */
     void handleMouseEvent(double x, double y);
+
+    /**
+     * Enables or disables cursor for the camera.
+     * It needs to set m_firstMouse to true so that camera wont snap between previous positions.
+     */
+    Slot<bool> slt_cursorEnabled{[this](bool isEnabled){
+        m_cursorEnabled = isEnabled;
+        m_firstMouse = true;
+    }};
+
 private:
     float m_speed = 0.05f;
     float m_sensitivity = 0.001f;
 
     bool m_firstMouse = true;
     glm::vec2 m_lastMousePos = glm::vec2(0.0f, 0.0f);
+
+    bool m_cursorEnabled = false;
 };
 
 
