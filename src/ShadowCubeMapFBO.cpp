@@ -2,15 +2,7 @@
 
 
 ShadowCubeMapFBO::~ShadowCubeMapFBO() {
-    if(m_fbo != -1){
-        glDeleteFramebuffers(1, &m_fbo);
-    }
-    if(m_shadowCubeMap != -1){
-        glDeleteTextures(1, &m_shadowCubeMap);
-    }
-    if(m_depth != -1){
-        glDeleteTextures(1, &m_depth);
-    }
+    clean();
 }
 
 void ShadowCubeMapFBO::init(int32_t size) {
@@ -54,6 +46,21 @@ void ShadowCubeMapFBO::init(int32_t size) {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+}
+
+void ShadowCubeMapFBO::clean(){
+    if(m_fbo != -1){
+        glDeleteFramebuffers(1, &m_fbo);
+        m_fbo = -1;
+    }
+    if(m_shadowCubeMap != -1){
+        glDeleteTextures(1, &m_shadowCubeMap);
+        m_shadowCubeMap = -1;
+    }
+    if(m_depth != -1){
+        glDeleteTextures(1, &m_depth);
+        m_depth = -1;
+    }
 }
 
 void ShadowCubeMapFBO::bind4writing(GLenum cubeFace) const {

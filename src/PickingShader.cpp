@@ -8,31 +8,25 @@ void PickingShader::init() {
     addShader(GL_FRAGMENT_SHADER, PICKING_FRAG_SHADER_PATH);
     finalize();
 
-    loc_WVP         = uniformLocation("u_WVP");
-    loc_drawIndex   = uniformLocation("u_drawIndex");
-    loc_objectIndex = uniformLocation("u_objectIndex");
-
-    for(uint32_t i = 0; i < ARRAY_SIZE(loc_bone); i++){
-        char name[128];
-        memset(name, 0, sizeof(name));
-        snprintf(name, sizeof(name), "u_bonesMatrices[%d]", i);
-        loc_bone[i] = uniformLocation(name);
-    }
-
+    loc_WVP = cacheUniform("u_WVP");
+    loc_objectIndex = cacheUniform("u_objectIndex");
+    loc_objectFlags = cacheUniform("u_objectFlags");
+    loc_boneMatrixArray = cacheUniform("u_bonesMatrices", ShaderType::BONE_SHADER);
 }
 
 void PickingShader::setWVP(const glm::mat4 &wvp) const {
-    glUniformMatrix4fv(loc_WVP, 1, GL_FALSE, glm::value_ptr(wvp));
+    glUniformMatrix4fv(getUniformLocation(loc_WVP), 1, GL_FALSE, glm::value_ptr(wvp));
 }
 
 void PickingShader::setObjectIndex(uint32_t objectIndex) const {
-    glUniform1ui(loc_objectIndex, objectIndex);
+    glUniform1ui(getUniformLocation(loc_objectIndex), objectIndex);
+
 }
 
-void PickingShader::drawStartCB(uint32_t drawIndex) {
-    glUniform1ui(loc_drawIndex, drawIndex);
+void PickingShader::setObjectFlags(uint32_t flags) const {
+    glUniform1ui(getUniformLocation(loc_objectFlags), flags);
 }
 
-void PickingShader::setBoneTransform(uint32_t boneId, glm::mat4 transform) const {
-    glUniformMatrix4fv(loc_bone[boneId], 1, GL_FALSE, glm::value_ptr(transform));
+void PickingShader::setBoneTransforms(const boneTransfoms_t &transforms) const {
+    glUniformMatrix4fv(getUniformLocation(loc_boneMatrixArray), MAX_BONES, GL_FALSE, glm::value_ptr(transforms[0]));
 }

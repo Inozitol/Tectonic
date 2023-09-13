@@ -16,9 +16,6 @@
 class Material {
 public:
     Material() = default;
-    Material(const Material&) = default;
-    Material(Material&&) = default;
-    Material(const aiMaterial* material, const aiScene* scene, const std::string& modelDirectory);
 
     void bindTextures() const;
     void unbindTextures() const;
@@ -33,14 +30,6 @@ public:
     std::shared_ptr<Texture> m_normalTexture = nullptr;
 
     std::string m_name{};
-
-private:
-    void loadName(const aiMaterial* material);
-    void loadColors(const aiMaterial* material);
-    static std::shared_ptr<Texture> loadTexture(const aiMaterial* material,
-                                                const aiScene* scene,
-                                                const std::string& modelDirectory,
-                                                aiTextureType type);
 };
 
 #endif //TECTONIC_MATERIAL_H

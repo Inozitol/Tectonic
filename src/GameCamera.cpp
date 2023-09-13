@@ -4,21 +4,27 @@ void GameCamera::handleKeyEvent(u_short key) {
     switch(key){
         case GLFW_KEY_W:
             m_position += m_speed * forward();
+            sig_position.emit(m_position);
             break;
         case GLFW_KEY_S:
             m_position += m_speed * back();
+            sig_position.emit(m_position);
             break;
         case GLFW_KEY_A:
             m_position += m_speed * left();
+            sig_position.emit(m_position);
             break;
         case GLFW_KEY_D:
             m_position += m_speed * right();
+            sig_position.emit(m_position);
             break;
         case GLFW_KEY_SPACE:
             m_position.y += m_speed;
+            sig_position.emit(m_position);
             break;
         case GLFW_KEY_C:
             m_position.y -= m_speed;
+            sig_position.emit(m_position);
             break;
         default:
             break;

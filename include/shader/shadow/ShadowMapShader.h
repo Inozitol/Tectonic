@@ -8,22 +8,22 @@
 #include "shader/Shader.h"
 #include "defs/ConfigDefs.h"
 #include "defs/ShaderDefines.h"
+#include "model/ModelTypes.h"
 
 class ShadowMapShader : public Shader {
 public:
-    ShadowMapShader() = default;
+    ShadowMapShader() : Shader(ShaderType::BASIC_SHADER | ShaderType::BONE_SHADER){}
     void init() override;
     void setWVP(const glm::mat4& wvp) const;
     void setWorld(const glm::mat4& world) const;
     void setLightWorldPos(const glm::vec3& pos) const;
-    void setBoneTransform(uint32_t boneId, glm::mat4 transform) const;
+    void setBoneTransforms(const boneTransfoms_t& transforms) const;
 
 private:
-    GLint loc_wvp = -1;
-    GLint loc_world = -1;
-    GLint loc_light_world_pos = -1;
-    GLint loc_bone[MAX_BONES] = {-1};
-
+    uint32_t loc_wvp = -1;
+    uint32_t loc_world = -1;
+    uint32_t loc_light_world_pos = -1;
+    uint32_t loc_boneMatrixArray{};
 };
 
 #endif //TECTONIC_SHADOWMAPSHADER_H

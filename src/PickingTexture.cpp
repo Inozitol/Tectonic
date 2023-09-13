@@ -1,14 +1,7 @@
 #include "PickingTexture.h"
 
 PickingTexture::~PickingTexture() {
-    if(m_fbo != -1)
-        glDeleteFramebuffers(1, &m_fbo);
-
-    if(m_pickingTexture != -1)
-        glDeleteTextures(1, &m_pickingTexture);
-
-    if(m_depthTexture != -1)
-        glDeleteTextures(1, &m_depthTexture);
+    clean();
 }
 
 void PickingTexture::init(int32_t winWidth, int32_t winHeight) {
@@ -27,6 +20,23 @@ void PickingTexture::init(int32_t winWidth, int32_t winHeight) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void PickingTexture::clean() {
+    if(m_fbo != -1) {
+        glDeleteFramebuffers(1, &m_fbo);
+        m_fbo = -1;
+    }
+
+    if(m_pickingTexture != -1) {
+        glDeleteTextures(1, &m_pickingTexture);
+        m_pickingTexture = -1;
+    }
+
+    if(m_depthTexture != -1) {
+        glDeleteTextures(1, &m_depthTexture);
+        m_depthTexture = -1;
+    }
+}
+
 void PickingTexture::enableWriting() const {
     glViewport(0, 0, m_width, m_height);
     glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
@@ -36,11 +46,11 @@ void PickingTexture::disableWriting() const {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-PickingTexture::pixelInfo PickingTexture::readPixel(int32_t x, int32_t y) {
+PickingTexture::pixelInfo PickingTexture::readPixel(int32_t x, int32_t y) const {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, m_fbo);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
     pixelInfo pixel;
-    glReadPixels(x, y, 1, 1, GL_RGB_INTEGER, GL_UNSIGNED_INT, &pixel);
+    glReadPixels(x, y, 1, 1, GL_RG_INTEGER, GL_UNSIGNED_SHORT, &pixel);
 
     glReadBuffer(GL_NONE);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -59,7 +69,7 @@ void PickingTexture::initTextures(int32_t winWidth, int32_t winHeight) {
 
     glGenTextures(1, &m_pickingTexture);
     glBindTexture(GL_TEXTURE_2D, m_pickingTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32UI, m_width, m_height, 0, GL_RGB_INTEGER, GL_UNSIGNED_INT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16UI, m_width, m_height, 0, GL_RG_INTEGER, GL_UNSIGNED_SHORT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_pickingTexture, 0);

@@ -3,6 +3,8 @@
 
 #include <list>
 #include <regex>
+#include <array>
+#include <unordered_map>
 
 #include "extern/glad/glad.h"
 #include "exceptions.h"
@@ -14,7 +16,13 @@ static const char* versionString = "#version 450 core\n";
  */
 class Shader {
 public:
-    Shader() = default;
+    enum class ShaderType {
+        UNKNOWN = 0,
+        BASIC_SHADER = 1 << 0,
+        BONE_SHADER = 1 << 1
+    };
+
+    explicit Shader(ShaderType types);
     virtual ~Shader();
 
     /**
@@ -23,9 +31,14 @@ public:
     virtual void init();
 
     /**
+     * @brief Deallocates shader programs
+     */
+    void clean();
+
+    /**
      * @brief Uses the internal shader program.
      */
-    void enable() const;
+    void enable(ShaderType type = ShaderType::BASIC_SHADER);
 
 protected:
 
@@ -42,19 +55,30 @@ protected:
      */
     void finalize();
 
-    /**
-     * Receives a location of a uniform. Should be called after finalize method.
-     * @param uniformName Name of uniform to receive.
-     * @return Location of the uniform.
-     */
-    GLint uniformLocation(const char* uniformName) const;
+    uint32_t cacheUniform(const char* uniformName, ShaderType type = ShaderType::UNKNOWN);
+    GLint getUniformLocation(uint32_t index) const;
+
+    //void loadUniforms();
+
+    ShaderType m_typeEnabled = ShaderType::BASIC_SHADER;
 
 private:
 
     static void replaceIncludes(std::string& codeString, std::string prefix = "#include");
+    static void splitBoneAnimation(std::string& codeString, std::string& boneCodeString, std::string lookup = "#BONE_SWITCH");
 
     std::list<GLuint> m_shaderObjList;
+    std::list<GLuint> m_boneShaderObjList;
     GLuint m_shaderProgram = -1;
+    GLuint m_boneShaderProgram = -1;
+
+    ShaderType m_shaderTypes;
+
+    std::unordered_map<ShaderType, std::unordered_map<uint32_t, GLint>> m_uniformCache;
+    uint32_t m_uniformCount = 0;
 };
+
+Shader::ShaderType operator|(Shader::ShaderType ls, Shader::ShaderType rs);
+bool operator&(Shader::ShaderType ls, Shader::ShaderType rs);
 
 #endif //TECTONIC_SHADER_H

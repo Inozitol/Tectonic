@@ -8,25 +8,25 @@
 #include "defs/ShaderDefines.h"
 #include "defs/ConfigDefs.h"
 #include "utils.h"
+#include "model/ModelTypes.h"
 
 class DebugShader : public Shader{
 public:
-    DebugShader() = default;
+    DebugShader() : Shader(ShaderType::BASIC_SHADER | ShaderType::BONE_SHADER){}
     void init() override;
     void setWVP(const glm::mat4& wvp) const;
     void setWorld(const glm::mat4& world) const;
-    void setBoneTransform(uint32_t boneId, const glm::mat4& transform) const;
+    void setBoneTransforms(const boneTransfoms_t& transforms) const;
 
 private:
     // WVP matrix
-    GLint loc_wvp = -1;
+    uint32_t loc_WVP = -1;
 
     // World matrix
-    GLint loc_world = -1;
+    uint32_t loc_world = -1;
 
     // Array of bones inside the scene
-    GLint loc_bone[MAX_BONES] = {-1};
-
+    uint32_t loc_boneMatrixArray{};
 };
 
 

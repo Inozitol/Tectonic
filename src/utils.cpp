@@ -125,23 +125,13 @@ namespace Utils{
         return OrthoProjInfo{min.x, max.x, min.y, max.y, min.z, max.z};
     }
 
-    glm::mat4 aiMatToGLM(const aiMatrix4x4t<ai_real>& assimpMat) {
-        glm::mat4 glmMat;
-        glmMat[0][0] = assimpMat.a1; glmMat[1][0] = assimpMat.a2; glmMat[2][0] = assimpMat.a3; glmMat[3][0] = assimpMat.a4;
-        glmMat[0][1] = assimpMat.b1; glmMat[1][1] = assimpMat.b2; glmMat[2][1] = assimpMat.b3; glmMat[3][1] = assimpMat.b4;
-        glmMat[0][2] = assimpMat.c1; glmMat[1][2] = assimpMat.c2; glmMat[2][2] = assimpMat.c3; glmMat[3][2] = assimpMat.c4;
-        glmMat[0][3] = assimpMat.d1; glmMat[1][3] = assimpMat.d2; glmMat[2][3] = assimpMat.d3; glmMat[3][3] = assimpMat.d4;
-        return glmMat;
-    }
-    glm::vec3 aiVecToGLM(const aiVector3D& vec){
-        return {vec.x, vec.y, vec.z};
+    uint32_t nextPowerOf(uint32_t in, uint32_t power){
+        double l = log(in)/log(power);
+        return static_cast<uint32_t>(std::pow(power,static_cast<uint32_t>(std::ceil(l))));
     }
 
-    glm::quat aiQuatToGLM(const aiQuaternion& orientation){
-        return {orientation.w, orientation.x, orientation.y, orientation.z};
+    int64_t binPow(int32_t exp){
+        return 1 << exp;
     }
 
-    glm::vec3 aiColToGLM(const aiColor3D& col){
-        return {col.r, col.g, col.b};
-    }
 }

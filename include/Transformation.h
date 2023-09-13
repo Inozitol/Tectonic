@@ -69,6 +69,10 @@ public:
      */
     [[nodiscard]] glm::mat4 getInverseMatrix() const;
 
+    float getScale();
+    glm::vec3 getRotation();
+    glm::vec3 getTranslation();
+
     [[nodiscard]] glm::vec3 invertPosition(const glm::vec3& pos) const;
     [[nodiscard]] glm::vec3 invertDirection(const glm::vec3& dir) const;
 
@@ -76,6 +80,10 @@ private:
     glm::mat4 m_scaleMatrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
     glm::mat4 m_rotationMatrix = glm::rotate(glm::mat4x4(1.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f));
     glm::mat4 m_translationMatrix = glm::translate(glm::mat4x4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+
+    float m_scale = 1.0f;
+    glm::vec3 m_rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 m_translation = glm::vec3(0.0f, 0.0f, 0.0f);
 
     mutable bool worldCurrent = false;
     mutable glm::mat4 m_worldMatrix{};

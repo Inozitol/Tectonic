@@ -1,6 +1,5 @@
 in vec2 TexCoord0;
 in vec3 Normal0;
-in vec3 LocalPos0;
 in vec3 WorldPos0;
 in vec4 LightSpacePos;
 in mat3 TBN;
@@ -73,8 +72,6 @@ vec3 calcShadowCoords(){
 }
 
 float calcShadowFactorBasic(vec3 lightDirection, vec3 normal){
-    //TODO
-    return 1.0;
 
     vec3 shadowCoords = calcShadowCoords();
 
@@ -85,24 +82,22 @@ float calcShadowFactorBasic(vec3 lightDirection, vec3 normal){
     vec2 texelSize = 1.0 / textureSize(u_samplers.shadowMap, 0);
 
     float diffuseFactor = dot(normal, -lightDirection);
-    float bias = mix(0.0001, 0.0, diffuseFactor);
+    float bias = mix(0.001, 0.0, diffuseFactor);
 
     // Calculating PCF shadow
     float shadow = 0.0;
     for(int x = -1; x <= 1; ++x){
         for(int y = -1; y <= 1; ++y){
             float pcfDepth = texture(u_samplers.shadowMap, shadowCoords.xy + vec2(x,y) * texelSize).x;
-            shadow += shadowCoords.z > pcfDepth + bias ? 1.0 : 0.0;
+            shadow += shadowCoords.z > pcfDepth + bias ? 0.0 : 1.0;
         }
     }
+
     shadow /= 9;
-    return 1-shadow*0.5;
+    return shadow*0.5;
 }
 
 float calcShadowFactorPointLight(vec3 lightToPixel, vec3 normal){
-    // TODO
-    return 1.0;
-
     float diffuseFactor = dot(normal, -lightToPixel);
     float bias = mix(0.001, 0.0, diffuseFactor);
 
@@ -168,7 +163,8 @@ vec4 calcLightInternalColor(BaseLight baseLight, vec3 direction, vec3 normal, fl
 // Calculates directional light
 // There's only one directional light calculated by calcLightInternalColor
 vec4 calcDirectionalLight(vec3 normal){
-    return calcLightInternalColor(u_directionalLight.base, u_directionalLight.direction, normal, calcShadowFactorBasic(u_directionalLight.direction, normal));
+    //return calcLightInternalColor(u_directionalLight.base, u_directionalLight.direction, normal, calcShadowFactorBasic(u_directionalLight.direction, normal));
+    return calcLightInternalColor(u_directionalLight.base, u_directionalLight.direction, normal, 1.0);
 }
 
 // Calculate point lights
@@ -179,12 +175,12 @@ vec4 calcPointLight(PointLight pointLight, vec3 normal, bool isSpot){
     vec3 lightWorldDir = WorldPos0 - pointLight.pos;
     float shadowFactor = 0.0f;
     if(isSpot){
-        shadowFactor = calcShadowFactorBasic(lightWorldDir, normal);
+        shadowFactor = calcShadowFactorBasic(normalize(lightWorldDir), normal);
     }else{
         shadowFactor = calcShadowFactorPointLight(lightWorldDir, normal);
     }
 
-    // Calculating world direction from light to pixel
+    // Calculating distance from light to pixel
     float lightDistance = length(lightWorldDir);
 
     // Calculating color of the pixel
@@ -227,15 +223,19 @@ void main(){
     vec3 normal = texture(u_samplers.normal, TexCoord0.xy).rgb;
     normal = normal * 2.0 - 1.0;
     normal = normalize(TBN * normal);
+    //normal = normalize(Normal0);
 
     vec4 totalLight = calcDirectionalLight(normal);
 
-    for(int i = 0; i < u_pointLightsCount; i++){
-        totalLight += calcPointLight(u_pointLights[i], normal, false);
-    }
     for(int i = 0; i < u_spotLightsCount; i++){
         totalLight += calcSpotLight(u_spotLights[i], normal);
     }
 
+    for(int i = 0; i < u_pointLightsCount; i++){
+        totalLight += calcPointLight(u_pointLights[i], normal, false);
+    }
+
     FragColor = texture(u_samplers.diffuse, TexCoord0.xy) * totalLight * u_colorMod;
+    //FragColor = vec4(normal, 1.0f);
+    //FragColor = vec4(texture(u_samplers.normal, TexCoord0.xy).rgb,1.0f);
 }

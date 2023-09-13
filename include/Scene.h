@@ -17,12 +17,13 @@
 #include "camera/GameCamera.h"
 #include "exceptions.h"
 #include "defs/ShaderDefines.h"
-#include "model/Animation.h"
+#include "model/anim/Animation.h"
 #include "Keyboard.h"
 #include "Cursor.h"
 #include "PickingTexture.h"
 #include "Renderer.h"
 #include "SceneTypes.h"
+#include "model/terrain/Terrain.h"
 
 #include "meta/meta.h"
 
@@ -37,21 +38,28 @@ public:
 
     void setWindowDimension(std::pair<int32_t, int32_t> dimensions);
 
-    [[nodiscard]] meshIndex_t insertMesh(const std::shared_ptr<Model>& mesh);
-    std::shared_ptr<Model> getMesh(meshIndex_t meshIndex);
+    modelIndex_t insertModel(const std::shared_ptr<Model>& model);
+    std::shared_ptr<Model> getModel(modelIndex_t modelIndex);
 
-    [[nodiscard]] objectIndex_t createObject(meshIndex_t modelIndex);
+    skinnedModelIndex_t insertSkinnedModel(const std::shared_ptr<SkinnedModel>& model);
+    std::shared_ptr<SkinnedModel> getSkinnedModel(skinnedModelIndex_t skinnedModelIndex);
+
+    void insertTerrain(const std::shared_ptr<Terrain>& terrain);
+    std::shared_ptr<Terrain> getTerrain();
+
+    objectIndex_t createObject(modelIndex_t modelIndex);
     ObjectData& getObject(objectIndex_t objectIndex);
+
+    skinnedObjectIndex_t createSkinnedObject(skinnedModelIndex_t skinnedModelIndex);
+    SkinnedObjectData& getSkinnedObject(skinnedObjectIndex_t skinnedObjectIndex);
 
     DirectionalLight& getDirectionalLight();
 
     spotLightIndex_t createSpotLight();
     SpotLight& getSpotLight(spotLightIndex_t spotLightIndex);
-    void eraseSpotLight(spotLightIndex_t spotLightIndex);
 
     pointLightIndex_t createPointLight();
     PointLight& getPointLight(pointLightIndex_t pointLightIndex);
-    void erasePointLight(pointLightIndex_t pointLightIndex);
 
     void handleMouseEvent(double x, double y);
     void handleKeyEvent(int32_t key);
@@ -100,15 +108,25 @@ public:
             m_objectMap.at(objectIndex).first.clicked();
     }};
 
+    Slot<skinnedObjectIndex_t> slt_skinnedObjectClicked{[this](skinnedObjectIndex_t objectIndex){
+        if(m_skinnedObjectMap.contains(objectIndex))
+            m_skinnedObjectMap.at(objectIndex).first.clicked();
+    }};
+
 private:
-    std::unordered_map<meshIndex_t, std::shared_ptr<Model>> m_modelMap;
-    std::unordered_map<objectIndex_t, std::pair<ObjectData, meshIndex_t>> m_objectMap;
+    std::unordered_map<modelIndex_t, std::shared_ptr<Model>> m_modelMap;
+    std::unordered_map<objectIndex_t, std::pair<ObjectData, modelIndex_t>> m_objectMap;
+    std::unordered_map<skinnedModelIndex_t, std::shared_ptr<SkinnedModel>> m_skinnedModelMap;
+    std::unordered_map<skinnedObjectIndex_t, std::pair<SkinnedObjectData, skinnedModelIndex_t>> m_skinnedObjectMap;
+    std::shared_ptr<Terrain> m_terrain;
 
     std::shared_ptr<GameCamera>         m_gameCamera;
     Transformation                      m_worldTransform;
 
-    std::set<meshIndex_t>               m_usedMeshIndexes;
+    std::set<modelIndex_t>              m_usedModelIndexes;
     std::set<objectIndex_t>             m_usedObjectIndexes;
+    std::set<skinnedModelIndex_t>       m_usedSkinnedModelIndexes;
+    std::set<skinnedObjectIndex_t>      m_usedSkinnedObjectIndexes;
 
     DirectionalLight                            m_dirLight;
     std::array<SpotLight, MAX_SPOT_LIGHTS>      m_spotLights;
@@ -123,6 +141,8 @@ private:
     PickingTexture m_pickingTexture;
     bool m_cursorIsPressed = false;
     int32_t m_cursorPosX = 0, m_cursorPosY = 0;
+
+    static Logger m_logger;
 };
 
 #endif //TECTONIC_SCENE_H

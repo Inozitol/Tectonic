@@ -4,12 +4,13 @@
 #include <unordered_map>
 
 #include "Bone.h"
-#include "ModelTypes.h"
+#include "model/ModelTypes.h"
 
 class Animation {
 public:
-    explicit Animation(const aiAnimation* animation);
-    Bone* findBone(const std::string& name);
+    Animation(double duration, double ticksPerSec);
+    const Bone* findBone(int32_t boneID) const;
+    const Bone* findBone(const std::string& boneName) const;
     void insertBone(const Bone& bone);
     [[nodiscard]] inline double getTicksPerSecond() const { return m_ticksPerSecond; }
     [[nodiscard]] inline double getDuration() const { return m_duration; }
@@ -17,8 +18,8 @@ public:
 private:
     double m_duration = 0.0;
     double m_ticksPerSecond = 0.0;
-    std::vector<Bone> m_bones;
+    std::unordered_map<int32_t, Bone> m_bones;
+    std::vector<Bone> m_boneVec;
 };
-
 
 #endif //TECTONIC_ANIMATION_H

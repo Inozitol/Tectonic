@@ -7,6 +7,8 @@
 #include <GLFW/glfw3.h>
 #include <memory>
 
+#include "meta/meta.h"
+
 #define NUM_CUBE_MAP_FACES 6
 
 /**
@@ -99,6 +101,8 @@ public:
 
     glm::mat4 getWVP(const glm::mat4& modelTrans);
 
+    glm::mat4 getVP();
+
     /**
      * Creates a projection matrix and stores it.
      * Should be called after a change to projection parameters.
@@ -146,6 +150,8 @@ public:
     [[nodiscard]] glm::vec3 right()   const {return Axis::POS_X * m_orientation;}
     [[nodiscard]] glm::vec3 down()    const {return Axis::NEG_Y * m_orientation;}
     [[nodiscard]] glm::vec3 up()      const {return Axis::POS_Y * m_orientation;}
+
+    Signal<glm::vec3> sig_position;
 
 protected:
     glm::vec3 m_position = {0.0f, 0.0f, 0.0f};

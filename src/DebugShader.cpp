@@ -8,25 +8,19 @@ void DebugShader::init() {
     addShader(GL_FRAGMENT_SHADER, DEBUG_FRAG_SHADER_PATH);
     finalize();
 
-    loc_wvp = uniformLocation("u_WVP");
-    loc_world = uniformLocation("u_world");
-    for(uint32_t i = 0; i < ARRAY_SIZE(loc_bone); i++){
-        char name[128];
-        memset(name, 0, sizeof(name));
-        snprintf(name, sizeof(name), "u_bonesMatrices[%d]", i);
-        loc_bone[i] = uniformLocation(name);
-    }
-
+    loc_WVP = cacheUniform("u_WVP");
+    loc_world = cacheUniform("u_world");
+    loc_boneMatrixArray = cacheUniform("u_bonesMatrices", ShaderType::BONE_SHADER);
 }
 
 void DebugShader::setWVP(const glm::mat4 &wvp) const {
-    glUniformMatrix4fv(loc_wvp, 1, GL_FALSE, glm::value_ptr(wvp));
+    glUniformMatrix4fv(getUniformLocation(loc_WVP), 1, GL_FALSE, glm::value_ptr(wvp));
 }
 
 void DebugShader::setWorld(const glm::mat4 &world) const {
-    glUniformMatrix4fv(loc_world, 1, GL_FALSE, glm::value_ptr(world));
+    glUniformMatrix4fv(getUniformLocation(loc_world), 1, GL_FALSE, glm::value_ptr(world));
 }
 
-void DebugShader::setBoneTransform(uint32_t boneId, const glm::mat4 &transform) const {
-    glUniformMatrix4fv(loc_bone[boneId], 1, GL_FALSE, glm::value_ptr(transform));
+void DebugShader::setBoneTransforms(const boneTransfoms_t &transforms) const {
+    glUniformMatrix4fv(getUniformLocation(loc_boneMatrixArray), MAX_BONES, GL_FALSE, glm::value_ptr(transforms[0]));
 }

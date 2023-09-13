@@ -43,10 +43,10 @@ namespace Utils{
     };
     OrthoProjInfo createTightOrthographicInfo(Camera &lightCamera, const Camera &gameCamera);
     bool readFile(const char* filename, std::string& content);
-    glm::mat4 aiMatToGLM(const aiMatrix4x4t<ai_real>& mat);
-    glm::vec3 aiVecToGLM(const aiVector3D& vec);
-    glm::quat aiQuatToGLM(const aiQuaternion& orientation);
-    glm::vec3 aiColToGLM(const aiColor3D& col);
+    uint32_t nextPowerOf(uint32_t in, uint32_t power);
+
+    int64_t binPow(int32_t exp);
+
 }
 
 #endif //TECTONIC_UTILS_H

@@ -16,6 +16,9 @@ public:
         _msg.append(str);
         load_rest(rest...);
     }
+
+    tectonicException() = default;
+
     char* what(){
         return _msg.data();
     }
@@ -38,53 +41,69 @@ class windowException : public tectonicException {
 public:
     template<typename ...T>
     explicit windowException(T... args) : tectonicException(args...){}
+    windowException() : tectonicException(){}
 };
 
 class cameraException : public tectonicException {
 public:
     template<typename ...T>
     explicit cameraException(T... args) : tectonicException(args...){}
+    cameraException() : tectonicException(){}
 };
 
 class textureException : public tectonicException {
 public:
     template<typename ...T>
     explicit textureException(T... args) : tectonicException(args...) {};
+    textureException() : tectonicException(){}
 };
 
 class modelException : public tectonicException {
 public:
     template<typename ...T>
     explicit modelException(T... args) : tectonicException(args...){}
+    modelException() : tectonicException(){}
 };
 
 class shaderException : public tectonicException {
 public:
     template<typename ...T>
     explicit shaderException(T... args) : tectonicException(args...){}
+    shaderException() : tectonicException(){}
 };
 
 class shadowMapException : public tectonicException {
 public:
     template<typename ...T>
     explicit shadowMapException(T... args) : tectonicException(args...){}
+    shadowMapException() : tectonicException(){}
 };
 
 class sceneException : public tectonicException {
 public:
     template<typename ...T>
     explicit sceneException(T... args) : tectonicException(args...){}
+    sceneException() : tectonicException(){}
 };
 
 class keyboardException : public tectonicException {
 public:
     template<typename ...T>
     explicit keyboardException(T... args) : tectonicException(args...){}
+    keyboardException() : tectonicException(){}
 };
 
 class rendererException : public tectonicException {
 public:
     template<typename ...T>
     explicit rendererException(T... args) : tectonicException(args...){}
+    rendererException() : tectonicException(){}
+};
+
+class modelLoaderException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit modelLoaderException(T... args) : tectonicException(args...){}
+    modelLoaderException() : tectonicException(){}
 };
 #endif //TECTONIC_EXCEPTIONS_H

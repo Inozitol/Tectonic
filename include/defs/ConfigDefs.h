@@ -23,14 +23,16 @@
 #define SHADOW_OPROJ_NEAR   -3.0f
 #define SHADOW_OPROJ_FAR     3.0f
 
-#define LIGHTING_VERT_SHADER_PATH   "shaders/lighting.vert"
-#define LIGHTING_FRAG_SHADER_PATH   "shaders/lighting.frag"
-#define SHADOWMAP_VERT_SHADER_PATH  "shaders/shadow.vert"
-#define SHADOWMAP_FRAG_SHADER_PATH  "shaders/shadow.frag"
-#define PICKING_VERT_SHADER_PATH    "shaders/picking.vert"
-#define PICKING_FRAG_SHADER_PATH    "shaders/picking.frag"
-#define DEBUG_VERT_SHADER_PATH      "shaders/debug.vert"
-#define DEBUG_GEOM_SHADER_PATH      "shaders/debug.geom"
-#define DEBUG_FRAG_SHADER_PATH      "shaders/debug.frag"
+#define LIGHTING_VERT_SHADER_PATH   "shaders/vert/lighting.vert"
+#define LIGHTING_FRAG_SHADER_PATH   "shaders/frag/lighting.frag"
+#define SHADOWMAP_VERT_SHADER_PATH  "shaders/vert/shadow.vert"
+#define SHADOWMAP_FRAG_SHADER_PATH  "shaders/frag/shadow.frag"
+#define PICKING_VERT_SHADER_PATH    "shaders/vert/picking.vert"
+#define PICKING_FRAG_SHADER_PATH    "shaders/frag/picking.frag"
+#define DEBUG_VERT_SHADER_PATH      "shaders/vert/debug.vert"
+#define DEBUG_GEOM_SHADER_PATH      "shaders/geom/debug.geom"
+#define DEBUG_FRAG_SHADER_PATH      "shaders/frag/debug.frag"
+#define TERRAIN_VERT_SHADER_PATH    "shaders/vert/terrain.vert"
+#define TERRAIN_FRAG_SHADER_PATH    "shaders/frag/terrain.frag"
 
 #endif //TECTONIC_CONFIGDEFS_H

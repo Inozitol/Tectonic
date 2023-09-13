@@ -39,6 +39,10 @@ glm::mat4 Camera::getWVP(const glm::mat4& model) {
     return m_projectionMatrix * m_viewMatrix * model;
 }
 
+glm::mat4 Camera::getVP(){
+    return m_projectionMatrix * m_viewMatrix;
+}
+
 void Camera::createView() {
     m_viewMatrix = rotationMatrix() * translationMatrix();
 }
@@ -57,6 +61,7 @@ void Camera::setDirection(glm::vec3 direction, glm::vec3 up) {
 
 void Camera::setPosition(glm::vec3 position) {
     m_position = position;
+    sig_position.emit(m_position);
 }
 
 void Camera::setPerspectiveInfo(const PerspProjInfo &info) {

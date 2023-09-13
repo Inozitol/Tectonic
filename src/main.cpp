@@ -3,23 +3,23 @@
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <glm/glm.hpp>
-#include <glm/mat4x4.hpp>
 #include <glm/gtx/string_cast.hpp>
 
 #include "exceptions.h"
-#include "defs/TextureDefs.h"
 
 #include "Window.h"
-#include "Transformation.h"
 #include "camera/GameCamera.h"
-#include "model/Model.h"
 #include "shader/LightingShader.h"
 #include "defs/ShaderDefines.h"
-#include "model/Terrain.h"
+#include "model/terrain/Terrain.h"
 #include "Scene.h"
 #include "Cursor.h"
 #include "Keyboard.h"
 #include "shader/PickingShader.h"
+#include "model/AssimpLoader.h"
+
+constexpr float g_roughness = 0.95;
+constexpr uint32_t g_size = 1009;
 
 Cursor g_cursor;
 Keyboard g_keyboard;
@@ -27,9 +27,11 @@ Keyboard g_keyboard;
 Renderer& g_renderer = Renderer::getInstance();
 std::shared_ptr<Window> window;
 
+std::shared_ptr<Terrain> g_terrain;
+
 Scene g_boneScene;
-meshIndex_t boneM_i;
-objectIndex_t bone_i;
+skinnedModelIndex_t boneM_i;
+skinnedObjectIndex_t bone_i;
 objectIndex_t terrainBone_i;
 
 int win_width, win_height;
@@ -70,25 +72,24 @@ MessageCallback( GLenum source,
 }
 
 void switchAnimation(uint32_t key){
-    ObjectData& bobObject = g_boneScene.getObject(bone_i);
+    SkinnedObjectData& bobObject = g_boneScene.getSkinnedObject(bone_i);
     switch(key){
-        case GLFW_KEY_0:
-            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(0));
-            break;
         case GLFW_KEY_1:
-            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(1));
+            bobObject.animator.playAnimation(0);
             break;
         case GLFW_KEY_2:
-            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(2));
+            bobObject.animator.playAnimation(1);
             break;
         case GLFW_KEY_3:
-            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(3));
+            bobObject.animator.playAnimation(2);
             break;
         case GLFW_KEY_4:
-            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(4));
+            bobObject.animator.playAnimation(3);
             break;
         case GLFW_KEY_5:
-            bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(5));
+            bobObject.animator.playAnimation(4);
+            break;
+        default:
             break;
     }
 }
@@ -109,10 +110,21 @@ void switchPolygonMode(){
 
 Slot<> g_slt_switchPolygonMode{[](){ switchPolygonMode(); }};
 
+void redoTerrain(){
+    g_terrain->generateMidpoint(g_size, g_roughness, {
+            "terrain/textures/rock.png",
+            "terrain/textures/dry.png",
+            "terrain/textures/grass.png",
+            "terrain/textures/snow.jpg"});
+}
+
+Slot<> g_slt_redoTerrain{[](){ redoTerrain(); }};
+
 void renderLoop(){
-    ObjectData& bobObject = g_boneScene.getObject(bone_i);
-    bobObject.animator.playAnimation(g_boneScene.getMesh(boneM_i)->getAnimation(0));
+    //SkinnedObjectData& bobObject = g_boneScene.getSkinnedObject(bone_i);
+    //bobObject.animator.playAnimation(3);
     while(!window->shouldClose()){
+        static float counter = 0.0f;
         static double deltaTime = 0.0f;
         static double animPrevTime = glfwGetTime();
         static double fpsPrevTime = glfwGetTime();
@@ -128,33 +140,18 @@ void renderLoop(){
             frameCounter = 0;
         }
 
-        bobObject.animator.updateAnimation(deltaTime);
-        auto transforms = bobObject.animator.getFinalBoneMatrices();
-
-        g_renderer.m_lightingShader.enable();
-        for(int32_t i = 0; i < transforms.size(); i++) {
-            g_renderer.m_lightingShader.setBoneTransform(i, transforms[i]);
-        }
-
-        g_renderer.m_pickingShader.enable();
-        for(int32_t i = 0; i < transforms.size(); i++) {
-            g_renderer.m_pickingShader.setBoneTransform(i, transforms[i]);
-        }
-
-        g_renderer.m_shadowMapShader.enable();
-        for(int32_t i = 0; i < transforms.size(); i++) {
-            g_renderer.m_shadowMapShader.setBoneTransform(i, transforms[i]);
-        }
-
-        g_renderer.m_debugShader.enable();
-        for(int32_t i = 0; i < transforms.size(); i++) {
-            g_renderer.m_debugShader.setBoneTransform(i, transforms[i]);
-        }
+        //bobObject.animator.updateAnimation(deltaTime);
 
         glUseProgram(0);
 
-        g_boneScene.getSpotLight(0).setPosition(g_boneScene.getGameCamera()->getPosition());
-        g_boneScene.getSpotLight(0).setDirection(g_boneScene.getGameCamera()->getDirection());
+        glm::vec3 circleCoords = {-sinf(counter)*3,1.0f,-cosf(counter)*3};
+
+        g_boneScene.getDirectionalLight().setDirection(glm::normalize(glm::vec3{0.0f,0.0f,0.0f} - circleCoords));
+
+        //g_boneScene.getSpotLight(0).setPosition(circleCoords);
+        //g_boneScene.getSpotLight(0).setDirection(glm::normalize(glm::vec3{0.0f,0.0f,0.0f} - circleCoords));
+
+        counter += 0.0001;
 
         g_boneScene.renderScene();
 
@@ -178,17 +175,18 @@ void initScenes(){
                                      SHADOW_OPROJ_NEAR,
                                      SHADOW_OPROJ_FAR});
     gameCamera->createProjectionMatrix();
-    gameCamera->setPosition({0.0f, 0.1, 0.5});
+    gameCamera->setPosition({0.0f, 1.0, 1.0});
     window->sig_cursorEnabled.connect(gameCamera->slt_cursorEnabled);
 
     g_cursor.sig_updatePos.connect(g_boneScene.slt_updateMousePosition);
     g_keyboard.connectKeyGroup("controls", g_boneScene.slt_receiveKeyboardButton);
 
     DirectionalLight& directionalLight = g_boneScene.getDirectionalLight();
-    directionalLight.ambientIntensity = 0.2f;
+    directionalLight.ambientIntensity = 0.5f;
     directionalLight.diffuseIntensity = 1.0f;
-    directionalLight.setDirection(glm::vec3(0.0f, -1.0f, 0.0f));
+    directionalLight.setDirection(glm::vec3(0.0f, -1.0f, -1.0f));
 
+    /*
     spotLightIndex_t spotLightIndex = g_boneScene.createSpotLight();
     SpotLight& spotLight = g_boneScene.getSpotLight(spotLightIndex);
     spotLight.diffuseIntensity = 40.0f;
@@ -196,37 +194,55 @@ void initScenes(){
     spotLight.color = glm::vec3(1.0f, 1.0f, 1.0f);
     spotLight.attenuation.linear = 0.2f;
     spotLight.attenuation.exp = 0.1f;
-    spotLight.angle = 30.0f;
+    spotLight.angle = 40.0f;
+    spotLight.setPosition({-2.0,1.5,0.2f});
+    spotLight.setDirection({1.0, -1.0, 0.0});
+    */
 
     /*
     pointLightIndex_t pointLightIndex = g_boneScene.createPointLight();
     PointLight& pointLight = g_boneScene.getPointLight(pointLightIndex);
     pointLight.diffuseIntensity = 10.0f;
+    pointLight.setPosition({-0.5,1.0,0.0f});
     pointLight.color = {1.0f, 1.0f, 1.0f};
     pointLight.attenuation.linear = 0.2;
     pointLight.attenuation.exp = 0.1;
     */
+    g_boneScene.setGameCamera(gameCamera);
 
-    std::shared_ptr<Terrain> terrainMesh(new Terrain);
-    terrainMesh->createTerrain(10,10,
-                               "meshes/textures/brickwall.jpg",
-                               "meshes/textures/brickwall_normal.jpg");
-    meshIndex_t terrainMeshBone_i = g_boneScene.insertMesh(terrainMesh);
-    terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
-    g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-5.0, 0.0, -5.0);
+    g_terrain = std::make_shared<Terrain>();
+    g_terrain->setMaxLOD(3);
+    g_terrain->setScale(0.05);
+    g_terrain->setMaxRange(5.0);
+    g_terrain->generateMidpoint(g_size, g_roughness, {
+        "terrain/textures/rock.png",
+        "terrain/textures/dry.png",
+        "terrain/textures/grass.png",
+        "terrain/textures/snow.jpg"});
+    //g_terrain->generateFlat(g_size, g_size, "terrain/textures/grass.png");
+    g_terrain->setCamera(*gameCamera);
+    gameCamera->setPosition({0.0,g_terrain->getHeight(g_terrain->getCenterCoords()),0.0});
+    g_boneScene.insertTerrain(g_terrain);
+    //modelIndex_t terrainMeshBone_i = g_boneScene.insertModel(terrainMesh);
+    //terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
+    //g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-25.0, 0.0, -25.0);
 
-    std::shared_ptr<Model> boneMesh(new Model);
-    boneMesh->loadModelFromFile("meshes/shibahu.glb");
-    boneM_i = g_boneScene.insertMesh(boneMesh);
-    bone_i = g_boneScene.createObject(boneM_i);
-    ObjectData& bobObject = g_boneScene.getObject(bone_i);
-    bobObject.transformation.setScale(0.01);
-    //bobObject.transformation.setRotation(-90.0f, 0.0f, 0.0f);
-    bobObject.transformation.setTranslation(-1.0f, 0.0f, 0.0f);
+    AssimpLoader assimpLoader;
+
+    /*
+    std::shared_ptr<SkinnedModel> boneMesh = assimpLoader.loadSkinnedModel("meshes/Walker.fbx");
+    boneMesh->bufferMeshes();
+    boneM_i = g_boneScene.insertSkinnedModel(boneMesh);
+    bone_i = g_boneScene.createSkinnedObject(boneM_i);
+    SkinnedObjectData& bobObject = g_boneScene.getSkinnedObject(bone_i);
+    bobObject.transformation.setScale(0.008);
+    */
+     //bobObject.transformation.setRotation(-90.0f, 0.0f, 0.0f);
+    //bobObject.transformation.setTranslation(-1.0f, 0.0f, 0.0f);
 
     //std::shared_ptr<Model> barrelModel(new Model);
     //barrelModel->loadModelFromFile("meshes/wine_barrel.obj");
-    //meshIndex_t barrel_i = g_boneScene.insertMesh(barrelModel);
+    //modelIndex_t barrel_i = g_boneScene.insertModel(barrelModel);
     //objectIndex_t barrelObj_i = g_boneScene.createObject(barrel_i);
     //g_boneScene.getObject(barrelObj_i).transformation.setTranslation(1.0f, 0.0f, 0.0f);
 
@@ -238,21 +254,20 @@ void initScenes(){
     /*
     for(int32_t x = -10; x < 10; x++){
         for(int32_t y = -10; y < 10; y++){
-            objectIndex_t obj = g_boneScene.createObject(barrel_i);
-            g_boneScene.getObject(obj).transformation.setTranslation(x/2, 0,y/2);
+            skinnedObjectIndex_t obj = g_boneScene.createSkinnedObject(boneM_i);
+            g_boneScene.getSkinnedObject(obj).transformation.setTranslation(x/2, 0,y/2);
             //g_boneScene.getObject(obj).transformation.setScale(0.008);
-            g_boneScene.getObject(obj).transformation.setScale(0.8);
+            g_boneScene.getSkinnedObject(obj).transformation.setScale(0.01);
         }
     }
     */
-
-    g_boneScene.setGameCamera(gameCamera);
 
     g_boneScene.setWindowDimension(window->getSize());
 
     g_cursor.sig_updatePos.connect(g_boneScene.slt_updateCursorPos);
     g_cursor.sig_cursorPressedPos.connect(g_renderer.slt_updateCursorPressedPos);
     g_renderer.sig_objectClicked.connect(g_boneScene.slt_objectClicked);
+    g_renderer.sig_skinnedObjectClicked.connect(g_boneScene.slt_skinnedObjectClicked);
 }
 
 void initKeyGroups(){
@@ -279,6 +294,7 @@ void initKeyGroups(){
         GLFW_KEY_4,
         GLFW_KEY_5
     });
+    g_keyboard.addKeyGroup("generateTerrain",{GLFW_KEY_T});
 
     g_keyboard.connectKeyGroup("close", window->slt_setClose);
     g_keyboard.connectKeyGroup("cursorToggle", window->slt_toggleCursor);
@@ -286,6 +302,7 @@ void initKeyGroups(){
     g_keyboard.connectKeyGroup("perspectiveToggle", g_boneScene.slt_togglePerspective);
     g_keyboard.connectKeyGroup("debugToggle", g_renderer.slt_toggleDebug);
     g_keyboard.connectKeyGroup("alphaNumerics", g_slt_animationChange);
+    g_keyboard.connectKeyGroup("generateTerrain", g_slt_redoTerrain);
 }
 
 int main(){

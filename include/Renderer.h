@@ -13,12 +13,15 @@
 #include "shader/PickingShader.h"
 #include "meta/Signal.h"
 #include "meta/Slot.h"
-#include "model/Animation.h"
+#include "model/anim/Animation.h"
 #include "PickingTexture.h"
 #include "exceptions.h"
 #include "Window.h"
 #include "SceneTypes.h"
 #include "shader/DebugShader.h"
+#include "model/terrain/Terrain.h"
+#include "shader/TerrainShader.h"
+#include "Logger.h"
 
 class Renderer {
 public:
@@ -32,8 +35,10 @@ public:
 
     std::shared_ptr<Window> window;
 
-    void queueRender(const ObjectData& object, Model* model);
-    void renderQueue();
+    void queueModelRender(const ObjectData& object, Model* model);
+    void queueSkinnedModelRender(const SkinnedObjectData& object, SkinnedModel* skinnedModel);
+    void setTerrainModelRender(const std::shared_ptr<Terrain>& terrain);
+    void renderQueues();
     void setWindowSize(int32_t width, int32_t height);
     void setGameCamera(const std::shared_ptr<GameCamera>& camera) { m_gameCamera = camera; };
     void setDirectionalLight(DirectionalLight* light) { m_dirLight = light; }
@@ -59,9 +64,10 @@ public:
     PickingShader       m_pickingShader;
     PickingTexture      m_pickingTexture;
     DebugShader         m_debugShader;
-
+    TerrainShader       m_terrainShader;
 
     Signal<objectIndex_t> sig_objectClicked;
+    Signal<skinnedObjectIndex_t> sig_skinnedObjectClicked;
 
     /**
      * @brief Informs the renderer when the cursor is being pressed
@@ -108,7 +114,12 @@ private:
     using meshQueue_t = std::vector<std::pair<const Material*, std::vector<Drawable>>>;
     using vaoQueue_t = std::unordered_map<GLuint, meshQueue_t>;
 
+    using skinnedMeshQueue_t = std::vector<std::pair<std::pair<const Material*,boneTransfoms_t>, std::vector<SkinnedDrawable>>>;
+    using skinnedVaoQueue_t = std::unordered_map<GLuint, skinnedMeshQueue_t>;
+
     vaoQueue_t m_drawQueue;
+    skinnedVaoQueue_t m_skinnedDrawQueue;
+    std::shared_ptr<Terrain> m_terrain;
 
     void initGLFW();
     static void initGL();
@@ -121,12 +132,24 @@ private:
     void pickingPass(const meshQueue_t& queue);
     void debugPass(const meshQueue_t& queue);
 
+    void lightingPass(const skinnedMeshQueue_t& queue);
+    void shadowPass(const skinnedMeshQueue_t& queue);
+    void pickingPass(const skinnedMeshQueue_t& queue);
+    void debugPass(const skinnedMeshQueue_t& queue);
+
     void renderModelLight(const Drawable& drawable);
     void renderModelShadow(const Drawable& drawable);
     void renderModelPicking(const Drawable& drawable);
     void renderModelDebug(const Drawable& drawable);
 
-    static inline void renderMesh(const Mesh& mesh);
+    void renderModelLight(const SkinnedDrawable& drawable);
+    void renderModelShadow(const SkinnedDrawable& drawable);
+    void renderModelPicking(const SkinnedDrawable& drawable);
+    void renderModelDebug(const SkinnedDrawable& drawable);
+
+    void renderTerrain();
+
+    static inline void renderMesh(const MeshInfo& mesh);
 
     int32_t m_windowWidth{};
     int32_t m_windowHeight{};
@@ -142,6 +165,8 @@ private:
     int32_t m_cursorPosX = 0, m_cursorPosY = 0;
 
     bool m_debugEnabled = false;
+
+    Logger m_logger = Logger("Renderer");
 };
 
 #endif //TECTONIC_RENDERER_H

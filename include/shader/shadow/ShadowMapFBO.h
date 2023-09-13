@@ -11,6 +11,7 @@ public:
     ShadowMapFBO() = default;
     ~ShadowMapFBO();
     void init(int32_t width, int32_t height);
+    void clean();
     void bind4writing() const;
     void bind4reading(GLenum tex_unit) const;
 

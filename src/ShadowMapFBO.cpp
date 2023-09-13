@@ -1,12 +1,7 @@
 #include "shader/shadow/ShadowMapFBO.h"
 
 ShadowMapFBO::~ShadowMapFBO() {
-    if(m_fbo != -1){
-        glDeleteFramebuffers(1, &m_fbo);
-    }
-    if(m_shadowMap != -1){
-        glDeleteTextures(1, &m_shadowMap);
-    }
+    clean();
 }
 
 void ShadowMapFBO::init(int32_t width, int32_t height) {
@@ -40,6 +35,17 @@ void ShadowMapFBO::init(int32_t width, int32_t height) {
     }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void ShadowMapFBO::clean() {
+    if(m_fbo != -1){
+        glDeleteFramebuffers(1, &m_fbo);
+        m_fbo = -1;
+    }
+    if(m_shadowMap != -1){
+        glDeleteTextures(1, &m_shadowMap);
+        m_shadowMap = -1;
+    }
 }
 
 void ShadowMapFBO::bind4writing() const {

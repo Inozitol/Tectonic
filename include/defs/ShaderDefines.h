@@ -14,10 +14,13 @@
 #define MAX_SPOT_LIGHTS 2
 
 // Maximum amount of bones
-#define MAX_BONES 250
+#define MAX_BONES 200
 
 // Maximum amount of bones influencing a vertex
-#define MAX_BONES_INFLUENCE 17
+#define MAX_BONES_INFLUENCE 30
 
 // Debug normal line magnitude
 #define DEBUG_NORMAL_MAGNITUDE 0.05
+
+// Maximum number of textures used at different heights in terrains
+#define MAX_TERRAIN_HEIGHT_TEXTURE 4

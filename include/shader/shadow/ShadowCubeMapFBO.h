@@ -10,6 +10,8 @@ public:
     ShadowCubeMapFBO() = default;
     ~ShadowCubeMapFBO();
 
+    void clean();
+
     void init(int32_t size);
     void bind4writing(GLenum cubeFace) const;
     void bind4reading(GLenum texUnit) const;

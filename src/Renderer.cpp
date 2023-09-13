@@ -1,6 +1,6 @@
 #include "Renderer.h"
 
-void Renderer::queueRender(const ObjectData &object, Model* model) {
+void Renderer::queueModelRender(const ObjectData &object, Model* model) {
     GLuint vao = model->getVAO();
     if(!m_drawQueue.contains(vao)) {
         m_drawQueue.insert({vao, meshQueue_t()});
@@ -12,17 +12,65 @@ void Renderer::queueRender(const ObjectData &object, Model* model) {
     }
 }
 
-void Renderer::renderQueue() {
+void Renderer::queueSkinnedModelRender(const SkinnedObjectData &object, SkinnedModel *skinnedModel) {
+    GLuint vao = skinnedModel->getVAO();
+    if(!m_skinnedDrawQueue.contains(vao)){
+        m_skinnedDrawQueue.insert({vao, skinnedMeshQueue_t()});
+        m_skinnedDrawQueue.at(vao).resize(skinnedModel->m_materials.size());
+    }
+    for(const auto& mesh: skinnedModel->m_meshes){
+        m_skinnedDrawQueue.at(vao).at(mesh.matIndex).first.first = skinnedModel->getMaterial(mesh.matIndex);
+        m_skinnedDrawQueue.at(vao).at(mesh.matIndex).first.second = object.animator.getFinalBoneMatrices();
+        m_skinnedDrawQueue.at(vao).at(mesh.matIndex).second.push_back(SkinnedDrawable{object, skinnedModel, &mesh});
+    }
+}
+
+void Renderer::setTerrainModelRender(const std::shared_ptr<Terrain>& terrain) {
+    m_terrain =  terrain;
+    m_terrainShader.enable();
+    float min,max;
+    std::tie(min,max) = m_terrain->getMinMaxHeight();
+    m_terrainShader.setMinHeight(min);
+    m_terrainShader.setMaxHeight(max);
+
+    std::vector<float> heights;
+    heights.reserve(m_terrain->m_blendingTexturesCount);
+    for(const auto& texture : m_terrain->m_blendingTextures){
+        heights.push_back(texture.first);
+    }
+
+    m_terrainShader.setBlendedTextures(heights, m_terrain->m_blendingTexturesCount);
+}
+
+void Renderer::renderQueues() {
     m_gameCamera->createView();
 
     clearRender();
 
-    if(m_cursorPressed) {
-        m_pickingShader.enable();
-        m_pickingTexture.enableWriting();
+    /// Terrain shader
+    if(m_terrain) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        m_terrainShader.enable();
         glViewport(0,0, m_windowWidth, m_windowHeight);
 
         glCullFace(GL_BACK);
+        glBindVertexArray(m_terrain->getVAO());
+        renderTerrain();
+    }
+
+    /// Picking phase
+    if(m_cursorPressed) {
+        m_pickingShader.enable(Shader::ShaderType::BONE_SHADER);
+        m_pickingTexture.enableWriting();
+
+        glCullFace(GL_BACK);
+
+        for (auto &[vao, queue]: m_skinnedDrawQueue) {
+            glBindVertexArray(vao);
+            pickingPass(queue);
+        }
+
+        m_pickingShader.enable(Shader::ShaderType::BASIC_SHADER);
 
         for (auto &[vao, queue]: m_drawQueue) {
             glBindVertexArray(vao);
@@ -32,33 +80,66 @@ void Renderer::renderQueue() {
         m_pickingTexture.disableWriting();
     }
 
-    /*
+
+    /// Shadow phase
+
+    m_shadowMapFBO.bind4writing();
+
+    m_dirLight->updateTightOrthoProjection(*m_gameCamera);
+    m_gameCamera->setOrthographicInfo(m_dirLight->shadowOrthoInfo);
+    m_dirLight->createView();
+
+    m_shadowMapShader.enable(Shader::ShaderType::BONE_SHADER);
+    m_shadowMapShader.setLightWorldPos(m_spotLights->at(0).getPosition());
+    m_spotLights->at(0).createView();
+
+    for(auto& [vao, queue]: m_skinnedDrawQueue){
+        glBindVertexArray(vao);
+        shadowPass(queue);
+    }
+
+    m_shadowMapShader.enable(Shader::ShaderType::BASIC_SHADER);
+    m_shadowMapShader.setLightWorldPos(m_spotLights->at(0).getPosition());
+
     for(auto& [vao, queue]: m_drawQueue){
         glBindVertexArray(vao);
         shadowPass(queue);
     }
-    */
+
+    /// Lighting phase
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0,0,m_windowWidth,m_windowHeight);
-    m_lightingShader.enable();
-
     glCullFace(GL_BACK);
 
     m_shadowMapFBO.bind4reading(SHADOW_TEXTURE_UNIT);
-    m_dirLight->createView();
 
+    m_lightingShader.enable(Shader::ShaderType::BONE_SHADER);
+    for (auto &[vao, queue]: m_skinnedDrawQueue) {
+        glBindVertexArray(vao);
+        lightingPass(queue);
+    }
+
+    m_lightingShader.enable(Shader::ShaderType::BASIC_SHADER);
     for (auto &[vao, queue]: m_drawQueue) {
         glBindVertexArray(vao);
         lightingPass(queue);
     }
 
+    /// Debug phase
+
     if(m_debugEnabled) {
-        m_debugShader.enable();
+        m_debugShader.enable(Shader::ShaderType::BONE_SHADER);
         glViewport(0,0,m_windowWidth, m_windowHeight);
 
         glCullFace(GL_BACK);
 
+        for (auto &[vao, queue]: m_skinnedDrawQueue) {
+            glBindVertexArray(vao);
+            debugPass(queue);
+        }
+
+        m_debugShader.enable(Shader::ShaderType::BASIC_SHADER);
         for (auto &[vao, queue]: m_drawQueue) {
             glBindVertexArray(vao);
             debugPass(queue);
@@ -71,41 +152,40 @@ void Renderer::renderQueue() {
         const auto& pixel = m_pickingTexture.readPixel(m_cursorPosX, m_windowHeight-m_cursorPosY-1);
 
         if(pixel.objectIndex != 0){
-            sig_objectClicked.emit(pixel.objectIndex-1);
+            if(pixel.objectFlags & PickingTexture::SKINNED){
+                sig_skinnedObjectClicked.emit(pixel.objectIndex-1);
+            }else {
+                sig_objectClicked.emit(pixel.objectIndex - 1);
+            }
         }
 
         m_cursorPressed = false;
     }
 
     m_drawQueue.clear();
+    m_skinnedDrawQueue.clear();
+
+    //renderModels();
+    //renderSkinnedModels();
 }
 
 void Renderer::clearRender() const {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0,0,m_windowWidth,m_windowHeight);
     //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClearColor(0.027, 0.769, 0.702, 1.0f);
+    //glClearColor(0.027, 0.769, 0.702, 1.0f);
+    glClearColor(0.0f,0.0f,0.0f,0.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     m_shadowMapFBO.bind4writing();
     glClear(GL_DEPTH_BUFFER_BIT);
 
-    m_pickingShader.enable();
     m_pickingTexture.enableWriting();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(0);
 }
 
 void Renderer::shadowPass(const meshQueue_t &queue) {
-    m_shadowMapFBO.bind4writing();
-    m_shadowMapShader.enable();
-
-    glCullFace(GL_FRONT);
-
-    m_dirLight->updateTightOrthoProjection(*m_gameCamera);
-    m_gameCamera->setOrthographicInfo(m_dirLight->shadowOrthoInfo);
-    m_dirLight->createView();
-
     for(const auto & matVector : queue){
         for(const auto& drawable : matVector.second) {
             renderModelShadow(drawable);
@@ -113,7 +193,28 @@ void Renderer::shadowPass(const meshQueue_t &queue) {
     }
 }
 
+void Renderer::shadowPass(const skinnedMeshQueue_t &queue) {
+    for(const auto & matVector : queue){
+        const boneTransfoms_t boneTransforms = matVector.first.second;
+        m_shadowMapShader.setBoneTransforms(boneTransforms);
+
+        for(const auto& drawable : matVector.second) {
+            renderModelShadow(drawable);
+        }
+    }
+}
+
 void Renderer::renderModelShadow(const Drawable& drawable) {
+    glm::mat4 mashMatrix = drawable.object.transformation.getMatrix();
+
+    glm::mat4 wvp = m_spotLights->at(0).getWVP(mashMatrix);
+    m_shadowMapShader.setWVP(wvp);
+    m_shadowMapShader.setWorld(mashMatrix);
+
+    renderMesh(*drawable.mesh);
+}
+
+void Renderer::renderModelShadow(const SkinnedDrawable& drawable) {
     glm::mat4 mashMatrix = drawable.object.transformation.getMatrix();
 
     glm::mat4 wvp = m_spotLights->at(0).getWVP(mashMatrix);
@@ -143,6 +244,28 @@ void Renderer::lightingPass(const meshQueue_t &queue) {
     }
 }
 
+void Renderer::lightingPass(const skinnedMeshQueue_t &queue) {
+    for(const auto & matVector : queue){
+        const Material* material = matVector.first.first;
+        const boneTransfoms_t boneTransforms = matVector.first.second;
+
+        m_lightingShader.setBoneTransforms(boneTransforms);
+
+        if(material){
+            m_lightingShader.setMaterial(*material);
+            material->bindTextures();
+        }
+
+        for(const auto& drawable : matVector.second) {
+            renderModelLight(drawable);
+        }
+
+        if(material) {
+            material->unbindTextures();
+        }
+    }
+}
+
 void Renderer::renderModelLight(const Drawable& drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
@@ -152,7 +275,7 @@ void Renderer::renderModelLight(const Drawable& drawable) {
     m_lightingShader.setWorld(objectTransform);
 
     // Light point of view
-    glm::mat4 light_wvp = m_dirLight->getWVP(objectTransform);
+    glm::mat4 light_wvp = m_spotLights->at(0).getWVP(objectTransform);
     m_lightingShader.setLightWVP(light_wvp);
 
     // Setup dir light
@@ -168,22 +291,57 @@ void Renderer::renderModelLight(const Drawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-inline void Renderer::renderMesh(const Mesh &mesh) {
+void Renderer::renderModelLight(const SkinnedDrawable& drawable) {
+    glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
+
+    // Camera point of view
+    glm::mat4 wvp = m_gameCamera->getWVP(objectTransform);
+    m_lightingShader.setWVP(wvp);
+    m_lightingShader.setWorld(objectTransform);
+
+    // Light point of view
+    glm::mat4 light_wvp = m_spotLights->at(0).getWVP(objectTransform);
+    m_lightingShader.setLightWVP(light_wvp);
+
+    // Setup dir light
+    m_lightingShader.setDirectionalLight(*m_dirLight);
+
+    m_lightingShader.setWorldCameraPos(m_gameCamera->getPosition());
+
+    m_lightingShader.setSpotLights(m_spotLightsCount, *m_spotLights);
+    m_lightingShader.setPointLights(m_pointLightsCount, *m_pointLights);
+
+    m_lightingShader.setColorMod(drawable.object.colorMod);
+
+    renderMesh(*drawable.mesh);
+}
+
+inline void Renderer::renderMesh(const MeshInfo &mesh) {
     glDrawElementsBaseVertex(GL_TRIANGLES,
                              static_cast<GLsizei>(mesh.indicesCount),
                              GL_UNSIGNED_INT,
                              (void *)(mesh.indicesOffset * sizeof(uint32_t)),
-                             mesh.verticesOffset);
+                             static_cast<GLint>(mesh.verticesOffset));
 }
 
 void Renderer::pickingPass(const meshQueue_t &queue) {
-
     for(const auto & matVector : queue){
         for(const auto& drawable : matVector.second) {
             renderModelPicking(drawable);
         }
     }
+}
 
+void Renderer::pickingPass(const skinnedMeshQueue_t &queue) {
+    for(const auto & matVector : queue){
+
+        const boneTransfoms_t boneTransforms = matVector.first.second;
+        m_pickingShader.setBoneTransforms(boneTransforms);
+
+        for(const auto& drawable : matVector.second) {
+            renderModelPicking(drawable);
+        }
+    }
 }
 
 void Renderer::renderModelPicking(const Drawable& drawable) {
@@ -193,13 +351,37 @@ void Renderer::renderModelPicking(const Drawable& drawable) {
     glm::mat4 wvp = m_gameCamera->getWVP(objectTransform);
     m_pickingShader.setWVP(wvp);
     m_pickingShader.setObjectIndex(drawable.object.index+1);
+    m_pickingShader.setObjectFlags(0);
+
+    renderMesh(*drawable.mesh);
+}
+
+void Renderer::renderModelPicking(const SkinnedDrawable& drawable) {
+    glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
+
+    // Camera point of view
+    glm::mat4 wvp = m_gameCamera->getWVP(objectTransform);
+    m_pickingShader.setWVP(wvp);
+    m_pickingShader.setObjectIndex(drawable.object.index+1);
+    m_pickingShader.setObjectFlags(PickingTexture::SKINNED);
 
     renderMesh(*drawable.mesh);
 }
 
 void Renderer::debugPass(const Renderer::meshQueue_t &queue) {
-
     for(const auto & matVector : queue){
+        for(const auto& drawable : matVector.second) {
+            renderModelDebug(drawable);
+        }
+    }
+}
+
+void Renderer::debugPass(const Renderer::skinnedMeshQueue_t &queue) {
+    for(const auto & matVector : queue){
+        const boneTransfoms_t boneTransforms = matVector.first.second;
+
+        m_debugShader.setBoneTransforms(boneTransforms);
+
         for(const auto& drawable : matVector.second) {
             renderModelDebug(drawable);
         }
@@ -216,6 +398,35 @@ void Renderer::renderModelDebug(const Drawable &drawable) {
 
     renderMesh(*drawable.mesh);
 }
+
+void Renderer::renderModelDebug(const SkinnedDrawable &drawable) {
+    glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
+
+    // Camera point of view
+    glm::mat4 wvp = m_gameCamera->getWVP(objectTransform);
+    m_debugShader.setWVP(wvp);
+    m_debugShader.setWorld(objectTransform);
+
+    renderMesh(*drawable.mesh);
+}
+
+void Renderer::renderTerrain() {
+    glm::mat4 vp = m_gameCamera->getVP();
+    m_terrainShader.setWVP(vp);
+
+    m_terrain->bindBlendingTextures();
+
+    // Setup dir light
+    m_terrainShader.setDirectionalLight(*m_dirLight);
+
+    auto meshIter = m_terrain->meshIter();
+
+    while(meshIter) {
+        auto mesh = *meshIter;
+        renderMesh(mesh);
+        meshIter++;
+    }
+ }
 
 void Renderer::setWindowSize(int32_t width, int32_t height) {
     m_windowWidth = width;
@@ -238,6 +449,19 @@ Renderer::Renderer() {
 
 Renderer::~Renderer() {
     window.reset();
+
+    // Cleanup shaders
+    m_lightingShader.clean();
+    m_pickingShader.clean();
+    m_debugShader.clean();
+    m_shadowMapShader.clean();
+    m_terrainShader.clean();
+
+    // Cleanup textures
+    m_pickingTexture.clean();
+    m_shadowCubeMapFBO.clean();
+    m_shadowMapFBO.clean();
+
     glfwTerminate();
 }
 
@@ -280,7 +504,7 @@ void Renderer::initGL() {
 void Renderer::initShaders() {
     m_lightingShader.init();
 
-    m_lightingShader.enable();
+    m_lightingShader.enable(Shader::ShaderType::BASIC_SHADER);
     m_lightingShader.setDiffuseTextureUnit(COLOR_TEXTURE_UNIT_INDEX);
     m_lightingShader.setSpecularTextureUnit(SPECULAR_EXPONENT_UNIT_INDEX);
     m_lightingShader.setNormalTextureUnit(NORMAL_TEXTURE_UNIT_INDEX);
@@ -297,6 +521,10 @@ void Renderer::initShaders() {
     m_pickingTexture.init(m_windowWidth, m_windowHeight);
 
     m_debugShader.init();
+
+    m_terrainShader.init();
+    m_terrainShader.enable();
+    m_terrainShader.setBlendedTextureSamples(COLOR_TEXTURE_UNIT_INDEX);
 }
 
 void Renderer::glfwErrorCallback(int, const char *msg) {
@@ -326,6 +554,3 @@ void Renderer::openGLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum
             break;
     }
 }
-
-
-

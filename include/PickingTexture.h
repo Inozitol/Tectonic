@@ -10,17 +10,21 @@ public:
     ~PickingTexture();
 
     void init(int32_t winWidth, int32_t winHeight);
+    void clean();
     void initTextures(int32_t winWidth, int32_t winHeight);
     void enableWriting() const;
     void disableWriting() const;
 
-    struct pixelInfo{
-        uint32_t objectIndex = 0;
-        uint32_t drawIndex = 0;
-        uint32_t primIndex = 0;
+    enum objectFlags{
+        SKINNED = 1 << 0
     };
 
-    pixelInfo readPixel(int32_t x, int32_t y);
+    struct pixelInfo{
+        uint16_t objectIndex = 0;
+        uint16_t objectFlags = 0;
+    };
+
+    pixelInfo readPixel(int32_t x, int32_t y) const;
 private:
 
     int32_t m_width = 0, m_height = 0;

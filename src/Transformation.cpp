@@ -2,6 +2,7 @@
 
 void Transformation::setScale(float scale) {
     m_scaleMatrix = glm::scale(glm::mat4x4(1.0f), glm::vec3(scale, scale, scale));
+    m_scale = scale;
 
     worldCurrent = false;
 }
@@ -11,23 +12,22 @@ void Transformation::setRotation(float x, float y, float z) {
     glm::mat4x4 ry = glm::rotate(glm::mat4x4(1.0f), glm::radians(y), glm::vec3(0.0f, 1.0f, 0.0f));
     glm::mat4x4 rz = glm::rotate(glm::mat4x4(1.0f), glm::radians(z), glm::vec3(0.0f, 0.0f, 1.0f));
 
-    glm::mat4x4 irx = glm::rotate(glm::mat4x4(1.0f), glm::radians(-x), glm::vec3(1.0f, 0.0f, 0.0f));
-    glm::mat4x4 iry = glm::rotate(glm::mat4x4(1.0f), glm::radians(-y), glm::vec3(0.0f, 1.0f, 0.0f));
-    glm::mat4x4 irz = glm::rotate(glm::mat4x4(1.0f), glm::radians(-z), glm::vec3(0.0f, 0.0f, 1.0f));
-
     m_rotationMatrix = rx * ry * rz;
+    m_rotation = {x,y,z};
 
     worldCurrent = false;
 }
 
 void Transformation::setTranslation(float x, float y, float z) {
     m_translationMatrix = glm::translate(glm::mat4x4(1.0f), glm::vec3(x, y, z));
+    m_translation = {x,y,z};
 
     worldCurrent = false;
 }
 
 void Transformation::scale(float scale) {
     m_scaleMatrix = glm::scale(m_scaleMatrix, glm::vec3(scale, scale, scale));
+    m_scale *= scale;
 
     worldCurrent = false;
 }
@@ -36,12 +36,14 @@ void Transformation::rotate(float x, float y, float z) {
     m_rotationMatrix = glm::rotate(m_rotationMatrix, glm::radians(x), glm::vec3(1.0f, 0.0f, 0.0f));
     m_rotationMatrix = glm::rotate(m_rotationMatrix, glm::radians(y), glm::vec3(0.0f, 1.0f, 0.0f));
     m_rotationMatrix = glm::rotate(m_rotationMatrix, glm::radians(z), glm::vec3(0.0f, 0.0f, 1.0f));
+    m_rotation += glm::vec3(x,y,z);
 
     worldCurrent = false;
 }
 
 void Transformation::translate(float x, float y, float z) {
     m_translationMatrix = glm::translate(m_translationMatrix, glm::vec3(x, y, z));
+    m_translation += glm::vec3(x,y,z);
 
     worldCurrent = false;
 }
@@ -74,3 +76,14 @@ glm::vec3 Transformation::invertDirection(const glm::vec3& dir) const {
     return glm::normalize(world3 * dir);
 }
 
+float Transformation::getScale() {
+    return m_scale;
+}
+
+glm::vec3 Transformation::getRotation() {
+    return m_rotation;
+}
+
+glm::vec3 Transformation::getTranslation() {
+    return m_translation;
+}
