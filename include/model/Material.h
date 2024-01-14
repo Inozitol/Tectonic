@@ -6,7 +6,7 @@
 #include <memory>
 
 #include "utils.h"
-#include "model/Texture.h"
+#include "model/texture/Texture.h"
 #include "defs/TextureDefs.h"
 
 /**

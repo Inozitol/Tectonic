@@ -99,9 +99,11 @@ public:
      */
     [[nodiscard]] const glm::mat4x4& getViewMatrix() const;
 
-    glm::mat4 getWVP(const glm::mat4& modelTrans);
+    glm::mat4 getWVP(const glm::mat4& world);
 
     glm::mat4 getVP();
+
+    glm::mat4 getVPNoTranslate();
 
     /**
      * Creates a projection matrix and stores it.
@@ -111,13 +113,19 @@ public:
 
     /**
      * Creates a view matrix and stores it.
-     * Should be called after a change to orientation or local_position.
+     * Should be called after a change to orientation or position.
      */
     void createView();
 
     /**
+     * Creates a view projection matrix and stores it.
+     * Is called automatically after every position and rotation update.
+     */
+    void createVP();
+
+    /**
      * @brief Returns a local_position of the camera in world space.
-     * @return Reference to a local_position in worlds space.
+     * @return Reference to a position in worlds space.
      */
     [[nodiscard]] const glm::vec3& getPosition() const;
 
@@ -129,7 +137,7 @@ public:
 
     /**
      * Sets the local_position of the camera in world space.
-     * @param position Vector with local_position in world space.
+     * @param position Vector with position in world space.
      */
     void setPosition(glm::vec3 position);
 
@@ -151,7 +159,9 @@ public:
     [[nodiscard]] glm::vec3 down()    const {return Axis::NEG_Y * m_orientation;}
     [[nodiscard]] glm::vec3 up()      const {return Axis::POS_Y * m_orientation;}
 
-    Signal<glm::vec3> sig_position;
+    Signal<const glm::vec3&> sig_position;
+    Signal<const glm::quat&> sig_orientation;
+    Signal<const glm::mat4&> sig_VPMatrix;
 
 protected:
     glm::vec3 m_position = {0.0f, 0.0f, 0.0f};
@@ -175,7 +185,8 @@ private:
      */
     bool isPerspective = true;
 
-    glm::mat4 m_viewMatrix = glm::identity<glm::mat4x4>();
+    glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
+    glm::mat4 m_VP = glm::identity<glm::mat4>();
 };
 
 #endif //TECTONIC_CAMERA_H

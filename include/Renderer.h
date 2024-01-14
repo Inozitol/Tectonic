@@ -11,6 +11,9 @@
 #include "shader/shadow/ShadowCubeMapFBO.h"
 #include "shader/shadow/ShadowMapFBO.h"
 #include "shader/PickingShader.h"
+#include "shader/DebugShader.h"
+#include "shader/TerrainShader.h"
+#include "shader/SkyboxShader.h"
 #include "meta/Signal.h"
 #include "meta/Slot.h"
 #include "model/anim/Animation.h"
@@ -18,10 +21,9 @@
 #include "exceptions.h"
 #include "Window.h"
 #include "SceneTypes.h"
-#include "shader/DebugShader.h"
 #include "model/terrain/Terrain.h"
-#include "shader/TerrainShader.h"
 #include "Logger.h"
+#include "model/terrain/Skybox.h"
 
 class Renderer {
 public:
@@ -38,6 +40,7 @@ public:
     void queueModelRender(const ObjectData& object, Model* model);
     void queueSkinnedModelRender(const SkinnedObjectData& object, SkinnedModel* skinnedModel);
     void setTerrainModelRender(const std::shared_ptr<Terrain>& terrain);
+    void setSkyboxModelRender(const std::shared_ptr<Skybox>& skybox);
     void renderQueues();
     void setWindowSize(int32_t width, int32_t height);
     void setGameCamera(const std::shared_ptr<GameCamera>& camera) { m_gameCamera = camera; };
@@ -65,6 +68,7 @@ public:
     PickingTexture      m_pickingTexture;
     DebugShader         m_debugShader;
     TerrainShader       m_terrainShader;
+    SkyboxShader        m_skyboxShader;
 
     Signal<objectIndex_t> sig_objectClicked;
     Signal<skinnedObjectIndex_t> sig_skinnedObjectClicked;
@@ -120,6 +124,7 @@ private:
     vaoQueue_t m_drawQueue;
     skinnedVaoQueue_t m_skinnedDrawQueue;
     std::shared_ptr<Terrain> m_terrain;
+    std::shared_ptr<Skybox> m_skybox;
 
     void initGLFW();
     static void initGL();
@@ -148,6 +153,7 @@ private:
     void renderModelDebug(const SkinnedDrawable& drawable);
 
     void renderTerrain();
+    void renderSkybox();
 
     static inline void renderMesh(const MeshInfo& mesh);
 

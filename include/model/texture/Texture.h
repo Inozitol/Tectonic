@@ -20,6 +20,7 @@ public:
 
     void bind(GLenum tex_unit) const;
     void unbind(GLenum tex_unit) const;
+    [[nodiscard]] GLuint64 getHandle() const;
 
     const std::string& name();
 
@@ -31,6 +32,8 @@ private:
     std::string m_fileName;
     GLenum m_texTarget = -1;
     GLuint m_texObject = -1;
+
+    GLuint64 m_bindlessHandle = -1;
 
     static Logger m_logger;
 };

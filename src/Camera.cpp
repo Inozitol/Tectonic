@@ -35,16 +35,27 @@ void Camera::createProjectionMatrix() {
     }
 }
 
-glm::mat4 Camera::getWVP(const glm::mat4& model) {
-    return m_projectionMatrix * m_viewMatrix * model;
+glm::mat4 Camera::getWVP(const glm::mat4& world) {
+    return m_VP * world;
 }
 
 glm::mat4 Camera::getVP(){
-    return m_projectionMatrix * m_viewMatrix;
+    return m_VP;
 }
 
 void Camera::createView() {
     m_viewMatrix = rotationMatrix() * translationMatrix();
+}
+
+void Camera::createVP() {
+    createView();
+    m_VP = m_projectionMatrix * m_viewMatrix;
+
+    sig_VPMatrix.emit(getVP());
+}
+
+glm::mat4 Camera::getVPNoTranslate() {
+    return m_projectionMatrix * rotationMatrix();
 }
 
 const glm::vec3 & Camera::getPosition() const {
@@ -57,11 +68,14 @@ glm::vec3 Camera::getDirection() const {
 
 void Camera::setDirection(glm::vec3 direction, glm::vec3 up) {
     m_orientation = glm::conjugate(glm::quatLookAt(direction, up));
+    sig_orientation.emit(m_orientation);
+    createVP();
 }
 
 void Camera::setPosition(glm::vec3 position) {
     m_position = position;
     sig_position.emit(m_position);
+    createVP();
 }
 
 void Camera::setPerspectiveInfo(const PerspProjInfo &info) {
@@ -100,3 +114,4 @@ const PerspProjInfo &Camera::getPerspectiveInfo() const{
 const OrthoProjInfo &Camera::getOrthographicInfo() const{
     return *m_orthoProjInfo;
 }
+

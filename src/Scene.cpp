@@ -160,8 +160,19 @@ void Scene::handleMouseEvent(double x, double y) {
 }
 
 void Scene::handleKeyEvent(int32_t key) {
-    if(m_gameCamera)
+    if(m_gameCamera) {
         m_gameCamera->handleKeyEvent(key);
+
+        /*
+        if(m_terrain) {
+            glm::vec3 cameraPos = m_gameCamera->getPosition();
+
+            cameraPos.y = m_terrain->hMapBaryWCoord(cameraPos.x,cameraPos.z) + 0.2f;
+
+            m_gameCamera->setPosition(cameraPos);
+        }
+         */
+    }
 }
 
 void Scene::insertTerrain(const std::shared_ptr<Terrain> &terrain) {
@@ -171,6 +182,15 @@ void Scene::insertTerrain(const std::shared_ptr<Terrain> &terrain) {
 
 std::shared_ptr<Terrain> Scene::getTerrain() {
     return m_terrain;
+}
+
+void Scene::insertSkybox(const std::shared_ptr<Skybox> &skybox) {
+    m_skybox = skybox;
+    m_renderer.setSkyboxModelRender(skybox);
+}
+
+std::shared_ptr<Skybox> Scene::getSkybox() {
+    return m_skybox;
 }
 
 

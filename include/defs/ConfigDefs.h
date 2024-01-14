@@ -34,5 +34,7 @@
 #define DEBUG_FRAG_SHADER_PATH      "shaders/frag/debug.frag"
 #define TERRAIN_VERT_SHADER_PATH    "shaders/vert/terrain.vert"
 #define TERRAIN_FRAG_SHADER_PATH    "shaders/frag/terrain.frag"
+#define SKYBOX_VERT_SHADER_PATH     "shaders/vert/skybox.vert"
+#define SKYBOX_FRAG_SHADER_PATH     "shaders/frag/skybox.frag"
 
 #endif //TECTONIC_CONFIGDEFS_H

@@ -9,7 +9,8 @@
 #include "extern/glad/glad.h"
 #include "exceptions.h"
 
-static const char* versionString = "#version 450 core\n";
+static const char* prefixString = "#version 450 core\n"
+                                  "#extension GL_ARB_bindless_texture : require\n";
 
 /**
  * @brief Base class for managing shader code.

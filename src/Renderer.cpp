@@ -33,18 +33,14 @@ void Renderer::setTerrainModelRender(const std::shared_ptr<Terrain>& terrain) {
     m_terrainShader.setMinHeight(min);
     m_terrainShader.setMaxHeight(max);
 
-    std::vector<float> heights;
-    heights.reserve(m_terrain->m_blendingTexturesCount);
-    for(const auto& texture : m_terrain->m_blendingTextures){
-        heights.push_back(texture.first);
-    }
+    m_terrainShader.setBlendedTextures(m_terrain->m_blendingTextures, m_terrain->m_blendingTexturesCount);
+}
 
-    m_terrainShader.setBlendedTextures(heights, m_terrain->m_blendingTexturesCount);
+void Renderer::setSkyboxModelRender(const std::shared_ptr<Skybox> &skybox) {
+    m_skybox = skybox;
 }
 
 void Renderer::renderQueues() {
-    m_gameCamera->createView();
-
     clearRender();
 
     /// Terrain shader
@@ -125,6 +121,17 @@ void Renderer::renderQueues() {
         glBindVertexArray(vao);
         lightingPass(queue);
     }
+
+    // Skybox phase
+    if(m_skybox) {
+        glCullFace(GL_FRONT);
+        glDepthFunc(GL_LEQUAL);
+        m_skyboxShader.enable();
+        glBindVertexArray(m_skybox->getVAO());
+        renderSkybox();
+        glDepthFunc(GL_LESS);
+    }
+
 
     /// Debug phase
 
@@ -428,6 +435,14 @@ void Renderer::renderTerrain() {
     }
  }
 
+void Renderer::renderSkybox() {
+    glm::mat4 vp = m_gameCamera->getVPNoTranslate();
+    m_skyboxShader.setVP(vp);
+
+    m_skybox->m_cubemapTex->bind(SKYBOX_CUBE_MAP_TEXTURE_UNIT);
+    renderMesh(m_skybox->m_meshes.at(0));
+}
+
 void Renderer::setWindowSize(int32_t width, int32_t height) {
     m_windowWidth = width;
     m_windowHeight = height;
@@ -472,7 +487,7 @@ void Renderer::initGLFW() {
         throw rendererException("Renderer couldn't init GLFW");
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
@@ -523,8 +538,12 @@ void Renderer::initShaders() {
     m_debugShader.init();
 
     m_terrainShader.init();
-    m_terrainShader.enable();
-    m_terrainShader.setBlendedTextureSamples(COLOR_TEXTURE_UNIT_INDEX);
+    //m_terrainShader.enable();
+    //m_terrainShader.setBlendedTextureSamples(COLOR_TEXTURE_UNIT_INDEX);
+
+    m_skyboxShader.init();
+    m_skyboxShader.enable();
+    m_skyboxShader.setCubemapUnit(SKYBOX_CUBE_MAP_TEXTURE_UNIT_INDEX);
 }
 
 void Renderer::glfwErrorCallback(int, const char *msg) {
@@ -554,3 +573,4 @@ void Renderer::openGLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum
             break;
     }
 }
+

@@ -26,6 +26,7 @@
 #include "model/terrain/Terrain.h"
 
 #include "meta/meta.h"
+#include "model/terrain/Skybox.h"
 
 class Scene {
 public:
@@ -46,6 +47,9 @@ public:
 
     void insertTerrain(const std::shared_ptr<Terrain>& terrain);
     std::shared_ptr<Terrain> getTerrain();
+
+    void insertSkybox(const std::shared_ptr<Skybox>& skybox);
+    std::shared_ptr<Skybox> getSkybox();
 
     objectIndex_t createObject(modelIndex_t modelIndex);
     ObjectData& getObject(objectIndex_t objectIndex);
@@ -133,6 +137,8 @@ private:
     decltype(MAX_SPOT_LIGHTS)                   m_spotLightsCount;
     std::array<PointLight, MAX_POINT_LIGHTS>    m_pointLights;
     decltype(MAX_POINT_LIGHTS)                  m_pointLightsCount;
+
+    std::shared_ptr<Skybox> m_skybox = nullptr;
 
     Renderer& m_renderer = Renderer::getInstance();
 

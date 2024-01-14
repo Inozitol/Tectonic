@@ -18,8 +18,7 @@ public:
     void setWVP(const glm::mat4& wvp) const;
     void setMinHeight(float minHeight) const;
     void setMaxHeight(float maxHeight) const;
-    void setBlendedTextures(const std::vector<float>& heights, uint32_t textureCount);
-    void setBlendedTextureSamples(GLint texUnit) const;
+    void setBlendedTextures(const std::array<std::pair<float, std::shared_ptr<Texture>>, MAX_TERRAIN_HEIGHT_TEXTURE>& heights, uint32_t textureCount);
     void setDirectionalLight(const DirectionalLight &light) const;
 
 private:

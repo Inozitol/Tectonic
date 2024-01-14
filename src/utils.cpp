@@ -134,4 +134,38 @@ namespace Utils{
         return 1 << exp;
     }
 
+    void FrustumCulling::update(const glm::mat4 &VP) {
+        glm::mat4 tVP = glm::transpose(VP);
+
+        m_leftClipPlane     = tVP[3] + tVP[0];
+        m_rightClipPlane    = tVP[3] - tVP[0];
+        m_bottomClipPlane   = tVP[3] + tVP[1];
+        m_topClipPlane      = tVP[3] - tVP[1];
+        m_nearClipPlane     = tVP[3] + tVP[2];
+        m_farClipPlane      = tVP[3] - tVP[2];
+    }
+
+    bool FrustumCulling::isPointInside(const glm::vec3 &point) const {
+        glm::vec4 point4D(point,1.0f);
+
+        return  (glm::dot(m_leftClipPlane,point4D) >= m_bias) &&
+                (glm::dot(m_rightClipPlane, point4D) >= m_bias) &&
+                (glm::dot(m_bottomClipPlane, point4D) >= m_bias) &&
+                (glm::dot(m_topClipPlane, point4D) >= m_bias) &&
+                (glm::dot(m_nearClipPlane, point4D) >= m_bias) &&
+                (glm::dot(m_farClipPlane, point4D) >= m_bias);
+    }
+
+    void barycentric(glm::vec2 p, glm::vec2 a, glm::vec2 b, glm::vec2 c, float &u, float &v, float &w){
+        glm::vec2 v0 = b-a, v1 = c-a, v2 = p-a;
+        float d00 = glm::dot(v0,v0);
+        float d01 = glm::dot(v0,v1);
+        float d11 = glm::dot(v1,v1);
+        float d20 = glm::dot(v2,v0);
+        float d21 = glm::dot(v2,v1);
+        float denom = d00*d11 - d01*d01;
+        v = (d11*d20 - d01*d21) / denom;
+        w = (d00*d21 - d01*d20) / denom;
+        u = 1.0f-v-w;
+    }
 }

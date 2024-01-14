@@ -34,43 +34,6 @@ skinnedModelIndex_t boneM_i;
 skinnedObjectIndex_t bone_i;
 objectIndex_t terrainBone_i;
 
-int win_width, win_height;
-
-void err_callback(int, const char* msg){
-    fprintf(stderr, "Error: %s\n", msg);
-}
-
-void GLAPIENTRY
-MessageCallback( GLenum source,
-                 GLenum type,
-                 GLuint id,
-                 GLenum severity,
-                 GLsizei length,
-                 const GLchar* message,
-                 const void* userParam )
-{
-    switch(severity){
-        case GL_DEBUG_SEVERITY_NOTIFICATION:
-        case GL_DEBUG_SEVERITY_LOW:
-            break;
-        case GL_DEBUG_SEVERITY_MEDIUM:
-            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = MEDIUM, message = %s\n",
-                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
-                     type, message );
-            break;
-        case GL_DEBUG_SEVERITY_HIGH:
-            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = HIGH, message = %s\n",
-                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
-                     type, message );
-            break;
-        default:
-            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = UNKNOWN, message = %s\n",
-                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
-                     type, message );
-            break;
-    }
-}
-
 void switchAnimation(uint32_t key){
     SkinnedObjectData& bobObject = g_boneScene.getSkinnedObject(bone_i);
     switch(key){
@@ -114,8 +77,9 @@ void redoTerrain(){
     g_terrain->generateMidpoint(g_size, g_roughness, {
             "terrain/textures/rock.png",
             "terrain/textures/dry.png",
-            "terrain/textures/grass.png",
+            "terrain/textures/grass_dark.png",
             "terrain/textures/snow.jpg"});
+    g_boneScene.getGameCamera()->setPosition({0.0, g_terrain->hMapLCoord(g_terrain->getCenterCoords()), 0.0});
 }
 
 Slot<> g_slt_redoTerrain{[](){ redoTerrain(); }};
@@ -211,21 +175,31 @@ void initScenes(){
     g_boneScene.setGameCamera(gameCamera);
 
     g_terrain = std::make_shared<Terrain>();
+    g_terrain->flags.set(Terrain::Flags::SET_NEAREST_SIZE);
     g_terrain->setMaxLOD(3);
-    g_terrain->setScale(0.05);
-    g_terrain->setMaxRange(5.0);
+    g_terrain->setScale(0.1);
+    g_terrain->setMaxRange(20.0);
     g_terrain->generateMidpoint(g_size, g_roughness, {
         "terrain/textures/rock.png",
         "terrain/textures/dry.png",
-        "terrain/textures/grass.png",
+        "terrain/textures/grass_dark.png",
         "terrain/textures/snow.jpg"});
     //g_terrain->generateFlat(g_size, g_size, "terrain/textures/grass.png");
     g_terrain->setCamera(*gameCamera);
-    gameCamera->setPosition({0.0,g_terrain->getHeight(g_terrain->getCenterCoords()),0.0});
+    gameCamera->setPosition({0.0, g_terrain->hMapLCoord(g_terrain->getCenterCoords()), 0.0});
     g_boneScene.insertTerrain(g_terrain);
     //modelIndex_t terrainMeshBone_i = g_boneScene.insertModel(terrainMesh);
     //terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
     //g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-25.0, 0.0, -25.0);
+
+    std::shared_ptr<Skybox> skybox = std::make_shared<Skybox>();
+    skybox->init({"terrain/skyboxtex/xpos.png",
+                  "terrain/skyboxtex/xneg.png",
+                  "terrain/skyboxtex/ypos.png",
+                  "terrain/skyboxtex/yneg.png",
+                  "terrain/skyboxtex/zpos.png",
+                  "terrain/skyboxtex/zneg.png"});
+    g_boneScene.insertSkybox(skybox);
 
     AssimpLoader assimpLoader;
 

@@ -3,6 +3,14 @@
 
 Logger Terrain::m_logger = Logger("Terrain");
 
+Terrain::Terrain() {
+    initMeta();
+}
+
+void Terrain::initMeta() {
+    flags.sig_flagChanged.connect(slt_flagChange);
+}
+
 void Terrain::normalize() {
     if(m_maxHeight <= m_minHeight){
         return;
@@ -217,19 +225,90 @@ void Terrain::squareStep(uint32_t rectSize, float currHeight) {
     }
 }
 
+const glm::vec3& Terrain::pMapWCoord(int32_t x, int32_t y) {
+    return pMapAt(static_cast<uint32_t>(static_cast<float>(x)/m_worldScale + static_cast<float>(m_dimX)/2), static_cast<uint32_t>(static_cast<float>(y)/m_worldScale + static_cast<float>(m_dimY)/2));
+}
+
+float Terrain::hMapWCoord(int32_t x, int32_t y){
+    return hMapAt(static_cast<uint32_t>(static_cast<float>(x)/m_worldScale + static_cast<float>(m_dimX)/2), static_cast<uint32_t>(static_cast<float>(y)/m_worldScale + static_cast<float>(m_dimY)/2));
+}
+
+float Terrain::hMapBaryWCoord(float x, float y) {
+    int32_t xF = std::floor(x);
+    int32_t yF = std::floor(y);
+    uint32_t xLoc = static_cast<uint32_t>(static_cast<float>(xF)/m_worldScale + static_cast<float>(m_dimX)/2);
+    uint32_t yLoc = static_cast<uint32_t>(static_cast<float>(yF)/m_worldScale + static_cast<float>(m_dimY)/2);
+    glm::vec3 p1;
+    glm::vec3 p2;
+    glm::vec3 p3;
+
+    float xQuad = x - static_cast<float>(xF);
+    float yQuad = y - static_cast<float>(yF);
+
+    if(xLoc%2 == 0 && yLoc%2 == 0 && xQuad > yQuad) {
+        p1 = pMapWCoord(xF, yF);
+        p2 = pMapWCoord(xF+1,yF+1);
+        p3 = pMapWCoord(xF+1, yF);
+    }else if(xLoc%2 == 0 && yLoc%2 == 0 && xQuad <= yQuad) {
+        p1 = pMapWCoord(xF, yF);
+        p2 = pMapWCoord(xF, yF+1);
+        p3 = pMapWCoord(xF+1,yF+1);
+    }else if(xLoc%2 == 1 && yLoc%2 == 0 && xQuad > -yQuad+1) {
+        p1 = pMapWCoord(xF+1, yF);
+        p2 = pMapWCoord(xF,yF+1);
+        p3 = pMapWCoord(xF+1, yF+1);
+    }else if(xLoc%2 == 1 && yLoc%2 == 0 && xQuad <= -yQuad+1) {
+        p1 = pMapWCoord(xF, yF);
+        p2 = pMapWCoord(xF,yF+1);
+        p3 = pMapWCoord(xF+1, yF);
+    }else if(xLoc%2 == 0 && yLoc%2 == 1 && xQuad > -yQuad+1) {
+        p1 = pMapWCoord(xF+1, yF);
+        p2 = pMapWCoord(xF,yF+1);
+        p3 = pMapWCoord(xF+1, yF+1);
+    }else if(xLoc%2 == 0 && yLoc%2 == 1 && xQuad <= -yQuad+1) {
+        p1 = pMapWCoord(xF, yF);
+        p2 = pMapWCoord(xF,yF+1);
+        p3 = pMapWCoord(xF+1, yF);
+    }else if(xLoc%2 == 1 && yLoc%2 == 1 && xQuad > yQuad) {
+        p1 = pMapWCoord(xF, yF);
+        p2 = pMapWCoord(xF+1,yF+1);
+        p3 = pMapWCoord(xF+1, yF);
+    }else if(xLoc%2 == 1 && yLoc%2 == 1 && xQuad <= yQuad) {
+        p1 = pMapWCoord(xF, yF);
+        p2 = pMapWCoord(xF,yF+1);
+        p3 = pMapWCoord(xF+1, yF+1);
+    }
+
+    float h1, h2, h3;
+    Utils::barycentric({x,y}, {p1.x,p1.z},{p2.x,p2.z},{p3.x,p3.z},h1,h2,h3);
+    return p1.y*h1 + p2.y*h2 + p3.y*h3;
+}
 void Terrain::generateFlatPlane() {
     m_logger(Logger::DEBUG) << "Generating flat terrain of size " << m_dimX << "x" << m_dimY << '\n';
 
     if((m_dimX-1) % (m_patchSize-1) != 0){
+        uint32_t nearestSize = ((m_dimX-1+m_patchSize-1)/(m_patchSize-1)*(m_patchSize-1)+1);
         m_logger(Logger::WARNING) <<
                                   "Terrain X dimension size of " << m_dimX << " on patch size of " << m_patchSize << " may result in issues. " <<
-                                  "Recommending size is " << ((m_dimX-1+m_patchSize-1)/(m_patchSize-1)*(m_patchSize-1)+1) << '\n';
+                                  "Recommending size is " << nearestSize << '\n';
+
+        if(flags[Flags::SET_NEAREST_SIZE]){
+            m_dimX = nearestSize;
+            m_logger(Logger::INFO) << "Flag SET_NEAREST_SIZE enabled. Setting recommended size as the new size." << '\n';
+        }
     }
 
     if((m_dimY-1) % (m_patchSize-1) != 0){
+        uint32_t nearestSize = ((m_dimY-1+m_patchSize-1)/(m_patchSize-1)*(m_patchSize-1)+1);
         m_logger(Logger::WARNING) <<
                                   "Terrain Y dimension size of " << m_dimY << " on patch size of " << m_patchSize << " may result in issues. " <<
-                                  "Recommending size is " << ((m_dimY-1+m_patchSize-1)/(m_patchSize-1)*(m_patchSize-1)+1) << '\n';
+                                  "Recommending size is " << nearestSize << '\n';
+
+        if(flags[Flags::SET_NEAREST_SIZE]){
+            m_dimY = nearestSize;
+            m_logger(Logger::INFO) << "Flag SET_NEAREST_SIZE enabled. Setting recommended size as a new size." << '\n';
+        }
+
     }
 
     m_patchesX = (m_dimX-1) / (m_patchSize-1);
@@ -257,13 +336,20 @@ void Terrain::generateFlatPlane() {
     createPatchIndices();
 }
 
-
 float& Terrain::hMapAt(uint32_t x, uint32_t y){
     return m_vertices.at((y * m_dimX) + x).m_position.y;
 }
 
 float& Terrain::hMapAt(uint32_t i){
     return m_vertices.at(i).m_position.y;
+}
+
+glm::vec3& Terrain::pMapAt(uint32_t x, uint32_t y){
+    return m_vertices.at((y * m_dimX) + x).m_position;
+}
+
+glm::vec3& Terrain::pMapAt(uint32_t i){
+    return m_vertices.at(i).m_position;
 }
 
 std::pair<float, float> Terrain::getMinMaxHeight() {
@@ -473,45 +559,12 @@ void Terrain::createTriangle(uint32_t i0, uint32_t i1, uint32_t i2) {
 }
 
 Terrain::meshIterator Terrain::meshIter() {
-    std::function<MeshInfo(uint32_t&, uint32_t&)> func = {[this](uint32_t& patchX, uint32_t& patchY){
-        patchX = (patchX+1);
-        if(patchX == m_patchesX){
-            patchY++;
-            patchX = 0;
-        }
-        if(patchY == m_patchesY){
-            patchX = 0;
-            patchY = 0;
-            return MeshInfo();
-        }
-
-        const LODManager::patchLOD& pLOD = m_lodManager.getPatchLOD(patchX, patchY);
-        uint32_t C = pLOD.core;
-        uint32_t L = pLOD.left;
-        uint32_t R = pLOD.right;
-        uint32_t T = pLOD.top;
-        uint32_t B = pLOD.bottom;
-
-        uint32_t baseIndex = m_lodInfo.at(C).info[L][R][T][B].start;
-
-        uint32_t y = patchY * (m_patchSize-1);
-        uint32_t x = patchX * (m_patchSize-1);
-        uint32_t baseVertex = y * m_dimX + x;
-
-        MeshInfo meshInfo;
-        meshInfo.indicesCount = m_lodInfo.at(C).info[L][R][T][B].count;
-        meshInfo.verticesOffset = baseVertex;
-        meshInfo.indicesOffset = baseIndex;
-        meshInfo.matIndex = 0;
-
-        return meshInfo;
-    }};
-
-    return Terrain::meshIterator(func);
+    return Terrain::meshIterator(m_meshFunc);
 }
 
 void Terrain::setCamera(Camera &camera) {
     camera.sig_position.connect(m_lodManager.slt_cameraPosition);
+    camera.sig_VPMatrix.connect(m_frustumCulling.slt_updateVP);
 }
 
 void Terrain::setScale(float scale) {
@@ -526,10 +579,46 @@ std::pair<uint32_t, uint32_t> Terrain::getCenterCoords() const {
     return {m_dimX / 2, m_dimY / 2};
 }
 
-float Terrain::getHeight(uint32_t x, uint32_t y) {
+float Terrain::hMapLCoord(uint32_t x, uint32_t y) {
     return hMapAt(x,y);
 }
 
-float Terrain::getHeight(std::pair<uint32_t, uint32_t> coords) {
+float Terrain::hMapLCoord(std::pair<uint32_t, uint32_t> coords) {
     return hMapAt(coords.first,coords.second);
+}
+
+bool Terrain::isPatchInsideFrustum(uint32_t x, uint32_t y) {
+    uint32_t x0 = x * (m_patchSize-1);
+    uint32_t x1 = x0 + m_patchSize-1;
+    uint32_t y0 = y * (m_patchSize-1);
+    uint32_t y1 = y0 + m_patchSize-1;
+
+    glm::vec3 h00 = pMapAt(x0,y0);
+    glm::vec3 h01 = pMapAt(x0,y1);
+    glm::vec3 h10 = pMapAt(x1, y0);
+    glm::vec3 h11 = pMapAt(x1,y1);
+
+    float minHeight = std::min(h00.y, std::min(h01.y, std::min(h10.y, h11.y)));
+    float maxHeight = std::max(h00.y, std::max(h01.y, std::max(h10.y, h11.y)));
+
+    glm::vec3 p00_low(static_cast<float>(h00.x), minHeight, static_cast<float>(h00.z));
+    glm::vec3 p01_low(static_cast<float>(h01.x), minHeight, static_cast<float>(h01.z));
+    glm::vec3 p10_low(static_cast<float>(h10.x), minHeight, static_cast<float>(h10.z));
+    glm::vec3 p11_low(static_cast<float>(h11.x), minHeight, static_cast<float>(h11.z));
+
+    glm::vec3 p00_high(static_cast<float>(h00.x), maxHeight, static_cast<float>(h00.z));
+    glm::vec3 p01_high(static_cast<float>(h01.x), maxHeight, static_cast<float>(h01.z));
+    glm::vec3 p10_high(static_cast<float>(h10.x), maxHeight, static_cast<float>(h10.z));
+    glm::vec3 p11_high(static_cast<float>(h11.x), maxHeight, static_cast<float>(h11.z));
+
+    return  m_frustumCulling.isPointInside(p00_low)  ||
+            m_frustumCulling.isPointInside(p01_low)  ||
+            m_frustumCulling.isPointInside(p10_low)  ||
+            m_frustumCulling.isPointInside(p11_low)  ||
+            m_frustumCulling.isPointInside(p00_high) ||
+            m_frustumCulling.isPointInside(p01_high) ||
+            m_frustumCulling.isPointInside(p10_high) ||
+            m_frustumCulling.isPointInside(p11_high);
+
+    //return m_frustum.IsBoxVisible(p00_low, p11_high);
 }

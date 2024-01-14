@@ -66,7 +66,7 @@ void Shader::addShader(GLenum type, const char *filename) {
     replaceIncludes(shaderText);
 
     shaderText.insert(0, prefix);
-    shaderText.insert(0, versionString);
+    shaderText.insert(0, prefixString);
 
     // Vertex shaders in bone supported shaders need to be split into BASIC and BONE shaders
     if(type == GL_VERTEX_SHADER && (m_shaderTypes & ShaderType::BONE_SHADER)){

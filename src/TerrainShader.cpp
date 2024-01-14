@@ -45,16 +45,11 @@ void TerrainShader::setMaxHeight(float maxHeight) const {
     glUniform1f(getUniformLocation(loc_maxHeight), maxHeight);
 }
 
-void TerrainShader::setBlendedTextures(const std::vector<float>& heights, uint32_t textureCount) {
+void TerrainShader::setBlendedTextures(const std::array<std::pair<float, std::shared_ptr<Texture>>, MAX_TERRAIN_HEIGHT_TEXTURE>& textures, uint32_t textureCount) {
     glUniform1ui(getUniformLocation(loc_numTextureHeights), textureCount);
     for(uint32_t i = 0; i < textureCount; i++){
-        glUniform1f(getUniformLocation(loc_textureHeight[i]), heights.at(i));
-    }
-}
-
-void TerrainShader::setBlendedTextureSamples(GLint texUnit) const {
-    for(uint32_t i = 0; i < MAX_TERRAIN_HEIGHT_TEXTURE; i++) {
-        glUniform1i(getUniformLocation(loc_sampler.height[i]), texUnit+i);
+        glUniform1f(getUniformLocation(loc_textureHeight[i]), textures.at(i).first);
+        glUniform1ui64ARB(getUniformLocation(loc_sampler.height[i]), textures.at(i).second->getHandle());
     }
 }
 
@@ -64,5 +59,4 @@ void TerrainShader::setDirectionalLight(const DirectionalLight &light) const {
     glUniform1f(getUniformLocation(loc_dirLight.ambientIntensity), light.ambientIntensity);
     glUniform1f(getUniformLocation(loc_dirLight.diffuseIntensity), light.diffuseIntensity);
     glUniform3f(getUniformLocation(loc_dirLight.direction), direction.x, direction.y, direction.z);
-
 }

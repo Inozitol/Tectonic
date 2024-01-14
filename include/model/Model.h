@@ -15,7 +15,7 @@
 #include "defs/ShaderDefines.h"
 
 #include "Transformation.h"
-#include "Texture.h"
+#include "model/texture/Texture.h"
 #include "Material.h"
 #include "utils.h"
 #include "shader/LightingShader.h"

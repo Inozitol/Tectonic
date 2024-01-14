@@ -28,7 +28,7 @@ public:
     void calcLODRegions();
     void loadHeightsPerPatch(const std::vector<std::vector<float>>& map);
 
-    Slot<glm::vec3> slt_cameraPosition{[this](const glm::vec3& pos){
+    Slot<const glm::vec3&> slt_cameraPosition{[this](const glm::vec3& pos){
         updateLODMapPass1(pos);
         updateLODMapPass2(pos);
     }};
