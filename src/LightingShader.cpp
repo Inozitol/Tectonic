@@ -1,6 +1,8 @@
 #include <iostream>
 #include <glm/gtx/string_cast.hpp>
 #include <array>
+#include "extern/glad/glad.h"
+
 #include "shader/LightingShader.h"
 
 #include "utils.h"

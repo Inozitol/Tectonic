@@ -1,9 +1,10 @@
-#ifndef TECTONIC_RENDERER_H
-#define TECTONIC_RENDERER_H
+#ifndef TECTONIC_ENGINECORE_H
+#define TECTONIC_ENGINECORE_H
 
 #include <queue>
 
 #include "extern/glad/glad.h"
+
 #include "model/Model.h"
 #include "camera/GameCamera.h"
 #include "shader/LightingShader.h"
@@ -25,17 +26,19 @@
 #include "Logger.h"
 #include "model/terrain/Skybox.h"
 
-class Renderer {
-public:
-    Renderer(Renderer const&) = delete;
-    void operator=(Renderer const&) = delete;
+#include "vulkan/VulkanCore.h"
 
-    static Renderer& getInstance(){
-        static Renderer instance;
+class EngineCore {
+public:
+    EngineCore(EngineCore const&) = delete;
+    void operator=(EngineCore const&) = delete;
+
+    static EngineCore& getInstance(){
+        static EngineCore instance;
         return instance;
     }
 
-    std::shared_ptr<Window> window;
+    std::unique_ptr<Window> window;
 
     void queueModelRender(const ObjectData& object, Model* model);
     void queueSkinnedModelRender(const SkinnedObjectData& object, SkinnedModel* skinnedModel);
@@ -74,21 +77,21 @@ public:
     Signal<skinnedObjectIndex_t> sig_skinnedObjectClicked;
 
     /**
-     * @brief Informs the renderer when the cursor is being pressed
+     * @brief Informs the engine when the cursor is being pressed
      */
     Slot<bool> slt_cursorPressed{[this](bool isPressed){
         m_cursorPressed = isPressed;
     }};
 
     /**
-     * @brief Informs the renderer about new window dimension
+     * @brief Informs the engine about new window dimension
      */
     Slot<int32_t, int32_t> slt_windowDimensions{[this](int32_t width, int32_t height){
         setWindowSize(width, height);
     }};
 
     /**
-     * @brief Informs the renderer about new cursor position
+     * @brief Informs the engine about new cursor position
      */
     Slot<double, double> slt_updateCursorPos{[this](double x, double y){
         m_cursorPosX = static_cast<int32_t>(x);
@@ -96,7 +99,7 @@ public:
     }};
 
     /**
-     * @brief Informs th renderer with mouse pressed position
+     * @brief Informs th engine with mouse pressed position
      */
     Slot<double, double> slt_updateCursorPressedPos{[this](double x, double y){
         m_cursorPosX = static_cast<int32_t>(x);
@@ -112,8 +115,8 @@ public:
     }};
 
 private:
-    Renderer();
-    ~Renderer();
+    EngineCore();
+    ~EngineCore();
 
     using meshQueue_t = std::vector<std::pair<const Material*, std::vector<Drawable>>>;
     using vaoQueue_t = std::unordered_map<GLuint, meshQueue_t>;
@@ -175,4 +178,4 @@ private:
     Logger m_logger = Logger("Renderer");
 };
 
-#endif //TECTONIC_RENDERER_H
+#endif //TECTONIC_ENGINECORE_H

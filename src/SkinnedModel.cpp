@@ -1,3 +1,5 @@
+
+#include "extern/glad/glad.h"
 #include "model/anim/SkinnedModel.h"
 
 SkinnedModel::SkinnedModel(const Model &model) {

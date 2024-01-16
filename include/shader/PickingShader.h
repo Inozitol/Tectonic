@@ -1,11 +1,11 @@
 #ifndef TECTONIC_PICKINGSHADER_H
 #define TECTONIC_PICKINGSHADER_H
 
-#include "utils.h"
 #include "shader/Shader.h"
 #include "defs/ShaderDefines.h"
 #include "defs/ConfigDefs.h"
 #include "model/ModelTypes.h"
+#include "utils.h"
 
 class PickingShader : public Shader {
 public:

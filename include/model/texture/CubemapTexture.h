@@ -5,7 +5,6 @@
 #include <array>
 
 #include "utils.h"
-#include "extern/glad/glad.h"
 #include "Logger.h"
 #include "extern/stb_image.h"
 #include "exceptions.h"

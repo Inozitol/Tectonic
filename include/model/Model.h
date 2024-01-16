@@ -8,17 +8,14 @@
 #include <unordered_map>
 #include <array>
 #include <functional>
-#include "extern/glad/glad.h"
 
 #include "exceptions.h"
 #include "defs/TextureDefs.h"
 #include "defs/ShaderDefines.h"
 
 #include "Transformation.h"
-#include "model/texture/Texture.h"
 #include "Material.h"
 #include "utils.h"
-#include "shader/LightingShader.h"
 #include "model/anim/Animation.h"
 #include "model/anim/Bone.h"
 #include "ModelTypes.h"
@@ -31,7 +28,7 @@
 class Model {
     friend class AssimpLoader;
     friend class SkinnedModel;
-    friend class Renderer;
+    friend class EngineCore;
 public:
     Model() = default;
 

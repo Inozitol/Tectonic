@@ -3,6 +3,20 @@
 #include "utils.h"
 
 namespace Utils{
+    Dimensions::Dimensions(uint32_t width, uint32_t height) {
+        this->width = width;
+        this->height = height;
+    }
+
+    Dimensions::Dimensions(int32_t width, int32_t height) {
+        this->width = static_cast<uint32_t>(width);
+        this->height = static_cast<uint32_t>(height);
+    }
+
+    float Dimensions::ratio() const {
+        return (float)width/(float)height;
+    }
+
     bool readFile(const char* filename, std::string& content){
         std::ifstream f;
 

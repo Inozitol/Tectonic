@@ -1,16 +1,19 @@
 #ifndef TECTONIC_WINDOW_H
 #define TECTONIC_WINDOW_H
 
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <functional>
+#include <vulkan/vulkan.h>
 #include "exceptions.h"
 
+#include "utils.h"
 #include "meta/Signal.h"
 #include "Cursor.h"
 #include "Keyboard.h"
 
 /**
- * Class representing the application window.
+ * Application window abstraction. Implemented with GLFW window.
  */
 class Window {
 public:
@@ -38,10 +41,16 @@ public:
     Signal<bool> sig_cursorEnabled;
 
     /**
-     * @brief Emitted when window dimensions are changed.
-     * Returns width and height.
+     * @brief Emitted when window dimensions is resized.
+     * Returns new width and height.
      */
     Signal<int32_t, int32_t> sig_widowDimensions;
+
+    /**
+     * @brief Emitted when window framebuffer is resized.
+     * Returns new width and height.
+     */
+    Signal<int32_t, int32_t> sig_framebufferResize;
 
     /**
      * @brief Closes the window.
@@ -66,7 +75,7 @@ public:
      * @brief Gets the width and height of the window.
      * @return Width and height.
      */
-    std::pair<int32_t, int32_t> getSize();
+    Utils::Dimensions getSize();
 
     /**
      * @brief Gets the window aspect aspect.
@@ -119,6 +128,8 @@ public:
     void connectKeyboard(Keyboard& keyboard);
 
     static Window* getContextFromWindow(GLFWwindow* window);
+
+    [[ nodiscard ]] VkSurfaceKHR createWindowSurface(VkInstance instance);
 
 private:
     void initSignals();

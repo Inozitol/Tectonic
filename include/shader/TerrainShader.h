@@ -9,6 +9,7 @@
 #include "defs/ConfigDefs.h"
 #include "model/Material.h"
 #include "model/terrain/Terrain.h"
+#include "shader/LightingShader.h"
 
 class TerrainShader : public Shader {
 public:

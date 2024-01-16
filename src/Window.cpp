@@ -33,16 +33,14 @@ bool Window::shouldClose() {
     return glfwWindowShouldClose(m_window);
 }
 
-std::pair<int32_t, int32_t> Window::getSize() {
-    int width, height;
-    glfwGetWindowSize(m_window, &width, &height);
-    return {width, height};
+Utils::Dimensions Window::getSize() {
+    int32_t winWidth, winHeight;
+    glfwGetWindowSize(m_window, &winWidth, &winHeight);
+    return {winWidth, winHeight};
 }
 
 float Window::getRatio(){
-    int width, height;
-    std::tie(width, height) = this->getSize();
-    return (float)width/(float)height;
+    return this->getSize().ratio();
 }
 
 void Window::disableCursor() {
@@ -84,6 +82,11 @@ void Window::initSignals() {
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_widowDimensions.emit(width, height);
     });
+
+    glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* win, int width, int height){
+        Window* winContext = Window::getContextFromWindow(win);
+        winContext->sig_framebufferResize.emit(width, height);
+    });
 }
 
 Window *Window::getContextFromWindow(GLFWwindow *window) {
@@ -101,4 +104,17 @@ void Window::connectCursor(Cursor &cursor) {
 
 void Window::connectKeyboard(Keyboard &keyboard) {
     sig_updateKeyboardButtonInfo.connect(keyboard.slt_updateButtonInfo);
+}
+
+VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
+    static bool surfaceCreated = false;
+    if(surfaceCreated){
+        throw windowException("Attempted to create VkSurfaceKHR on Window with previously created surface");
+    }
+    VkSurfaceKHR surface;
+    if(glfwCreateWindowSurface(instance, m_window, nullptr, &surface) != VK_SUCCESS){
+        throw windowException("Failed to create window KHR surface");
+    }
+    surfaceCreated = true;
+    return surface;
 }

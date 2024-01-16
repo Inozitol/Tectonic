@@ -10,7 +10,6 @@
 #include <assimp/types.h>
 #include <bitset>
 
-#include "extern/glad/glad.h"
 #include "camera/Camera.h"
 #include "meta/meta.h"
 
@@ -18,13 +17,14 @@
 #define INVALID_UNIFORM_LOC 0xFFFFFFFF
 
 namespace Utils{
-    /**
-     * @brief Class for binding a VAO by creating an object on stack.
-     */
-    class EphemeralVAOBind{
-    public:
-        explicit EphemeralVAOBind(GLuint vao){ glBindVertexArray(vao); }
-        ~EphemeralVAOBind(){ glBindVertexArray(0); }
+    struct Dimensions{
+        uint32_t width = 0;
+        uint32_t height = 0;
+
+        Dimensions(uint32_t width, uint32_t height);
+        Dimensions(int32_t width, int32_t height);
+
+        [[nodiscard]] float ratio() const;
     };
 
     class Frustum{

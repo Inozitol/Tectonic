@@ -7,13 +7,13 @@
 #include <limits>
 #include <utility>
 
-#include "model/Model.h"
-#include "Transformation.h"
-#include "shader/LightingShader.h"
 #include "shader/shadow/ShadowMapFBO.h"
 #include "shader/shadow/ShadowCubeMapFBO.h"
 #include "shader/shadow/ShadowMapShader.h"
 #include "shader/PickingShader.h"
+#include "shader/LightingShader.h"
+#include "model/Model.h"
+#include "Transformation.h"
 #include "camera/GameCamera.h"
 #include "exceptions.h"
 #include "defs/ShaderDefines.h"
@@ -21,10 +21,9 @@
 #include "Keyboard.h"
 #include "Cursor.h"
 #include "PickingTexture.h"
-#include "Renderer.h"
+#include "engine/EngineCore.h"
 #include "SceneTypes.h"
 #include "model/terrain/Terrain.h"
-
 #include "meta/meta.h"
 #include "model/terrain/Skybox.h"
 
@@ -140,7 +139,7 @@ private:
 
     std::shared_ptr<Skybox> m_skybox = nullptr;
 
-    Renderer& m_renderer = Renderer::getInstance();
+    EngineCore& m_renderer = EngineCore::getInstance();
 
     std::pair<int32_t, int32_t> m_winDimensions;
 

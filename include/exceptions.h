@@ -37,6 +37,13 @@ private:
     std::string _msg;
 };
 
+class engineException : public tectonicException {
+public:
+    template<typename ...T>
+    explicit engineException(T... args) : tectonicException(args...){}
+    engineException() : tectonicException(){}
+};
+
 class windowException : public tectonicException {
 public:
     template<typename ...T>
@@ -93,17 +100,11 @@ public:
     keyboardException() : tectonicException(){}
 };
 
-class rendererException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit rendererException(T... args) : tectonicException(args...){}
-    rendererException() : tectonicException(){}
-};
-
 class modelLoaderException : public tectonicException {
 public:
     template<typename ...T>
     explicit modelLoaderException(T... args) : tectonicException(args...){}
     modelLoaderException() : tectonicException(){}
 };
+
 #endif //TECTONIC_EXCEPTIONS_H

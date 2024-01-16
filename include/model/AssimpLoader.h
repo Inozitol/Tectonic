@@ -2,6 +2,7 @@
 #define TECTONIC_ASSIMPLOADER_H
 
 #include <queue>
+#include <stack>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>

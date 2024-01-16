@@ -5,7 +5,7 @@
 #include "model/Model.h"
 
 class Skybox : public Model {
-    friend class Renderer;
+    friend class EngineCore;
 public:
     Skybox();
     void init(const std::array<std::string, CUBEMAP_SIDE_COUNT>& filenames);

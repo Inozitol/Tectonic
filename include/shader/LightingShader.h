@@ -4,12 +4,12 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "defs/ConfigDefs.h"
-#include "Shader.h"
 #include "model/Material.h"
 #include "Transformation.h"
 #include "camera/Camera.h"
 #include "defs/ShaderDefines.h"
 #include "model/ModelTypes.h"
+#include "Shader.h"
 
 /**
  * Base representation of light factors.

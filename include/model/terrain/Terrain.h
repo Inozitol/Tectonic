@@ -12,7 +12,7 @@
 #include "LODManager.h"
 
 class Terrain : public Model {
-    friend class Renderer;
+    friend class EngineCore;
 public:
     Terrain();
     ~Terrain() = default;

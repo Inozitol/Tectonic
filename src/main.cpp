@@ -1,21 +1,13 @@
-
 #include "extern/glad/glad.h"
+
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 
 #include "exceptions.h"
-
-#include "Window.h"
-#include "camera/GameCamera.h"
-#include "shader/LightingShader.h"
-#include "defs/ShaderDefines.h"
-#include "model/terrain/Terrain.h"
+#include "engine/EngineCore.h"
 #include "Scene.h"
-#include "Cursor.h"
-#include "Keyboard.h"
-#include "shader/PickingShader.h"
 #include "model/AssimpLoader.h"
 
 constexpr float g_roughness = 0.95;
@@ -24,7 +16,7 @@ constexpr uint32_t g_size = 1009;
 Cursor g_cursor;
 Keyboard g_keyboard;
 
-Renderer& g_renderer = Renderer::getInstance();
+EngineCore& g_renderer = EngineCore::getInstance();
 std::shared_ptr<Window> window;
 
 std::shared_ptr<Terrain> g_terrain;
@@ -179,12 +171,12 @@ void initScenes(){
     g_terrain->setMaxLOD(3);
     g_terrain->setScale(0.1);
     g_terrain->setMaxRange(20.0);
-    g_terrain->generateMidpoint(g_size, g_roughness, {
-        "terrain/textures/rock.png",
-        "terrain/textures/dry.png",
-        "terrain/textures/grass_dark.png",
-        "terrain/textures/snow.jpg"});
-    //g_terrain->generateFlat(g_size, g_size, "terrain/textures/grass.png");
+    //g_terrain->generateMidpoint(g_size, g_roughness, {
+    //    "terrain/textures/rock.png",
+    //    "terrain/textures/dry.png",
+    //    "terrain/textures/grass_dark.png",
+    //    "terrain/textures/snow.jpg"});
+    g_terrain->generateFlat(g_size, g_size, "terrain/textures/grass_dark.png");
     g_terrain->setCamera(*gameCamera);
     gameCamera->setPosition({0.0, g_terrain->hMapLCoord(g_terrain->getCenterCoords()), 0.0});
     g_boneScene.insertTerrain(g_terrain);
@@ -192,6 +184,7 @@ void initScenes(){
     //terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
     //g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-25.0, 0.0, -25.0);
 
+    /*
     std::shared_ptr<Skybox> skybox = std::make_shared<Skybox>();
     skybox->init({"terrain/skyboxtex/xpos.png",
                   "terrain/skyboxtex/xneg.png",
@@ -200,18 +193,17 @@ void initScenes(){
                   "terrain/skyboxtex/zpos.png",
                   "terrain/skyboxtex/zneg.png"});
     g_boneScene.insertSkybox(skybox);
-
+    */
     AssimpLoader assimpLoader;
 
-    /*
     std::shared_ptr<SkinnedModel> boneMesh = assimpLoader.loadSkinnedModel("meshes/Walker.fbx");
     boneMesh->bufferMeshes();
     boneM_i = g_boneScene.insertSkinnedModel(boneMesh);
     bone_i = g_boneScene.createSkinnedObject(boneM_i);
     SkinnedObjectData& bobObject = g_boneScene.getSkinnedObject(bone_i);
     bobObject.transformation.setScale(0.008);
-    */
-     //bobObject.transformation.setRotation(-90.0f, 0.0f, 0.0f);
+
+    //bobObject.transformation.setRotation(-90.0f, 0.0f, 0.0f);
     //bobObject.transformation.setTranslation(-1.0f, 0.0f, 0.0f);
 
     //std::shared_ptr<Model> barrelModel(new Model);
@@ -236,7 +228,7 @@ void initScenes(){
     }
     */
 
-    g_boneScene.setWindowDimension(window->getSize());
+    //g_boneScene.setWindowDimension(window->getSize());
 
     g_cursor.sig_updatePos.connect(g_boneScene.slt_updateCursorPos);
     g_cursor.sig_cursorPressedPos.connect(g_renderer.slt_updateCursorPressedPos);
@@ -280,8 +272,9 @@ void initKeyGroups(){
 }
 
 int main(){
-    window = g_renderer.window;
+    //window = g_renderer.window;
 
+    /*
     try {
         window->connectKeyboard(g_keyboard);
         window->connectCursor(g_cursor);
@@ -292,6 +285,9 @@ int main(){
         renderLoop();
     } catch(tectonicException& te){
         fprintf(stderr, "%s", te.what());
-    }
+    }*/
+
+    VulkanCore &core = VulkanCore::getInstance();
+    while(true) { core.draw(); }
     return 0;
 }

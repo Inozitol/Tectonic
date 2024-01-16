@@ -5,7 +5,6 @@
 #include "extern/glad/glad.h"
 #include "exceptions.h"
 
-
 class ShadowMapFBO {
 public:
     ShadowMapFBO() = default;

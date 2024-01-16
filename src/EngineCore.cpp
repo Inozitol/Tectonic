@@ -1,6 +1,6 @@
-#include "Renderer.h"
+#include "engine/EngineCore.h"
 
-void Renderer::queueModelRender(const ObjectData &object, Model* model) {
+void EngineCore::queueModelRender(const ObjectData &object, Model* model) {
     GLuint vao = model->getVAO();
     if(!m_drawQueue.contains(vao)) {
         m_drawQueue.insert({vao, meshQueue_t()});
@@ -12,7 +12,7 @@ void Renderer::queueModelRender(const ObjectData &object, Model* model) {
     }
 }
 
-void Renderer::queueSkinnedModelRender(const SkinnedObjectData &object, SkinnedModel *skinnedModel) {
+void EngineCore::queueSkinnedModelRender(const SkinnedObjectData &object, SkinnedModel *skinnedModel) {
     GLuint vao = skinnedModel->getVAO();
     if(!m_skinnedDrawQueue.contains(vao)){
         m_skinnedDrawQueue.insert({vao, skinnedMeshQueue_t()});
@@ -25,7 +25,7 @@ void Renderer::queueSkinnedModelRender(const SkinnedObjectData &object, SkinnedM
     }
 }
 
-void Renderer::setTerrainModelRender(const std::shared_ptr<Terrain>& terrain) {
+void EngineCore::setTerrainModelRender(const std::shared_ptr<Terrain>& terrain) {
     m_terrain =  terrain;
     m_terrainShader.enable();
     float min,max;
@@ -36,11 +36,11 @@ void Renderer::setTerrainModelRender(const std::shared_ptr<Terrain>& terrain) {
     m_terrainShader.setBlendedTextures(m_terrain->m_blendingTextures, m_terrain->m_blendingTexturesCount);
 }
 
-void Renderer::setSkyboxModelRender(const std::shared_ptr<Skybox> &skybox) {
+void EngineCore::setSkyboxModelRender(const std::shared_ptr<Skybox> &skybox) {
     m_skybox = skybox;
 }
 
-void Renderer::renderQueues() {
+void EngineCore::renderQueues() {
     clearRender();
 
     /// Terrain shader
@@ -176,7 +176,7 @@ void Renderer::renderQueues() {
     //renderSkinnedModels();
 }
 
-void Renderer::clearRender() const {
+void EngineCore::clearRender() const {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0,0,m_windowWidth,m_windowHeight);
     //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
@@ -192,7 +192,7 @@ void Renderer::clearRender() const {
     glUseProgram(0);
 }
 
-void Renderer::shadowPass(const meshQueue_t &queue) {
+void EngineCore::shadowPass(const meshQueue_t &queue) {
     for(const auto & matVector : queue){
         for(const auto& drawable : matVector.second) {
             renderModelShadow(drawable);
@@ -200,7 +200,7 @@ void Renderer::shadowPass(const meshQueue_t &queue) {
     }
 }
 
-void Renderer::shadowPass(const skinnedMeshQueue_t &queue) {
+void EngineCore::shadowPass(const skinnedMeshQueue_t &queue) {
     for(const auto & matVector : queue){
         const boneTransfoms_t boneTransforms = matVector.first.second;
         m_shadowMapShader.setBoneTransforms(boneTransforms);
@@ -211,7 +211,7 @@ void Renderer::shadowPass(const skinnedMeshQueue_t &queue) {
     }
 }
 
-void Renderer::renderModelShadow(const Drawable& drawable) {
+void EngineCore::renderModelShadow(const Drawable& drawable) {
     glm::mat4 mashMatrix = drawable.object.transformation.getMatrix();
 
     glm::mat4 wvp = m_spotLights->at(0).getWVP(mashMatrix);
@@ -221,7 +221,7 @@ void Renderer::renderModelShadow(const Drawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::renderModelShadow(const SkinnedDrawable& drawable) {
+void EngineCore::renderModelShadow(const SkinnedDrawable& drawable) {
     glm::mat4 mashMatrix = drawable.object.transformation.getMatrix();
 
     glm::mat4 wvp = m_spotLights->at(0).getWVP(mashMatrix);
@@ -231,7 +231,7 @@ void Renderer::renderModelShadow(const SkinnedDrawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::lightingPass(const meshQueue_t &queue) {
+void EngineCore::lightingPass(const meshQueue_t &queue) {
 
     for(const auto & matVector : queue){
         const Material* material = matVector.first;
@@ -251,7 +251,7 @@ void Renderer::lightingPass(const meshQueue_t &queue) {
     }
 }
 
-void Renderer::lightingPass(const skinnedMeshQueue_t &queue) {
+void EngineCore::lightingPass(const skinnedMeshQueue_t &queue) {
     for(const auto & matVector : queue){
         const Material* material = matVector.first.first;
         const boneTransfoms_t boneTransforms = matVector.first.second;
@@ -273,7 +273,7 @@ void Renderer::lightingPass(const skinnedMeshQueue_t &queue) {
     }
 }
 
-void Renderer::renderModelLight(const Drawable& drawable) {
+void EngineCore::renderModelLight(const Drawable& drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
     // Camera point of view
@@ -298,7 +298,7 @@ void Renderer::renderModelLight(const Drawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::renderModelLight(const SkinnedDrawable& drawable) {
+void EngineCore::renderModelLight(const SkinnedDrawable& drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
     // Camera point of view
@@ -323,7 +323,7 @@ void Renderer::renderModelLight(const SkinnedDrawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-inline void Renderer::renderMesh(const MeshInfo &mesh) {
+inline void EngineCore::renderMesh(const MeshInfo &mesh) {
     glDrawElementsBaseVertex(GL_TRIANGLES,
                              static_cast<GLsizei>(mesh.indicesCount),
                              GL_UNSIGNED_INT,
@@ -331,7 +331,7 @@ inline void Renderer::renderMesh(const MeshInfo &mesh) {
                              static_cast<GLint>(mesh.verticesOffset));
 }
 
-void Renderer::pickingPass(const meshQueue_t &queue) {
+void EngineCore::pickingPass(const meshQueue_t &queue) {
     for(const auto & matVector : queue){
         for(const auto& drawable : matVector.second) {
             renderModelPicking(drawable);
@@ -339,7 +339,7 @@ void Renderer::pickingPass(const meshQueue_t &queue) {
     }
 }
 
-void Renderer::pickingPass(const skinnedMeshQueue_t &queue) {
+void EngineCore::pickingPass(const skinnedMeshQueue_t &queue) {
     for(const auto & matVector : queue){
 
         const boneTransfoms_t boneTransforms = matVector.first.second;
@@ -351,7 +351,7 @@ void Renderer::pickingPass(const skinnedMeshQueue_t &queue) {
     }
 }
 
-void Renderer::renderModelPicking(const Drawable& drawable) {
+void EngineCore::renderModelPicking(const Drawable& drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
     // Camera point of view
@@ -363,7 +363,7 @@ void Renderer::renderModelPicking(const Drawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::renderModelPicking(const SkinnedDrawable& drawable) {
+void EngineCore::renderModelPicking(const SkinnedDrawable& drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
     // Camera point of view
@@ -375,7 +375,7 @@ void Renderer::renderModelPicking(const SkinnedDrawable& drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::debugPass(const Renderer::meshQueue_t &queue) {
+void EngineCore::debugPass(const EngineCore::meshQueue_t &queue) {
     for(const auto & matVector : queue){
         for(const auto& drawable : matVector.second) {
             renderModelDebug(drawable);
@@ -383,7 +383,7 @@ void Renderer::debugPass(const Renderer::meshQueue_t &queue) {
     }
 }
 
-void Renderer::debugPass(const Renderer::skinnedMeshQueue_t &queue) {
+void EngineCore::debugPass(const EngineCore::skinnedMeshQueue_t &queue) {
     for(const auto & matVector : queue){
         const boneTransfoms_t boneTransforms = matVector.first.second;
 
@@ -395,7 +395,7 @@ void Renderer::debugPass(const Renderer::skinnedMeshQueue_t &queue) {
     }
 }
 
-void Renderer::renderModelDebug(const Drawable &drawable) {
+void EngineCore::renderModelDebug(const Drawable &drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
     // Camera point of view
@@ -406,7 +406,7 @@ void Renderer::renderModelDebug(const Drawable &drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::renderModelDebug(const SkinnedDrawable &drawable) {
+void EngineCore::renderModelDebug(const SkinnedDrawable &drawable) {
     glm::mat4 objectTransform = drawable.object.transformation.getMatrix();
 
     // Camera point of view
@@ -417,7 +417,7 @@ void Renderer::renderModelDebug(const SkinnedDrawable &drawable) {
     renderMesh(*drawable.mesh);
 }
 
-void Renderer::renderTerrain() {
+void EngineCore::renderTerrain() {
     glm::mat4 vp = m_gameCamera->getVP();
     m_terrainShader.setWVP(vp);
 
@@ -435,7 +435,7 @@ void Renderer::renderTerrain() {
     }
  }
 
-void Renderer::renderSkybox() {
+void EngineCore::renderSkybox() {
     glm::mat4 vp = m_gameCamera->getVPNoTranslate();
     m_skyboxShader.setVP(vp);
 
@@ -443,7 +443,7 @@ void Renderer::renderSkybox() {
     renderMesh(m_skybox->m_meshes.at(0));
 }
 
-void Renderer::setWindowSize(int32_t width, int32_t height) {
+void EngineCore::setWindowSize(int32_t width, int32_t height) {
     m_windowWidth = width;
     m_windowHeight = height;
 
@@ -451,18 +451,18 @@ void Renderer::setWindowSize(int32_t width, int32_t height) {
     m_pickingTexture.init(m_windowWidth, m_windowHeight);
 }
 
-Renderer::Renderer() {
+EngineCore::EngineCore() {
     try {
-        initGLFW();
-        initGL();
-        initShaders();
+        //initGLFW();
+        //initGL();
+        //initShaders();
     }catch(tectonicException& e){
         fprintf(stderr, "EXCEPTION: %s", e.what());
         exit(-1);
     }
 }
 
-Renderer::~Renderer() {
+EngineCore::~EngineCore() {
     window.reset();
 
     // Cleanup shaders
@@ -480,24 +480,7 @@ Renderer::~Renderer() {
     glfwTerminate();
 }
 
-void Renderer::initGLFW() {
-    glfwSetErrorCallback(Renderer::glfwErrorCallback);
-
-    if (!glfwInit())
-        throw rendererException("Renderer couldn't init GLFW");
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
-
-    window = std::make_shared<Window>("Howdy World");
-
-    window->makeCurrentContext();
-}
-
-void Renderer::initGL() {
+void EngineCore::initGL() {
     gladLoadGL();
     glfwSwapInterval(0);
 
@@ -513,10 +496,10 @@ void Renderer::initGL() {
     // Enable error callback
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    glDebugMessageCallback(Renderer::openGLErrorCallback, nullptr);
+    glDebugMessageCallback(EngineCore::openGLErrorCallback, nullptr);
 }
 
-void Renderer::initShaders() {
+void EngineCore::initShaders() {
     m_lightingShader.init();
 
     m_lightingShader.enable(Shader::ShaderType::BASIC_SHADER);
@@ -546,12 +529,12 @@ void Renderer::initShaders() {
     m_skyboxShader.setCubemapUnit(SKYBOX_CUBE_MAP_TEXTURE_UNIT_INDEX);
 }
 
-void Renderer::glfwErrorCallback(int, const char *msg) {
+void EngineCore::glfwErrorCallback(int, const char *msg) {
     fprintf(stderr, "Error: %s\n", msg);
 }
 
-void Renderer::openGLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
-                                   const GLchar *message, const void *userParam) {
+void EngineCore::openGLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
+                                     const GLchar *message, const void *userParam) {
     switch(severity){
         case GL_DEBUG_SEVERITY_NOTIFICATION:
         case GL_DEBUG_SEVERITY_LOW:

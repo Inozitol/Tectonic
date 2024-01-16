@@ -4,11 +4,11 @@
 #include <glm/ext/matrix_float4x4.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "utils.h"
 #include "shader/Shader.h"
 #include "defs/ConfigDefs.h"
 #include "defs/ShaderDefines.h"
 #include "model/ModelTypes.h"
+#include "utils.h"
 
 class ShadowMapShader : public Shader {
 public:
