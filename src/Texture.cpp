@@ -2,7 +2,7 @@
 #include <iostream>
 #include "extern/glad/glad.h"
 #include "model/texture/Texture.h"
-#include "extern/stb_image.h"
+#include "extern/stb/stb_image.h"
 
 std::unordered_map<std::string, std::shared_ptr<Texture>> Texture::m_loadedTextures;
 Logger Texture::m_logger = Logger("Texture");

@@ -9,7 +9,8 @@ Window::Window(const std::string& name){
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    m_window = glfwCreateWindow(mode->width, mode->height, name.c_str(), primary, nullptr);
+    m_window = glfwCreateWindow(mode->width, mode->height, name.c_str(), nullptr, nullptr);
+    //m_window = glfwCreateWindow(1920, 1080, name.c_str(), primary, nullptr);
     if(!m_window){
         throw windowException("Unable to create Window");
     }
@@ -19,6 +20,10 @@ Window::Window(const std::string& name){
 }
 
 Window::~Window() {
+    clean();
+}
+
+void Window::clean() {
     glfwDestroyWindow(m_window);
 }
 
@@ -87,6 +92,11 @@ void Window::initSignals() {
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_framebufferResize.emit(width, height);
     });
+
+    glfwSetWindowCloseCallback(m_window, [](GLFWwindow* win){
+        Window* winContext = Window::getContextFromWindow(win);
+        winContext->sig_shouldClose.emit();
+    });
 }
 
 Window *Window::getContextFromWindow(GLFWwindow *window) {
@@ -98,12 +108,12 @@ void Window::close() {
 }
 
 void Window::connectCursor(Cursor &cursor) {
-    sig_updateMouseButtonInfo.connect(cursor.slt_updateButtonInfo);
-    sig_updateMousePos.connect(cursor.slt_updatePos);
+    CONNECT(sig_updateMouseButtonInfo, cursor.slt_updateButtonInfo);
+    CONNECT(sig_updateMousePos, cursor.slt_updatePos);
 }
 
 void Window::connectKeyboard(Keyboard &keyboard) {
-    sig_updateKeyboardButtonInfo.connect(keyboard.slt_updateButtonInfo);
+    CONNECT(sig_updateKeyboardButtonInfo, keyboard.slt_updateButtonInfo);
 }
 
 VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
@@ -118,3 +128,8 @@ VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
     surfaceCreated = true;
     return surface;
 }
+
+void Window::initImGuiVulkan() {
+    ImGui_ImplGlfw_InitForVulkan(m_window, true);
+}
+

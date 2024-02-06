@@ -275,7 +275,6 @@ int main(){
     //window = g_renderer.window;
 
     /*
-    try {
         window->connectKeyboard(g_keyboard);
         window->connectCursor(g_cursor);
 
@@ -287,7 +286,16 @@ int main(){
         fprintf(stderr, "%s", te.what());
     }*/
 
-    VulkanCore &core = VulkanCore::getInstance();
-    while(true) { core.draw(); }
+    try {
+        VulkanCore &vcore = VulkanCore::getInstance();
+
+        while(!vcore.shouldClose()) {
+            glfwPollEvents();
+            vcore.run();
+        }
+
+    } catch(tectonicException& te){
+        fprintf(stderr, "%s", te.what());
+    }
     return 0;
 }

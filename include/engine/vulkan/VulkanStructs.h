@@ -13,6 +13,13 @@ namespace VkStructs{
     VkSemaphoreSubmitInfo           semaphoreSubmitInfo(VkPipelineStageFlags2 stageMask, VkSemaphore semaphore);
     VkCommandBufferSubmitInfo       commandBufferSubmitInfo(VkCommandBuffer cmd);
     VkSubmitInfo2                   submitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signalSemaphoreInfo, VkSemaphoreSubmitInfo* waitSemaphoreInfo);
+    VkImageCreateInfo               imageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extent);
+    VkImageViewCreateInfo           imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
+    VkRenderingAttachmentInfo       attachmentInfo(VkImageView view, VkClearValue* clear, VkImageLayout layout);
+    VkRenderingAttachmentInfo       depthAttachmentInfo(VkImageView view, VkImageLayout layout);
+    VkRenderingInfo                 renderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment, VkRenderingAttachmentInfo* depthAttachment);
+    VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo(VkShaderStageFlagBits stage, VkShaderModule shaderModule, const char* entry = "main");
+    VkPipelineLayoutCreateInfo      pipelineLayoutCreateInfo();
 }
 
 #endif //TECTONIC_VULKANSTRUCTS_H

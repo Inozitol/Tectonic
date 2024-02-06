@@ -6,7 +6,7 @@
 
 #include "utils.h"
 #include "Logger.h"
-#include "extern/stb_image.h"
+#include "extern/stb/stb_image.h"
 #include "exceptions.h"
 
 #define CUBEMAP_SIDE_COUNT 6

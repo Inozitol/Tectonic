@@ -1,3 +1,9 @@
+#ifndef META_HANDLES_
+#define META_HANDLES_
+#define CONNECT(signal,slot) signal.connect(slot);
+#define DISCONNECT(signal,slot) signal.disconnect(slot);
+#endif
+
 #ifndef TECTONIC_SLOT_H
 #define TECTONIC_SLOT_H
 

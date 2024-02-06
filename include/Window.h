@@ -5,6 +5,9 @@
 #include <GLFW/glfw3.h>
 #include <functional>
 #include <vulkan/vulkan.h>
+
+#include "extern/imgui/imgui_impl_glfw.h"
+
 #include "exceptions.h"
 
 #include "utils.h"
@@ -51,6 +54,11 @@ public:
      * Returns new width and height.
      */
     Signal<int32_t, int32_t> sig_framebufferResize;
+
+    /**
+     * @brief Emitted when window should close.
+     */
+    Signal<> sig_shouldClose;
 
     /**
      * @brief Closes the window.
@@ -130,6 +138,8 @@ public:
     static Window* getContextFromWindow(GLFWwindow* window);
 
     [[ nodiscard ]] VkSurfaceKHR createWindowSurface(VkInstance instance);
+    void initImGuiVulkan();
+    void clean();
 
 private:
     void initSignals();

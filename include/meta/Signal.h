@@ -1,3 +1,11 @@
+
+// TODO handle for slot func template
+#ifndef META_HANDLES_
+#define META_HANDLES_
+#define CONNECT(signal,slot) signal.connect(slot);
+#define DISCONNECT(signal,slot) signal.disconnect(slot);
+#endif
+
 #ifndef TECTONIC_SIGNAL_H
 #define TECTONIC_SIGNAL_H
 

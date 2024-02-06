@@ -27,3 +27,72 @@ void VkUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout 
 
     vkCmdPipelineBarrier2(cmd, &depInfo);
 }
+
+void VkUtils::copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExtent2D srcExtent, VkExtent2D dstExtent) {
+    VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
+
+    blitRegion.srcOffsets[1].x = static_cast<int32_t>(srcExtent.width);
+    blitRegion.srcOffsets[1].y = static_cast<int32_t>(srcExtent.height);
+    blitRegion.srcOffsets[1].z = 1;
+
+    blitRegion.dstOffsets[1].x = static_cast<int32_t>(dstExtent.width);
+    blitRegion.dstOffsets[1].y = static_cast<int32_t>(dstExtent.height);
+    blitRegion.dstOffsets[1].z = 1;
+
+    blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blitRegion.srcSubresource.baseArrayLayer = 0;
+    blitRegion.srcSubresource.layerCount = 1;
+    blitRegion.srcSubresource.mipLevel = 0;
+
+    blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    blitRegion.dstSubresource.baseArrayLayer = 0;
+    blitRegion.dstSubresource.layerCount = 1;
+    blitRegion.dstSubresource.mipLevel = 0;
+
+    VkBlitImageInfo2 blitInfo {.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr };
+    blitInfo.srcImage = src;
+    blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    blitInfo.dstImage = dst;
+    blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    blitInfo.filter = VK_FILTER_LINEAR;
+    blitInfo.regionCount = 1;
+    blitInfo.pRegions = &blitRegion;
+
+    vkCmdBlitImage2(cmd, &blitInfo);
+}
+
+VkShaderModule VkUtils::loadShaderModule(const char* path, VkDevice device){
+    std::ifstream file(path, std::ios::ate | std::ios::binary);
+    if(!file.is_open()){
+        throw vulkanException("Failed to load a shader file ", path);
+    }
+
+    // Reserve memory for SpirV file
+    std::size_t fileSize = static_cast<std::size_t>(file.tellg());
+    std::vector<uint32_t> buffer(fileSize/sizeof(uint32_t));
+
+    // Read file
+    file.seekg(0);
+    file.read((char*)buffer.data(), fileSize);
+    file.close();
+    file.close();
+
+    VkShaderModuleCreateInfo createInfo{ .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .pNext = nullptr };
+    createInfo.codeSize = buffer.size() * sizeof(uint32_t);
+    createInfo.pCode = buffer.data();
+
+    // Create shader module from shader SpirV code
+    VkShaderModule shaderModule;
+    if(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS){
+        throw vulkanException("Failed to create shader module from shader file ", path);
+    }
+
+    return shaderModule;
+}
+
+void VkUtils::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if(func != nullptr){
+        func(instance, debugMessenger, pAllocator);
+    }
+}

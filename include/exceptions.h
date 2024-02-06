@@ -5,6 +5,14 @@
 #include <utility>
 #include <cstdarg>
 
+#define TECTONIC_EXCEPTION(newException, baseException)                 \
+class newException : public baseException {                             \
+public:                                                                 \
+    template<typename ...T>                                             \
+    explicit newException(T... args) : baseException(args...){}         \
+    newException() : baseException(){}                                  \
+};
+
 class tectonicException : public std::exception{
 public:
     template<typename T>
@@ -37,74 +45,17 @@ private:
     std::string _msg;
 };
 
-class engineException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit engineException(T... args) : tectonicException(args...){}
-    engineException() : tectonicException(){}
-};
+TECTONIC_EXCEPTION(engineException,         tectonicException)
+TECTONIC_EXCEPTION(windowException,         engineException)
+TECTONIC_EXCEPTION(keyboardException,       engineException)
+TECTONIC_EXCEPTION(vulkanException,         engineException)
 
-class windowException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit windowException(T... args) : tectonicException(args...){}
-    windowException() : tectonicException(){}
-};
-
-class cameraException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit cameraException(T... args) : tectonicException(args...){}
-    cameraException() : tectonicException(){}
-};
-
-class textureException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit textureException(T... args) : tectonicException(args...) {};
-    textureException() : tectonicException(){}
-};
-
-class modelException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit modelException(T... args) : tectonicException(args...){}
-    modelException() : tectonicException(){}
-};
-
-class shaderException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit shaderException(T... args) : tectonicException(args...){}
-    shaderException() : tectonicException(){}
-};
-
-class shadowMapException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit shadowMapException(T... args) : tectonicException(args...){}
-    shadowMapException() : tectonicException(){}
-};
-
-class sceneException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit sceneException(T... args) : tectonicException(args...){}
-    sceneException() : tectonicException(){}
-};
-
-class keyboardException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit keyboardException(T... args) : tectonicException(args...){}
-    keyboardException() : tectonicException(){}
-};
-
-class modelLoaderException : public tectonicException {
-public:
-    template<typename ...T>
-    explicit modelLoaderException(T... args) : tectonicException(args...){}
-    modelLoaderException() : tectonicException(){}
-};
+TECTONIC_EXCEPTION(cameraException,         tectonicException)
+TECTONIC_EXCEPTION(textureException,        tectonicException)
+TECTONIC_EXCEPTION(modelException,          tectonicException)
+TECTONIC_EXCEPTION(shaderException,         tectonicException)
+TECTONIC_EXCEPTION(shadowMapException,      tectonicException)
+TECTONIC_EXCEPTION(sceneException,          tectonicException)
+TECTONIC_EXCEPTION(modelLoaderException,    tectonicException)
 
 #endif //TECTONIC_EXCEPTIONS_H

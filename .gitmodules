@@ -1,0 +1,3 @@
+[submodule "include/extern/fastgltf"]
+	path = include/extern/fastgltf
+	url = https://github.com/spnda/fastgltf

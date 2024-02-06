@@ -9,11 +9,11 @@ find_package(glfw3 3.3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Vulkan REQUIRED)
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/extern)
+
 add_executable(Tectonic
         src/main.cpp
-        src/glad.c
         src/VulkanCore.cpp
-        src/VkBootstrap.cpp
         src/Animation.cpp
         src/Animator.cpp
         src/AssimpLoader.cpp
@@ -39,7 +39,6 @@ add_executable(Tectonic
         src/ShadowMapShader.cpp
         src/SkinnedModel.cpp
         src/Skybox.cpp
-        src/stb_image.cpp
         src/Terrain.cpp
         src/TerrainShader.cpp
         src/Texture.cpp
@@ -48,11 +47,45 @@ add_executable(Tectonic
         src/Window.cpp
         src/VulkanStucts.cpp
         src/VulkanUtils.cpp
-        src/SkyboxShader.cpp)
+        src/SkyboxShader.cpp
+        src/VulkanDescriptors.cpp
+        src/VulkanPipelines.cpp
+        src/VulkanDestructQueue.cpp
+        src/VulkanLoader.cpp src/VulkanTypes.cpp)
 
 target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic OpenGL::GL)
 target_link_libraries(Tectonic assimp)
 target_link_libraries(Tectonic Vulkan::Vulkan)
+target_link_libraries(Tectonic vkbootstrap)
+target_link_libraries(Tectonic vma)
+target_link_libraries(Tectonic stb)
+target_link_libraries(Tectonic glad)
+target_link_libraries(Tectonic imgui)
+target_link_libraries(Tectonic fastgltf)
 
 include_directories(include)
+
+find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
+
+file(GLOB_RECURSE GLSL_SOURCE
+        "${PROJECT_SOURCE_DIR}/shaders/*.vert"
+        "${PROJECT_SOURCE_DIR}/shaders/*.frag"
+        "${PROJECT_SOURCE_DIR}/shaders/*.comp")
+
+foreach(GLSL ${GLSL_SOURCE})
+    message(STATUS "BUILDING GLSL SHADER")
+    get_filename_component(FILE_NAME ${GLSL} NAME)
+    set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+    message(STATUS ${GLSL})
+
+    add_custom_command(
+            OUTPUT ${SPIRV}
+            COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+            DEPENDS ${GLSL})
+    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
+endforeach(GLSL)
+
+add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
+
+add_dependencies(${PROJECT_NAME} Shaders)

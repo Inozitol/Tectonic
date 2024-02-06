@@ -1,7 +1,7 @@
 #ifndef TECTONIC_TERRAIN_H
 #define TECTONIC_TERRAIN_H
 
-#include "extern/stb_image.h"
+#include "extern/stb/stb_image.h"
 #include <random>
 #include <limits>
 #include <utility>
