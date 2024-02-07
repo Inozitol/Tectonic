@@ -30,6 +30,33 @@ namespace Utils{
 
     bool readFile(const char* filename, std::string& content);
 
+    template<typename Enum_t>
+    class Flags{
+        static_assert(std::is_enum_v<Enum_t>, "Flags class supports only enum types");
+        using EnumU_t = typename std::make_unsigned_t<typename std::underlying_type<Enum_t>::type>;
+    public:
+        Flags& set(Enum_t flag, bool val = true) {
+            if(m_bits[underlying(flag)] != val) {
+                sig_flagChanged.emit(flag, val);
+            }
+            m_bits.set(underlying(flag), val);
+            return *this;
+        }
+        constexpr bool operator[](Enum_t flag) const {
+            return m_bits[underlying(flag)];
+        }
+        [[nodiscard]] constexpr std::size_t size() const noexcept {
+            return m_bits.size();
+        }
+        Signal<Enum_t, bool> sig_flagChanged;
+
+    private:
+        static constexpr EnumU_t underlying(Enum_t flag){
+            return static_cast<EnumU_t>(flag);
+        }
+        std::bitset<underlying(Enum_t::SIZE)> m_bits;
+    };
+
     /*
     class Frustum{
     public:
@@ -70,32 +97,6 @@ namespace Utils{
         glm::vec4 m_farClipPlane{};
     };
 
-    template<typename Enum_t>
-    class Flags{
-        static_assert(std::is_enum_v<Enum_t>, "Flags class supports only enum types");
-        using EnumU_t = typename std::make_unsigned_t<typename std::underlying_type<Enum_t>::type>;
-    public:
-        Flags& set(Enum_t flag, bool val = true) {
-            if(m_bits[underlying(flag)] != val) {
-                sig_flagChanged.emit(flag, val);
-            }
-            m_bits.set(underlying(flag), val);
-            return *this;
-        }
-        constexpr bool operator[](Enum_t flag) const {
-            return m_bits[underlying(flag)];
-        }
-        [[nodiscard]] constexpr std::size_t size() const noexcept {
-            return m_bits.size();
-        }
-        Signal<Enum_t, bool> sig_flagChanged;
-
-    private:
-        static constexpr EnumU_t underlying(Enum_t flag){
-            return static_cast<EnumU_t>(flag);
-        }
-        std::bitset<underlying(Enum_t::SIZE)> m_bits;
-    };
 
     OrthoProjInfo createTightOrthographicInfo(Camera &lightCamera, const Camera &gameCamera);
     uint32_t nextPowerOf(uint32_t in, uint32_t power);

@@ -35,18 +35,18 @@ namespace VktTypes{
 
     /** @brief Abstraction over Vma buffer allocation. */
     struct AllocatedBuffer{
-        VkBuffer buffer;
-        VmaAllocation allocation;
-        VmaAllocationInfo info;
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo info{};
     };
 
     /** @brief Abstraction over Vma image allocation. */
     struct AllocatedImage{
-        VkImage image;
-        VkImageView view;
-        VmaAllocation allocation;
-        VkExtent3D extent;
-        VkFormat format;
+        VkImage image = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkExtent3D extent {.width = 0, .height = 0, .depth = 0};
+        VkFormat format = VK_FORMAT_UNDEFINED;
     };
 
     /** @brief Graphics pipeline vertex. */
@@ -98,8 +98,8 @@ namespace VktTypes{
     };
 
     struct MaterialPipeline{
-        VkPipeline pipeline;
-        VkPipelineLayout layout;
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        VkPipelineLayout layout = VK_NULL_HANDLE;
     };
 
     enum class MaterialPass: uint8_t{
@@ -109,9 +109,9 @@ namespace VktTypes{
     };
 
     struct MaterialInstance{
-        MaterialPipeline* pipeline;
-        VkDescriptorSet materialSet;
-        MaterialPass passType;
+        MaterialPipeline* pipeline = nullptr;
+        VkDescriptorSet materialSet = VK_NULL_HANDLE;
+        MaterialPass passType = MaterialPass::OTHER;
     };
 
     struct RenderObject{

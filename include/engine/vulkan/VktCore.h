@@ -131,7 +131,7 @@ private:
 
     VmaAllocator m_vmaAllocator{};
 
-    DescriptorAllocator m_globDescriptorAllocator{};
+    DescriptorAllocatorDynamic m_globDescriptorAllocator{};
     VkDescriptorSet m_drawImageDescriptors{};
     VkDescriptorSetLayout m_drawImageDescriptorLayout{};
 
@@ -175,11 +175,11 @@ private:
 
         struct MaterialResources{
             VktTypes::AllocatedImage colorImage;
-            VkSampler colorSampler;
+            VkSampler colorSampler = VK_NULL_HANDLE;
             VktTypes::AllocatedImage metalRoughImage;
-            VkSampler metalRoughSampler;
-            VkBuffer dataBuffer;
-            uint32_t dataBufferOffset;
+            VkSampler metalRoughSampler = VK_NULL_HANDLE;
+            VkBuffer dataBuffer = VK_NULL_HANDLE;
+            uint32_t dataBufferOffset = 0;
         };
 
         DescriptorWriter writer;
@@ -192,6 +192,9 @@ private:
                                                  const MaterialResources& resources,
                                                  DescriptorAllocatorDynamic& descriptorAllocator);
     };
+
+    VktTypes::MaterialInstance m_defaultData;
+    GLTFMetallicRoughness m_metalRoughMaterial;
 };
 
 #endif //TECTONIC_VKTCORE_H
