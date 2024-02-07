@@ -1,7 +1,6 @@
 #include <iostream>
 #include <set>
 #include <queue>
-#include "extern/glad/glad.h"
 #include "model/Model.h"
 
 void Model::bufferMeshes() {

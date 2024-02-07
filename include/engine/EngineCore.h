@@ -3,8 +3,6 @@
 
 #include <queue>
 
-#include "extern/glad/glad.h"
-
 #include "model/Model.h"
 #include "camera/GameCamera.h"
 #include "shader/LightingShader.h"

@@ -1,7 +1,6 @@
 #ifndef TECTONIC_PICKINGTEXTURE_H
 #define TECTONIC_PICKINGTEXTURE_H
 
-#include "extern/glad/glad.h"
 #include "exceptions.h"
 
 class PickingTexture {

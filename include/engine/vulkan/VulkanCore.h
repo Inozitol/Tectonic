@@ -13,7 +13,6 @@
 #include "extern/vma/vk_mem_alloc.h"
 #include "extern/imgui/imgui.h"
 #include "extern/imgui/imgui_impl_vulkan.h"
-#include "extern/imgui/imgui_impl_glfw.h"
 
 #include "exceptions.h"
 #include "Window.h"
@@ -73,9 +72,9 @@ private:
                                   void* pUserData);
 
     VkTypes::AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-    void destroyBuffer(const VkTypes::AllocatedBuffer& buffer);
     VkTypes::AllocatedImage createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
     VkTypes::AllocatedImage createImage(void* data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
+    void destroyBuffer(const VkTypes::AllocatedBuffer& buffer);
     void destroyImage(const VkTypes::AllocatedImage& img);
 
     void resizeSwapchain();
@@ -174,8 +173,6 @@ private:
                                                 const MaterialResources& resources,
                                                 DescriptorAllocatorDynamic& descriptorAllocator);
     };
-
-
 };
 
 #endif //TECTONIC_VULKANCORE_H

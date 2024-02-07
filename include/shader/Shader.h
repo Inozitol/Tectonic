@@ -7,7 +7,6 @@
 #include <unordered_map>
 
 #include "exceptions.h"
-#include "extern/glad/glad.h"
 
 static const char* prefixString = "#version 450 core\n"
                                   "#extension GL_ARB_bindless_texture : require\n";

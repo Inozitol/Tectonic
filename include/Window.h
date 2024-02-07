@@ -6,8 +6,6 @@
 #include <functional>
 #include <vulkan/vulkan.h>
 
-#include "extern/imgui/imgui_impl_glfw.h"
-
 #include "exceptions.h"
 
 #include "utils.h"

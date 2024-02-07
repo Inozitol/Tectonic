@@ -2,7 +2,6 @@
 #define TECTONIC_SHADOWMAPFBO_H
 
 #include <cstdint>
-#include "extern/glad/glad.h"
 #include "exceptions.h"
 
 class ShadowMapFBO {

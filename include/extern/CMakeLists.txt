@@ -3,7 +3,6 @@ find_package(Vulkan REQUIRED)
 add_library(vkbootstrap STATIC)
 add_library(vma INTERFACE)
 add_library(stb STATIC)
-add_library(glad STATIC)
 add_library(imgui STATIC)
 
 add_subdirectory(fastgltf)
@@ -17,9 +16,6 @@ target_include_directories(vma INTERFACE vma)
 target_sources(stb PRIVATE stb/stb_image.cpp)
 target_include_directories(stb INTERFACE stb)
 
-target_sources(glad PRIVATE glad/glad.c)
-target_include_directories(glad INTERFACE glad)
-
 target_sources(imgui PRIVATE
         imgui/imconfig.h
         imgui/imgui.h
@@ -30,7 +26,5 @@ target_sources(imgui PRIVATE
         imgui/imgui_draw.cpp
         imgui/imgui_widgets.cpp
         imgui/imgui_impl_vulkan.h
-        imgui/imgui_impl_vulkan.cpp
-        imgui/imgui_impl_glfw.h
-        imgui/imgui_impl_glfw.cpp)
+        imgui/imgui_impl_vulkan.cpp)
 target_include_directories(imgui INTERFACE imgui)
