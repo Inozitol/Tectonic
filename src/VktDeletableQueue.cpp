@@ -1,19 +1,19 @@
-#include "engine/vulkan/VulkanDestructQueue.h"
-#include "engine/vulkan/VulkanDescriptors.h"
+#include "engine/vulkan/VktDeletableQueue.h"
+#include "engine/vulkan/VktDescriptors.h"
 
-void DeletionQueue::setInstance(VkInstance instance) {
+void VktDeletableQueue::setInstance(VkInstance instance) {
     m_instance = instance;
 }
 
-void DeletionQueue::setDevice(VkDevice device) {
+void VktDeletableQueue::setDevice(VkDevice device) {
     m_device = device;
 }
 
-void DeletionQueue::setVmaAllocator(VmaAllocator allocator) {
+void VktDeletableQueue::setVmaAllocator(VmaAllocator allocator) {
     m_vmaAllocator = allocator;
 }
 
-void DeletionQueue::flush() {
+void VktDeletableQueue::flush() {
     // TODO handle cases of missing instance and allocator
     if(!m_device){
         throw vulkanException("Cannot flush without device");
@@ -44,7 +44,7 @@ void DeletionQueue::flush() {
                 vkDestroyPipeline(m_device, reinterpret_cast<VkPipeline>(it->data), nullptr);
                 break;
             case DeletableType::VK_DEBUG_UTILS_MESSENGER:
-                VkUtils::DestroyDebugUtilsMessengerEXT(m_instance, reinterpret_cast<VkDebugUtilsMessengerEXT>(it->data), nullptr);
+                VktUtils::DestroyDebugUtilsMessengerEXT(m_instance, reinterpret_cast<VkDebugUtilsMessengerEXT>(it->data), nullptr);
                 break;
             case DeletableType::VK_SAMPLER:
                 vkDestroySampler(m_device, reinterpret_cast<VkSampler>(it->data), nullptr);
@@ -72,7 +72,7 @@ void DeletionQueue::flush() {
     }
 }
 
-void DeletionQueue::pushDeletable(DeletableType type, void* data, std::vector<void*> &&cont) {
+void VktDeletableQueue::pushDeletable(DeletableType type, void* data, std::vector<void*> &&cont) {
     if(cont.empty()){
         m_delQueue.push_back({type, data});
     }else{

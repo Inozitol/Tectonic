@@ -26,5 +26,7 @@ target_sources(imgui PRIVATE
         imgui/imgui_draw.cpp
         imgui/imgui_widgets.cpp
         imgui/imgui_impl_vulkan.h
-        imgui/imgui_impl_vulkan.cpp)
+        imgui/imgui_impl_vulkan.cpp
+        imgui/imgui_impl_glfw.h
+        imgui/imgui_impl_glfw.cpp)
 target_include_directories(imgui INTERFACE imgui)

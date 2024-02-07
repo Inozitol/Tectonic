@@ -1,19 +1,19 @@
-#include "engine/vulkan/VulkanLoader.h"
+#include "engine/vulkan/VktLoader.h"
 
 #include "stb_image.h"
 #include <iostream>
-#include "engine/vulkan/VulkanLoader.h"
+#include "engine/vulkan/VktLoader.h"
 
-#include "engine/vulkan/VulkanCore.h"
-#include "engine/vulkan/VulkanStructs.h"
-#include "engine/vulkan/VulkanTypes.h"
+#include "engine/vulkan/VktCore.h"
+#include "engine/vulkan/VktStructs.h"
+#include "engine/vulkan/VktTypes.h"
 #include <glm/gtx/quaternion.hpp>
 
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
 
-std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanCore* core, std::filesystem::path filePath){
+std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VktCore* core, std::filesystem::path filePath){
     fastgltf::GltfDataBuffer data;
     data.loadFromFile(filePath);
 
@@ -33,7 +33,7 @@ std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanCore
     std::vector<std::shared_ptr<MeshAsset>> meshes;
 
     std::vector<uint32_t> indices;
-    std::vector<VkTypes::Vertex> vertices;
+    std::vector<VktTypes::Vertex> vertices;
     for(fastgltf::Mesh& mesh : gltf.meshes){
         MeshAsset newMesh;
 
@@ -65,7 +65,7 @@ std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanCore
                 vertices.resize(vertices.size() + posAccessor.count);
 
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor, [&](glm::vec3 v, size_t index){
-                    VkTypes::Vertex newVtx{};
+                    VktTypes::Vertex newVtx{};
                     newVtx.position = v;
                     newVtx.normal = {1.0f, 0.0f, 0.0f};
                     newVtx.color = glm::vec4{1.0f};
@@ -108,7 +108,7 @@ std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanCore
 
         constexpr bool overrideColors = true;
         if(overrideColors){
-            for(VkTypes::Vertex& vtx : vertices){
+            for(VktTypes::Vertex& vtx : vertices){
                 vtx.color = glm::vec4(vtx.normal, 1.0f);
             }
         }

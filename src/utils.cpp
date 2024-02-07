@@ -3,17 +3,17 @@
 #include "utils.h"
 
 namespace Utils{
-    Dimensions::Dimensions(uint32_t width, uint32_t height) {
+    WindowDimension::WindowDimension(uint32_t width, uint32_t height) {
         this->width = width;
         this->height = height;
     }
 
-    Dimensions::Dimensions(int32_t width, int32_t height) {
+    WindowDimension::WindowDimension(int32_t width, int32_t height) {
         this->width = static_cast<uint32_t>(width);
         this->height = static_cast<uint32_t>(height);
     }
 
-    float Dimensions::ratio() const {
+    float WindowDimension::ratio() const {
         return (float)width/(float)height;
     }
 
@@ -37,7 +37,7 @@ namespace Utils{
         return ret;
     }
 
-
+/*
     void Frustum::calcCorners(const Camera &camera) {
         const PerspProjInfo perspInfo = camera.getPerspectiveInfo();
 
@@ -182,4 +182,5 @@ namespace Utils{
         w = (d00*d21 - d01*d20) / denom;
         u = 1.0f-v-w;
     }
+    */
 }

@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 
+find_package(glfw3 3.3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/extern)
@@ -13,14 +14,17 @@ add_executable(Tectonic
         src/main.cpp
         src/VulkanCore.cpp
         src/Logger.cpp
-        src/utils.cpp
         src/VulkanStucts.cpp
-        src/VulkanUtils.cpp
-        src/VulkanDescriptors.cpp
-        src/VulkanPipelines.cpp
-        src/VulkanDestructQueue.cpp
-        src/VulkanLoader.cpp src/VulkanTypes.cpp)
+        src/VktUtils.cpp
+        src/VktDescriptors.cpp
+        src/VktPipelines.cpp
+        src/VktDeletableQueue.cpp
+        src/VktLoader.cpp
+        src/VktTypes.cpp
+        src/Window.cpp
+        src/utils.cpp)
 
+target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic assimp)
 target_link_libraries(Tectonic Vulkan::Vulkan)
 target_link_libraries(Tectonic vkbootstrap)

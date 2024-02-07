@@ -3,9 +3,12 @@
 #include <cstdio>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
+//#include "engine/EngineCore.h"
+#include "engine/Window.h"
+#include "engine/vulkan/VktCore.h"
 
+/*
 #include "exceptions.h"
-#include "engine/EngineCore.h"
 #include "Scene.h"
 #include "model/AssimpLoader.h"
 
@@ -97,8 +100,6 @@ void renderLoop(){
 
         //bobObject.animator.updateAnimation(deltaTime);
 
-        glUseProgram(0);
-
         glm::vec3 circleCoords = {-sinf(counter)*3,1.0f,-cosf(counter)*3};
 
         g_boneScene.getDirectionalLight().setDirection(glm::normalize(glm::vec3{0.0f,0.0f,0.0f} - circleCoords));
@@ -141,7 +142,6 @@ void initScenes(){
     directionalLight.diffuseIntensity = 1.0f;
     directionalLight.setDirection(glm::vec3(0.0f, -1.0f, -1.0f));
 
-    /*
     spotLightIndex_t spotLightIndex = g_boneScene.createSpotLight();
     SpotLight& spotLight = g_boneScene.getSpotLight(spotLightIndex);
     spotLight.diffuseIntensity = 40.0f;
@@ -152,9 +152,6 @@ void initScenes(){
     spotLight.angle = 40.0f;
     spotLight.setPosition({-2.0,1.5,0.2f});
     spotLight.setDirection({1.0, -1.0, 0.0});
-    */
-
-    /*
     pointLightIndex_t pointLightIndex = g_boneScene.createPointLight();
     PointLight& pointLight = g_boneScene.getPointLight(pointLightIndex);
     pointLight.diffuseIntensity = 10.0f;
@@ -162,7 +159,6 @@ void initScenes(){
     pointLight.color = {1.0f, 1.0f, 1.0f};
     pointLight.attenuation.linear = 0.2;
     pointLight.attenuation.exp = 0.1;
-    */
     g_boneScene.setGameCamera(gameCamera);
 
     g_terrain = std::make_shared<Terrain>();
@@ -183,7 +179,6 @@ void initScenes(){
     //terrainBone_i = g_boneScene.createObject(terrainMeshBone_i);
     //g_boneScene.getObject(terrainBone_i).transformation.setTranslation(-25.0, 0.0, -25.0);
 
-    /*
     std::shared_ptr<Skybox> skybox = std::make_shared<Skybox>();
     skybox->init({"terrain/skyboxtex/xpos.png",
                   "terrain/skyboxtex/xneg.png",
@@ -192,7 +187,6 @@ void initScenes(){
                   "terrain/skyboxtex/zpos.png",
                   "terrain/skyboxtex/zneg.png"});
     g_boneScene.insertSkybox(skybox);
-    */
     AssimpLoader assimpLoader;
 
     std::shared_ptr<SkinnedModel> boneMesh = assimpLoader.loadSkinnedModel("meshes/Walker.fbx");
@@ -216,7 +210,6 @@ void initScenes(){
     //bob2Object.transformation.setScale(0.008);
     //bob2Object.transformation.setTranslation(0.2f, 0.0f, 0.0f);
 
-    /*
     for(int32_t x = -10; x < 10; x++){
         for(int32_t y = -10; y < 10; y++){
             skinnedObjectIndex_t obj = g_boneScene.createSkinnedObject(boneM_i);
@@ -225,7 +218,6 @@ void initScenes(){
             g_boneScene.getSkinnedObject(obj).transformation.setScale(0.01);
         }
     }
-    */
 
     //g_boneScene.setWindowDimension(window->getSize());
 
@@ -269,6 +261,25 @@ void initKeyGroups(){
     g_keyboard.connectKeyGroup("alphaNumerics", g_slt_animationChange);
     g_keyboard.connectKeyGroup("generateTerrain", g_slt_redoTerrain);
 }
+*/
+
+void glfwErrorCallback(int, const char *msg){
+    fprintf(stderr, "GLFW Error: %s\n", msg);
+}
+
+// TODO only temporary init
+void initGLFW(){
+    glfwSetErrorCallback(glfwErrorCallback);
+
+    if (!glfwInit()) {
+        throw engineException("Engine couldn't initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
+}
 
 int main(){
     //window = g_renderer.window;
@@ -285,9 +296,18 @@ int main(){
         fprintf(stderr, "%s", te.what());
     }*/
 
-    try {
-        VulkanCore &vcore = VulkanCore::getInstance();
+    initGLFW();
+    Window* window = new Window();
 
+    try {
+        VktCore &vcore = VktCore::getInstance();
+        vcore.setWindow(window);
+        vcore.init();
+
+        // TODO
+        //  Seems like a bad idea to use shouldClose().
+        //  The window isn't a hamster in a wheel.
+        //  Should get close bool with a signal from Window class.
         while(!vcore.shouldClose()) {
             glfwPollEvents();
             vcore.run();

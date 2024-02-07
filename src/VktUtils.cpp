@@ -1,6 +1,6 @@
-#include "engine/vulkan/VulkanUtils.h"
+#include "engine/vulkan/VktUtils.h"
 
-void VkUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout){
+void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout){
     VkImageMemoryBarrier2 imageBarrier {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
 
     imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -15,7 +15,7 @@ void VkUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout 
             (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
             ? VK_IMAGE_ASPECT_DEPTH_BIT
             : VK_IMAGE_ASPECT_COLOR_BIT;
-    imageBarrier.subresourceRange = VkStructs::imageSubresourceRange(aspectMask);
+    imageBarrier.subresourceRange = VktStructs::imageSubresourceRange(aspectMask);
     imageBarrier.image = image;
 
     VkDependencyInfo depInfo{};
@@ -28,7 +28,7 @@ void VkUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout 
     vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-void VkUtils::copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExtent2D srcExtent, VkExtent2D dstExtent) {
+void VktUtils::copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExtent2D srcExtent, VkExtent2D dstExtent) {
     VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
 
     blitRegion.srcOffsets[1].x = static_cast<int32_t>(srcExtent.width);
@@ -61,7 +61,7 @@ void VkUtils::copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExte
     vkCmdBlitImage2(cmd, &blitInfo);
 }
 
-VkShaderModule VkUtils::loadShaderModule(const char* path, VkDevice device){
+VkShaderModule VktUtils::loadShaderModule(const char* path, VkDevice device){
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if(!file.is_open()){
         throw vulkanException("Failed to load a shader file ", path);
@@ -90,7 +90,7 @@ VkShaderModule VkUtils::loadShaderModule(const char* path, VkDevice device){
     return shaderModule;
 }
 
-void VkUtils::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
+void VktUtils::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if(func != nullptr){
         func(instance, debugMessenger, pAllocator);

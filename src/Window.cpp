@@ -1,6 +1,8 @@
-#include "Window.h"
+#include "engine/Window.h"
 
-Window::Window(const std::string& name){
+Window::Window() : Window(DEFAULT_WINDOW_NAME){}
+
+Window::Window(const char* name){
     GLFWmonitor* primary = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primary);
 
@@ -9,7 +11,7 @@ Window::Window(const std::string& name){
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    m_window = glfwCreateWindow(mode->width, mode->height, name.c_str(), nullptr, nullptr);
+    m_window = glfwCreateWindow(mode->width, mode->height, name, nullptr, nullptr);
     //m_window = glfwCreateWindow(1920, 1080, name.c_str(), primary, nullptr);
     if(!m_window){
         throw windowException("Unable to create Window");
@@ -38,7 +40,7 @@ bool Window::shouldClose() {
     return glfwWindowShouldClose(m_window);
 }
 
-Utils::Dimensions Window::getSize() {
+Utils::WindowDimension Window::getSize() {
     int32_t winWidth, winHeight;
     glfwGetWindowSize(m_window, &winWidth, &winHeight);
     return {winWidth, winHeight};

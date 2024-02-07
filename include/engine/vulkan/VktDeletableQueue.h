@@ -1,5 +1,5 @@
-#ifndef TECTONIC_VULKANDESTRUCTQUEUE_H
-#define TECTONIC_VULKANDESTRUCTQUEUE_H
+#ifndef TECTONIC_VKTDELETABLEQUEUE_H
+#define TECTONIC_VKTDELETABLEQUEUE_H
 
 #include <deque>
 #include <functional>
@@ -9,7 +9,7 @@
 
 #include "exceptions.h"
 #include "vk_mem_alloc.h"
-#include "VulkanUtils.h"
+#include "VktUtils.h"
 
 enum class DeletableType {
     /**
@@ -104,9 +104,9 @@ enum class DeletableType {
     TEC_DESCRIPTOR_ALLOCATOR_DYNAMIC
 };
 
-class DeletionQueue{
+class VktDeletableQueue{
 public:
-    DeletionQueue() = default;
+    VktDeletableQueue() = default;
 
     void setInstance(VkInstance instance);
     void setDevice(VkDevice device);
@@ -115,7 +115,7 @@ public:
     void flush();
 
 private:
-    struct Deletable{
+    struct VktDeletable{
         DeletableType type{};
         void* data{};
         std::vector<void*> cont;
@@ -124,8 +124,8 @@ private:
     VkInstance m_instance = nullptr;
     VkDevice m_device = nullptr;
     VmaAllocator m_vmaAllocator = nullptr;
-    std::deque<Deletable> m_delQueue;
+    std::deque<VktDeletable> m_delQueue;
 };
 
 
-#endif //TECTONIC_VULKANDESTRUCTQUEUE_H
+#endif //TECTONIC_VKTDELETABLEQUEUE_H

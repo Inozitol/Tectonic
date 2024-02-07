@@ -1,23 +1,18 @@
-#ifndef TECTONIC_VULKANTYPES_H
-#define TECTONIC_VULKANTYPES_H
+#ifndef TECTONIC_VKTTYPES_H
+#define TECTONIC_VKTTYPES_H
 
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_transform.hpp>
-#include "VulkanDestructQueue.h"
-#include "VulkanDescriptors.h"
+#include "extern/imgui/imgui_impl_glfw.h"
+#include "VktDeletableQueue.h"
+#include "VktDescriptors.h"
+#include "meta/meta.h"
 
-class VulkanCore;
 
-namespace VkTypes{
+namespace VktTypes{
 
-    struct AllocatedImage{
-        VkImage image;
-        VkImageView view;
-        VmaAllocation allocation;
-        VkExtent3D extent;
-        VkFormat format;
-    };
 
+    /** Very work-in-progress push constants. */
     struct ComputePushConstants{
         glm::vec4 data1;
         glm::vec4 data2;
@@ -25,6 +20,10 @@ namespace VkTypes{
         glm::vec4 data4;
     };
 
+    /** @brief Abstraction over Vulkan compute pipeline.
+     *
+     * Holds a whole pipeline and pipeline layout.
+     */
     struct ComputeEffect{
         const char* name;
 
@@ -34,12 +33,23 @@ namespace VkTypes{
         ComputePushConstants data;
     };
 
+    /** @brief Abstraction over Vma buffer allocation. */
     struct AllocatedBuffer{
         VkBuffer buffer;
         VmaAllocation allocation;
         VmaAllocationInfo info;
     };
 
+    /** @brief Abstraction over Vma image allocation. */
+    struct AllocatedImage{
+        VkImage image;
+        VkImageView view;
+        VmaAllocation allocation;
+        VkExtent3D extent;
+        VkFormat format;
+    };
+
+    /** @brief Graphics pipeline vertex. */
     struct Vertex{
         glm::vec3 position;
         float uvX;
@@ -48,6 +58,12 @@ namespace VkTypes{
         glm::vec4 color;
     };
 
+    /**
+     * @brief Holds data needed for Vulkan to render a single frame.
+     *
+     * Because the rendering is overlapped and parallelized over multiple frames (see VktCore::FRAMES_OVERLAP),
+     * the engine needs to hold separate data for each of those frames.
+     */
     struct FrameData{
         VkCommandPool commandPool{};
         VkCommandBuffer mainCommandBuffer{};
@@ -56,11 +72,10 @@ namespace VkTypes{
         VkSemaphore renderSemaphore{};
         VkFence renderFence{};
 
-        DeletionQueue deletionQueue;
+        VktDeletableQueue deletionQueue;
         DescriptorAllocatorDynamic descriptors;
         AllocatedBuffer sceneUniformBuffer{};
     };
-
 
     struct GPUMeshBuffers{
         AllocatedBuffer indexBuffer;
@@ -112,4 +127,4 @@ namespace VkTypes{
 
 }
 
-#endif //TECTONIC_VULKANTYPES_H
+#endif //TECTONIC_VKTTYPES_H

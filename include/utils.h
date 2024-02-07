@@ -5,28 +5,32 @@
 #include <iostream>
 #include <cstring>
 #include <glm/vec4.hpp>
+#include <glm/gtx/transform.hpp>
 #include <glm/gtc/matrix_access.hpp>
 #include <glm/ext/matrix_clip_space.hpp>
 #include <assimp/types.h>
 #include <bitset>
 
-#include "camera/Camera.h"
+//#include "camera/Camera.h"
 #include "meta/meta.h"
 
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))
 #define INVALID_UNIFORM_LOC 0xFFFFFFFF
 
 namespace Utils{
-    struct Dimensions{
+    struct WindowDimension{
         uint32_t width = 0;
         uint32_t height = 0;
 
-        Dimensions(uint32_t width, uint32_t height);
-        Dimensions(int32_t width, int32_t height);
+        WindowDimension(uint32_t width, uint32_t height);
+        WindowDimension(int32_t width, int32_t height);
 
         [[nodiscard]] float ratio() const;
     };
 
+    bool readFile(const char* filename, std::string& content);
+
+    /*
     class Frustum{
     public:
         Frustum() = default;
@@ -48,9 +52,6 @@ namespace Utils{
 
     class FrustumCulling{
     public:
-        /**
-         * @param bias Bias for frustum planes checking. Should be positive.
-         */
         FrustumCulling(float bias) : m_bias(-bias){}
 
         void update(const glm::mat4& VP);
@@ -97,12 +98,12 @@ namespace Utils{
     };
 
     OrthoProjInfo createTightOrthographicInfo(Camera &lightCamera, const Camera &gameCamera);
-    bool readFile(const char* filename, std::string& content);
     uint32_t nextPowerOf(uint32_t in, uint32_t power);
 
     int64_t binPow(int32_t exp);
 
     void barycentric(glm::vec2 p, glm::vec2 a, glm::vec2 b, glm::vec2 c, float &u, float &v, float &w);
+    */
 }
 
 #endif //TECTONIC_UTILS_H

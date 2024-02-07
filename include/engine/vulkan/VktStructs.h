@@ -1,9 +1,9 @@
-#ifndef TECTONIC_VULKANSTRUCTS_H
-#define TECTONIC_VULKANSTRUCTS_H
+#ifndef TECTONIC_VKTSTRUCTS_H
+#define TECTONIC_VKTSTRUCTS_H
 
 #include <vulkan/vulkan.h>
 
-namespace VkStructs{
+namespace VktStructs{
     VkCommandPoolCreateInfo         commandPoolCreateInfo(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0);
     VkCommandBufferAllocateInfo     commandBufferAllocateInfo(VkCommandPool pool, uint32_t count = 1);
     VkFenceCreateInfo               fenceCreateInfo(VkFenceCreateFlags flags = 0);
@@ -22,4 +22,4 @@ namespace VkStructs{
     VkPipelineLayoutCreateInfo      pipelineLayoutCreateInfo();
 }
 
-#endif //TECTONIC_VULKANSTRUCTS_H
+#endif //TECTONIC_VKTSTRUCTS_H

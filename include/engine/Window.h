@@ -1,6 +1,7 @@
 #ifndef TECTONIC_WINDOW_H
 #define TECTONIC_WINDOW_H
 
+#include "extern/imgui/imgui_impl_glfw.h"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <functional>
@@ -18,7 +19,8 @@
  */
 class Window {
 public:
-    explicit Window(const std::string& name);
+    Window();
+    explicit Window(const char* name);
     ~Window();
 
     /**
@@ -81,7 +83,7 @@ public:
      * @brief Gets the width and height of the window.
      * @return Width and height.
      */
-    Utils::Dimensions getSize();
+    Utils::WindowDimension getSize();
 
     /**
      * @brief Gets the window aspect aspect.
@@ -138,6 +140,8 @@ public:
     [[ nodiscard ]] VkSurfaceKHR createWindowSurface(VkInstance instance);
     void initImGuiVulkan();
     void clean();
+
+    static constexpr const char* DEFAULT_WINDOW_NAME = "Tectonic";
 
 private:
     void initSignals();

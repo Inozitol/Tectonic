@@ -24,7 +24,7 @@
 #include "Logger.h"
 #include "model/terrain/Skybox.h"
 
-#include "vulkan/VulkanCore.h"
+#include "vulkan/VktCore.h"
 
 class EngineCore {
 public:

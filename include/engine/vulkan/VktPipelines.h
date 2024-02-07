@@ -1,14 +1,14 @@
-#ifndef TECTONIC_VULKANPIPELINES_H
-#define TECTONIC_VULKANPIPELINES_H
+#ifndef TECTONIC_VKTPIPELINES_H
+#define TECTONIC_VKTPIPELINES_H
 
 #include <vector>
 #include <array>
 #include <vulkan/vulkan.h>
-#include "VulkanUtils.h"
+#include "VktUtils.h"
 
-class PipelineBuilder{
+class VktPipelineBuilder{
 public:
-    PipelineBuilder();
+    VktPipelineBuilder();
     void clear();
     VkPipeline buildPipeline(VkDevice device);
     void setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
@@ -38,4 +38,4 @@ private:
     VkPipelineLayout m_layout;
 };
 
-#endif //TECTONIC_VULKANPIPELINES_H
+#endif //TECTONIC_VKTPIPELINES_H

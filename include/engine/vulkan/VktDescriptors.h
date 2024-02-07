@@ -1,12 +1,12 @@
-#ifndef TECTONIC_VULKANDESCRIPTORS_H
-#define TECTONIC_VULKANDESCRIPTORS_H
+#ifndef TECTONIC_VKTDESCRIPTORS_H
+#define TECTONIC_VKTDESCRIPTORS_H
 
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <span>
 #include <deque>
 
-#include "VulkanUtils.h"
+#include "VktUtils.h"
 
 struct DescriptorLayoutBuilder {
     std::vector<VkDescriptorSetLayoutBinding> bindings;
@@ -68,4 +68,4 @@ struct DescriptorWriter{
 };
 
 
-#endif //TECTONIC_VULKANDESCRIPTORS_H
+#endif //TECTONIC_VKTDESCRIPTORS_H
