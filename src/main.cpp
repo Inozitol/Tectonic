@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
-//#include "engine/EngineCore.h"
+#include "engine/EngineCore.h"
 #include "engine/Window.h"
 #include "engine/vulkan/VktCore.h"
 
@@ -19,7 +19,7 @@ Cursor g_cursor;
 Keyboard g_keyboard;
 
 EngineCore& g_renderer = EngineCore::getInstance();
-std::shared_ptr<Window> window;
+std::shared_ptr<Window> m_window;
 
 std::shared_ptr<Terrain> g_terrain;
 
@@ -81,7 +81,7 @@ Slot<> g_slt_redoTerrain{[](){ redoTerrain(); }};
 void renderLoop(){
     //SkinnedObjectData& bobObject = g_boneScene.getSkinnedObject(bone_i);
     //bobObject.animator.playAnimation(3);
-    while(!window->shouldClose()){
+    while(!m_window->shouldClose()){
         static float counter = 0.0f;
         static double deltaTime = 0.0f;
         static double animPrevTime = glfwGetTime();
@@ -111,7 +111,7 @@ void renderLoop(){
 
         g_boneScene.renderScene();
 
-        window->swapBuffers();
+        m_window->swapBuffers();
         glfwPollEvents();
     }
 }
@@ -121,7 +121,7 @@ void initScenes(){
     std::shared_ptr<GameCamera> gameCamera(new GameCamera);
     gameCamera->switchPerspective();
     gameCamera->setPerspectiveInfo({CAMERA_PPROJ_FOV,
-                                    window->getRatio(),
+                                    m_window->getRatio(),
                                     CAMERA_PPROJ_NEAR,
                                     CAMERA_PPROJ_FAR});
     gameCamera->setOrthographicInfo({SHADOW_OPROJ_LEFT,
@@ -132,7 +132,7 @@ void initScenes(){
                                      SHADOW_OPROJ_FAR});
     gameCamera->createProjectionMatrix();
     gameCamera->setPosition({0.0f, 1.0, 1.0});
-    window->sig_cursorEnabled.connect(gameCamera->slt_cursorEnabled);
+    m_window->sig_cursorEnabled.connect(gameCamera->slt_cursorEnabled);
 
     g_cursor.sig_updatePos.connect(g_boneScene.slt_updateMousePosition);
     g_keyboard.connectKeyGroup("controls", g_boneScene.slt_receiveKeyboardButton);
@@ -219,7 +219,7 @@ void initScenes(){
         }
     }
 
-    //g_boneScene.setWindowDimension(window->getSize());
+    //g_boneScene.setWindowDimension(m_window->getSize());
 
     g_cursor.sig_updatePos.connect(g_boneScene.slt_updateCursorPos);
     g_cursor.sig_cursorPressedPos.connect(g_renderer.slt_updateCursorPressedPos);
@@ -253,8 +253,8 @@ void initKeyGroups(){
     });
     g_keyboard.addKeyGroup("generateTerrain",{GLFW_KEY_T});
 
-    g_keyboard.connectKeyGroup("close", window->slt_setClose);
-    g_keyboard.connectKeyGroup("cursorToggle", window->slt_toggleCursor);
+    g_keyboard.connectKeyGroup("close", m_window->slt_setClose);
+    g_keyboard.connectKeyGroup("cursorToggle", m_window->slt_toggleCursor);
     g_keyboard.connectKeyGroup("polygonToggle", g_slt_switchPolygonMode);
     g_keyboard.connectKeyGroup("perspectiveToggle", g_boneScene.slt_togglePerspective);
     g_keyboard.connectKeyGroup("debugToggle", g_renderer.slt_toggleDebug);
@@ -263,30 +263,12 @@ void initKeyGroups(){
 }
 */
 
-void glfwErrorCallback(int, const char *msg){
-    fprintf(stderr, "GLFW Error: %s\n", msg);
-}
-
-// TODO only temporary init
-void initGLFW(){
-    glfwSetErrorCallback(glfwErrorCallback);
-
-    if (!glfwInit()) {
-        throw engineException("Engine couldn't initialize GLFW");
-    }
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
-}
-
 int main(){
-    //window = g_renderer.window;
+    //m_window = g_renderer.m_window;
 
     /*
-        window->connectKeyboard(g_keyboard);
-        window->connectCursor(g_cursor);
+        m_window->connectKeyboard(g_keyboard);
+        m_window->connectCursor(g_cursor);
 
         initKeyGroups();
         initScenes();
@@ -296,23 +278,10 @@ int main(){
         fprintf(stderr, "%s", te.what());
     }*/
 
-    initGLFW();
-    Window* window = new Window();
-
     try {
-        VktCore &vcore = VktCore::getInstance();
-        vcore.setWindow(window);
-        vcore.init();
-
-        // TODO
-        //  Seems like a bad idea to use shouldClose().
-        //  The window isn't a hamster in a wheel.
-        //  Should get close bool with a signal from Window class.
-        while(!vcore.shouldClose()) {
-            glfwPollEvents();
-            vcore.run();
-        }
-
+        EngineCore& core = EngineCore::getInstance();
+        core.run();
+        core.clean();
     } catch(tectonicException& te){
         fprintf(stderr, "%s", te.what());
     }

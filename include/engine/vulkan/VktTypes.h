@@ -3,14 +3,13 @@
 
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <memory>
 #include "extern/imgui/imgui_impl_glfw.h"
 #include "VktDeletableQueue.h"
 #include "VktDescriptors.h"
-#include "meta/meta.h"
-
+#include "Logger.h"
 
 namespace VktTypes{
-
 
     /** Very work-in-progress push constants. */
     struct ComputePushConstants{
@@ -51,11 +50,11 @@ namespace VktTypes{
 
     /** @brief Graphics pipeline vertex. */
     struct Vertex{
-        glm::vec3 position;
-        float uvX;
-        glm::vec3 normal;
-        float uvY;
-        glm::vec4 color;
+        glm::vec3 position = {0.0f, 0.0f, 0.0f};
+        float uvX = 0.0f;
+        glm::vec3 normal = {1.0f, 0.0f, 0.0f};
+        float uvY = 0.0f;
+        glm::vec4 color = {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
     /**
@@ -78,23 +77,23 @@ namespace VktTypes{
     };
 
     struct GPUMeshBuffers{
-        AllocatedBuffer indexBuffer;
-        AllocatedBuffer vertexBuffer;
-        VkDeviceAddress vertexBufferAddress;
+        AllocatedBuffer indexBuffer{};
+        AllocatedBuffer vertexBuffer{};
+        VkDeviceAddress vertexBufferAddress = 0;
     };
 
     struct GPUDrawPushConstants{
         glm::mat4 worldMatrix = glm::mat4(1.0f);
-        VkDeviceAddress vertexBuffer{};
+        VkDeviceAddress vertexBuffer = 0;
     };
 
     struct GPUSceneData{
-        glm::mat4 view;
-        glm::mat4 proj;
-        glm::mat4 viewproj;
-        glm::vec4 ambientColor;
-        glm::vec4 sunlightDirection;
-        glm::vec4 sunlightColor;
+        glm::mat4 view = glm::identity<glm::mat4>();
+        glm::mat4 proj  = glm::identity<glm::mat4>();;
+        glm::mat4 viewproj = glm::identity<glm::mat4>();;
+        glm::vec4 ambientColor = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4 sunlightDirection = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4 sunlightColor = {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
     struct MaterialPipeline{
@@ -109,22 +108,52 @@ namespace VktTypes{
     };
 
     struct MaterialInstance{
+        MaterialInstance() = default;
         MaterialPipeline* pipeline = nullptr;
         VkDescriptorSet materialSet = VK_NULL_HANDLE;
         MaterialPass passType = MaterialPass::OTHER;
     };
 
     struct RenderObject{
-        uint32_t indexCount;
-        uint32_t firstIndex;
-        VkBuffer indexBuffer;
+        uint32_t indexCount = 0;
+        uint32_t firstIndex = 0;
+        VkBuffer indexBuffer = VK_NULL_HANDLE;
 
-        MaterialInstance* material;
+        MaterialInstance* material = nullptr;
 
         glm::mat4 transform = glm::identity<glm::mat4>();
-        VkDeviceAddress vertexBufferAddress;
+        VkDeviceAddress vertexBufferAddress = 0;
     };
 
+    struct DrawContext{
+        std::vector<RenderObject> opaqueSurfaces;
+        std::vector<RenderObject> transparentSurfaces;
+    };
+
+    class IRenderable{
+        virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
+    };
+
+    struct Node : public IRenderable{
+        std::weak_ptr<Node> parent;
+        std::vector<std::shared_ptr<Node>> children;
+
+        glm::mat4 localTransform;
+        glm::mat4 worldTransform;
+
+        void refreshTransform(const glm::mat4& parentMatrix){
+            worldTransform = parentMatrix * localTransform;
+            for(const auto& c : children){
+                c->refreshTransform(worldTransform);
+            }
+        }
+
+        virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) {
+            for(auto& c : children){
+                c->draw(topMatrix, ctx);
+            }
+        }
+    };
 }
 
 #endif //TECTONIC_VKTTYPES_H

@@ -52,7 +52,7 @@ private:
     std::vector<PoolSizeRatio> m_ratios;
     std::vector<VkDescriptorPool> m_fullPools;
     std::vector<VkDescriptorPool> m_readyPools;
-    uint32_t m_setsPerPool;
+    uint32_t m_setsPerPool = 0;
 };
 
 struct DescriptorWriter{
@@ -60,8 +60,8 @@ struct DescriptorWriter{
     std::deque<VkDescriptorBufferInfo> bufferInfos;
     std::vector<VkWriteDescriptorSet> writes;
 
-    void writeImage(int binding, VkImageView view, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
-    void writeBuffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
+    void writeImage(uint32_t binding, VkImageView view, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
+    void writeBuffer(uint32_t binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
 
     void clear();
     void updateSet(VkDevice device, VkDescriptorSet set);

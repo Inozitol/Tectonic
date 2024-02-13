@@ -100,7 +100,7 @@ IMGUI_IMPL_API bool         ImGui_ImplVulkan_LoadFunctions(PFN_vkVoidFunction(*l
 // You probably do NOT need to use or care about those functions.
 // Those functions only exist because:
 //   1) they facilitate the readability and maintenance of the multiple main.cpp examples files.
-//   2) the multi-viewport / platform window implementation needs them internally.
+//   2) the multi-viewport / platform m_window implementation needs them internally.
 // Generally we avoid exposing any kind of superfluous high-level helpers in the bindings,
 // but it is too much code to duplicate everywhere so we exceptionally expose them.
 //
@@ -138,7 +138,7 @@ struct ImGui_ImplVulkanH_FrameSemaphores
     VkSemaphore         RenderCompleteSemaphore;
 };
 
-// Helper structure to hold the data needed by one rendering context into one OS window
+// Helper structure to hold the data needed by one rendering context into one OS m_window
 // (Used by example's main.cpp. Used by multi-viewport features. Probably NOT used by your own engine/app.)
 struct ImGui_ImplVulkanH_Window
 {
@@ -149,7 +149,7 @@ struct ImGui_ImplVulkanH_Window
     VkSurfaceFormatKHR  SurfaceFormat;
     VkPresentModeKHR    PresentMode;
     VkRenderPass        RenderPass;
-    VkPipeline          Pipeline;               // The window pipeline may uses a different VkRenderPass than the one passed in ImGui_ImplVulkan_InitInfo
+    VkPipeline          Pipeline;               // The m_window pipeline may uses a different VkRenderPass than the one passed in ImGui_ImplVulkan_InitInfo
     bool                UseDynamicRendering;
     bool                ClearEnable;
     VkClearValue        ClearValue;

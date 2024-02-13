@@ -7,7 +7,8 @@
 
 class Logger {
 public:
-    explicit Logger(std::string  identifier);
+    explicit Logger(std::string identifier);
+
 
     enum LogLevel : uint8_t{
         DEBUG = 0,
@@ -20,6 +21,7 @@ public:
     friend Logger& operator<<(Logger& l, const std::string& str);
     friend Logger& operator<<(Logger& l, const char* str);
     friend Logger& operator<<(Logger& l, char ch);
+    friend Logger& operator<<(Logger& l, uint64_t num);
     friend Logger& operator<<(Logger& l, uint32_t num);
     friend Logger& operator<<(Logger& l, uint8_t num);
     friend Logger& operator<<(Logger& l, float num);

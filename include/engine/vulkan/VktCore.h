@@ -3,6 +3,10 @@
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #include <glm/gtx/transform.hpp>
 
 #include <memory>
@@ -17,6 +21,7 @@
 
 #include "exceptions.h"
 #include "engine/Window.h"
+#include "Logger.h"
 #include "VktStructs.h"
 #include "VktTypes.h"
 #include "VktUtils.h"
@@ -37,17 +42,20 @@ public:
      */
     void init();
 
+    /**
+     * @brief De-initializes Vulkan.
+     */
+    void clean();
+
     /** @brief Inserts initialized Window. */
     void setWindow(Window* window);
 
     /** @brief Uploads a mesh into the created Vulkan device memory. */
-    VktTypes::GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex> vertices);
-
-    static constexpr uint8_t FRAMES_OVERLAP = 2;
+    static VktTypes::GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex> vertices);
 
     /**
      * @brief Checks if the Window inside should close.
-     * @return True if the window wants to close, False if not.
+     * @return True if the m_window wants to close, False if not.
      *
      * It only calls the Window::shouldClose. It would be better to check it from the actual Window,
      * or setup a signal to get the data without polling glfwWindowShouldClose.
@@ -58,6 +66,71 @@ public:
      * @brief Main run function that should be called every frame.
      */
     void run();
+
+    void setViewMatrix(const glm::mat4& viewMatrix);
+    void setProjMatrix(const glm::mat4& projMatrix);
+
+    /**
+     * @brief Returns current VkDevice (if initialized).
+     * @return Current VkDevice.
+     */
+    static VkDevice device();
+
+    static constexpr uint8_t FRAMES_OVERLAP = 2;
+
+    static VktTypes::AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+    static VktTypes::AllocatedImage  createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
+    static VktTypes::AllocatedImage  createImage(void* data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
+    static void destroyBuffer(const VktTypes::AllocatedBuffer& buffer);
+    static void destroyImage(const VktTypes::AllocatedImage& img);
+
+    struct GLTFMetallicRoughness{
+        VktTypes::MaterialPipeline opaquePipeline{};
+        VktTypes::MaterialPipeline transparentPipeline{};
+
+        VkDescriptorSetLayout materialLayout{};
+
+        struct MaterialConstants{
+            glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 metalRoughFactors = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 extra[14];
+        };
+
+        struct MaterialResources{
+            VktTypes::AllocatedImage colorImage;
+            VkSampler colorSampler = VK_NULL_HANDLE;
+            VktTypes::AllocatedImage metalRoughImage;
+            VkSampler metalRoughSampler = VK_NULL_HANDLE;
+            VkBuffer dataBuffer = VK_NULL_HANDLE;
+            uint32_t dataBufferOffset = 0;
+        };
+
+        DescriptorWriter writer;
+
+        void buildPipelines(VktCore* core);
+        void clearResources(VkDevice device);
+
+        VktTypes::MaterialInstance writeMaterial(VkDevice device,
+                                                 VktTypes::MaterialPass pass,
+                                                 const MaterialResources& resources,
+                                                 DescriptorAllocatorDynamic& descriptorAllocator);
+    };
+
+    struct MeshNode : public VktTypes::Node{
+        std::shared_ptr<MeshAsset> mesh;
+        virtual void draw(const glm::mat4& topMatrix, VktTypes::DrawContext& ctx) override;
+    };
+
+    // TODO REMOVE LATER
+    VktTypes::AllocatedImage m_errorCheckboardImage{};
+    VktTypes::AllocatedImage m_whiteImage{};
+    VktTypes::AllocatedImage m_blackImage{};
+    VktTypes::AllocatedImage m_greyImage{};
+    VkSampler m_defaultSamplerLinear{};
+    VkSampler m_defaultSamplerNearest{};
+    GLTFMetallicRoughness m_metalRoughMaterial;
+
+    std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 private:
     VktCore() = default;
@@ -82,8 +155,8 @@ private:
     void draw();
 
     void drawBackground(VkCommandBuffer cmd);
-    void drawGeometry(VkCommandBuffer cmd);
     void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
+    void drawGeometry(VkCommandBuffer cmd);
 
     void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func);
 
@@ -92,109 +165,70 @@ private:
                                   const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                                   void* pUserData);
 
-    VktTypes::AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-    VktTypes::AllocatedImage  createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
-    VktTypes::AllocatedImage  createImage(void* data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
-    void destroyBuffer(const VktTypes::AllocatedBuffer& buffer);
-    void destroyImage(const VktTypes::AllocatedImage& img);
-
     void resizeSwapchain();
+
+    void updateScene();
 
     bool m_isInitialized = false;
     uint32_t m_frameNumber = 0;
 
-    VkInstance m_instance{};
-    VkPhysicalDevice m_physicalDevice{};
-    VkDevice m_device{};
+    VkInstance m_instance = VK_NULL_HANDLE;
+    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+    VkDevice m_device = VK_NULL_HANDLE;
 
-    VkSurfaceKHR m_surface{};
-    VkExtent2D m_windowExtent{};
+    VkSurfaceKHR m_surface = VK_NULL_HANDLE;
+    VkExtent2D m_windowExtent = {.width = 0, .height = 0};
     Window* m_window = nullptr;
 
-    VkSwapchainKHR m_swapchain{};
+    VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
     VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
     std::vector<VkImage> m_swapchainImages;
     std::vector<VkImageView> m_swapchainImageViews;
-    VkExtent2D m_swapchainExtent{};
+    VkExtent2D m_swapchainExtent = {.width = 0, .height = 0};
     bool m_resizeSwapchain = false;
 
-    VktTypes::AllocatedImage m_drawImage{};
-    VktTypes::AllocatedImage m_depthImage{};
-    VkExtent2D m_drawExtent{};
+    VktTypes::AllocatedImage m_drawImage;
+    VktTypes::AllocatedImage m_depthImage;
+    VkExtent2D m_drawExtent = {.width = 0, .height = 0};
     float m_renderScale = 1.0f;
 
-    VktTypes::FrameData m_frames[FRAMES_OVERLAP];
-    VkQueue m_graphicsQueue{};
-    uint32_t m_graphicsQueueFamily{};
+    std::array<VktTypes::FrameData, FRAMES_OVERLAP> m_frames;
+    VkQueue m_graphicsQueue = VK_NULL_HANDLE;
+    uint32_t m_graphicsQueueFamily = 0;
 
     VktDeletableQueue m_coreDeletionQueue;
 
-    VmaAllocator m_vmaAllocator{};
+    VmaAllocator m_vmaAllocator = VK_NULL_HANDLE;
 
-    DescriptorAllocatorDynamic m_globDescriptorAllocator{};
-    VkDescriptorSet m_drawImageDescriptors{};
-    VkDescriptorSetLayout m_drawImageDescriptorLayout{};
+    DescriptorAllocatorDynamic m_globDescriptorAllocator;
+    VkDescriptorSet m_drawImageDescriptors = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_drawImageDescriptorLayout = VK_NULL_HANDLE;
 
-    VkPipeline m_gradientPipeline{};
-    VkPipelineLayout m_gradientPipelineLayout{};
+    VkPipeline m_gradientPipeline = VK_NULL_HANDLE;
+    VkPipelineLayout m_gradientPipelineLayout = VK_NULL_HANDLE;
 
-    VkFence m_immFence{};
-    VkCommandBuffer m_immCommandBuffer{};
-    VkCommandPool m_immCommandPool{};
+    VkFence m_immFence = VK_NULL_HANDLE;
+    VkCommandBuffer m_immCommandBuffer = VK_NULL_HANDLE;
+    VkCommandPool m_immCommandPool = VK_NULL_HANDLE;
 
     std::vector<VktTypes::ComputeEffect> m_backgroundEffect;
     int m_currentBackgroundEffect = 0;
 
-    VkPipelineLayout m_meshPipelineLayout{};
-    VkPipeline m_meshPipeline{};
+    VkPipelineLayout m_meshPipelineLayout = VK_NULL_HANDLE;
+    VkPipeline m_meshPipeline = VK_NULL_HANDLE;
 
-    std::vector<std::shared_ptr<MeshAsset>> m_testMeshes;
-
-    VktTypes::GPUSceneData m_sceneData{};
+    VktTypes::GPUSceneData m_sceneData;
     VkDescriptorSetLayout m_gpuSceneDataDescriptorLayout{};
 
-    VktTypes::AllocatedImage m_whiteImage{};
-    VktTypes::AllocatedImage m_blackImage{};
-    VktTypes::AllocatedImage m_greyImage{};
-    VktTypes::AllocatedImage m_errorCheckboardImage{};
-    VkSampler m_defaultSamplerLinear{};
-    VkSampler m_defaultSamplerNearest{};
     VkDescriptorSetLayout m_singleImageDescriptorLayout{};
 
-    struct GLTFMetallicRoughness{
-        VktTypes::MaterialPipeline opaquePipeline{};
-        VktTypes::MaterialPipeline transparentPipeline{};
+    VktTypes::DrawContext m_mainDrawContext;
+    //std::unordered_map<std::string, std::shared_ptr<VktTypes::Node>> m_loadedNodes;
 
-        VkDescriptorSetLayout materialLayout{};
+    glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
+    glm::mat4 m_projMatrix = glm::identity<glm::mat4>();
 
-        struct MaterialConstants{
-            glm::vec4 colorFactors;
-            glm::vec4 metalRoughFactors;
-            glm::vec4 extra[14];
-        };
-
-        struct MaterialResources{
-            VktTypes::AllocatedImage colorImage;
-            VkSampler colorSampler = VK_NULL_HANDLE;
-            VktTypes::AllocatedImage metalRoughImage;
-            VkSampler metalRoughSampler = VK_NULL_HANDLE;
-            VkBuffer dataBuffer = VK_NULL_HANDLE;
-            uint32_t dataBufferOffset = 0;
-        };
-
-        DescriptorWriter writer;
-
-        void buildPipelines(VktCore* core);
-        void clearResources(VkDevice device);
-
-        VktTypes::MaterialInstance writeMaterial(VkDevice device,
-                                                 VktTypes::MaterialPass pass,
-                                                 const MaterialResources& resources,
-                                                 DescriptorAllocatorDynamic& descriptorAllocator);
-    };
-
-    VktTypes::MaterialInstance m_defaultData;
-    GLTFMetallicRoughness m_metalRoughMaterial;
+    Logger m_logger = Logger("VulkanCore");
 };
 
 #endif //TECTONIC_VKTCORE_H

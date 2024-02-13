@@ -15,7 +15,7 @@
 #include "Keyboard.h"
 
 /**
- * Application window abstraction. Implemented with GLFW window.
+ * Application m_window abstraction. Implemented with GLFW m_window.
  */
 class Window {
 public:
@@ -44,24 +44,24 @@ public:
     Signal<bool> sig_cursorEnabled;
 
     /**
-     * @brief Emitted when window dimensions is resized.
+     * @brief Emitted when m_window dimensions is resized.
      * Returns new width and height.
      */
     Signal<int32_t, int32_t> sig_widowDimensions;
 
     /**
-     * @brief Emitted when window framebuffer is resized.
+     * @brief Emitted when m_window framebuffer is resized.
      * Returns new width and height.
      */
     Signal<int32_t, int32_t> sig_framebufferResize;
 
     /**
-     * @brief Emitted when window should close.
+     * @brief Emitted when m_window should close.
      */
     Signal<> sig_shouldClose;
 
     /**
-     * @brief Closes the window.
+     * @brief Closes the m_window.
      */
     Slot<> slt_setClose{[this](){
         close();
@@ -75,41 +75,41 @@ public:
     }};
 
     /**
-     * @brief Makes the window as the current context.
+     * @brief Makes the m_window as the current context.
      */
     void makeCurrentContext();
 
     /**
-     * @brief Gets the width and height of the window.
+     * @brief Gets the width and height of the m_window.
      * @return Width and height.
      */
     Utils::WindowDimension getSize();
 
     /**
-     * @brief Gets the window aspect aspect.
+     * @brief Gets the m_window aspect aspect.
      * @return Aspect aspect.
      */
     float getRatio();
 
     /**
-     * Swaps the front and back buffers of the window.
+     * Swaps the front and back buffers of the m_window.
      * Should be called after every frame.
      */
     void swapBuffers();
 
     /**
-     * Returns true if the window should close.
-     * @return True if window should close.
+     * Returns true if the m_window should close.
+     * @return True if m_window should close.
      */
     bool shouldClose();
 
     /**
-     * @brief Disables the cursor inside the window.
+     * @brief Disables the cursor inside the m_window.
      */
     void disableCursor();
 
     /**
-     * @brief Enables the cursor inside the window.
+     * @brief Enables the cursor inside the m_window.
      */
     void enableCursor();
 
@@ -119,7 +119,7 @@ public:
     void toggleCursor();
 
     /**
-     * @brief Sets the window to shouldClose state.
+     * @brief Sets the m_window to shouldClose state.
      */
     void close();
 

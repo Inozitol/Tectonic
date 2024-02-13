@@ -125,7 +125,7 @@ VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
     }
     VkSurfaceKHR surface;
     if(glfwCreateWindowSurface(instance, m_window, nullptr, &surface) != VK_SUCCESS){
-        throw windowException("Failed to create window KHR surface");
+        throw windowException("Failed to create m_window KHR surface");
     }
     surfaceCreated = true;
     return surface;

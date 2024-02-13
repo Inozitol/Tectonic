@@ -3,26 +3,12 @@
 
 #include <queue>
 
-#include "model/Model.h"
 #include "camera/GameCamera.h"
-#include "shader/LightingShader.h"
-#include "shader/shadow/ShadowMapShader.h"
-#include "shader/shadow/ShadowCubeMapFBO.h"
-#include "shader/shadow/ShadowMapFBO.h"
-#include "shader/PickingShader.h"
-#include "shader/DebugShader.h"
-#include "shader/TerrainShader.h"
-#include "shader/SkyboxShader.h"
-#include "meta/Signal.h"
-#include "meta/Slot.h"
-#include "model/anim/Animation.h"
-#include "PickingTexture.h"
+#include "meta/meta.h"
 #include "exceptions.h"
 #include "Window.h"
-#include "SceneTypes.h"
-#include "model/terrain/Terrain.h"
 #include "Logger.h"
-#include "model/terrain/Skybox.h"
+#include "defs/ConfigDefs.h"
 
 #include "vulkan/VktCore.h"
 
@@ -36,31 +22,34 @@ public:
         return instance;
     }
 
-    std::unique_ptr<Window> window;
+    void run();
 
+    /**
+     * @brief De-initializes engine.
+     */
+    void clean();
+
+    /*
     void queueModelRender(const ObjectData& object, Model* model);
     void queueSkinnedModelRender(const SkinnedObjectData& object, SkinnedModel* skinnedModel);
     void setTerrainModelRender(const std::shared_ptr<Terrain>& terrain);
     void setSkyboxModelRender(const std::shared_ptr<Skybox>& skybox);
     void renderQueues();
+    */
+
     void setWindowSize(int32_t width, int32_t height);
-    void setGameCamera(const std::shared_ptr<GameCamera>& camera) { m_gameCamera = camera; };
+
+    /*
     void setDirectionalLight(DirectionalLight* light) { m_dirLight = light; }
     void setSpotLight(std::array<SpotLight, MAX_SPOT_LIGHTS>* lights) { m_spotLights = lights;}
     void setSpotLightCount(decltype(MAX_SPOT_LIGHTS) count) { m_spotLightsCount = count; }
     void setPointLight(std::array<PointLight, MAX_POINT_LIGHTS>* lights) { m_pointLights = lights; }
     void setPointLightCount(decltype(MAX_POINT_LIGHTS) count) { m_pointLightsCount = count; }
+    */
 
     static void glfwErrorCallback(int, const char* msg);
-    static void GLAPIENTRY
-    openGLErrorCallback(GLenum source,
-                        GLenum type,
-                        GLuint id,
-                        GLenum severity,
-                        GLsizei length,
-                        const GLchar* message,
-                        const void* userParam);
 
+    /*
     LightingShader      m_lightingShader;
     ShadowMapShader     m_shadowMapShader;
     ShadowMapFBO        m_shadowMapFBO;
@@ -73,6 +62,7 @@ public:
 
     Signal<objectIndex_t> sig_objectClicked;
     Signal<skinnedObjectIndex_t> sig_skinnedObjectClicked;
+    */
 
     /**
      * @brief Informs the engine when the cursor is being pressed
@@ -82,7 +72,7 @@ public:
     }};
 
     /**
-     * @brief Informs the engine about new window dimension
+     * @brief Informs the engine about new m_window dimension
      */
     Slot<int32_t, int32_t> slt_windowDimensions{[this](int32_t width, int32_t height){
         setWindowSize(width, height);
@@ -116,6 +106,15 @@ private:
     EngineCore();
     ~EngineCore();
 
+    VktCore& m_vktCore = VktCore::getInstance();
+
+    static void initGLFW();
+    void initKeyGroups();
+    void initKeyboard();
+    void initCursor();
+    void initGameCamera();
+
+    /*
     using meshQueue_t = std::vector<std::pair<const Material*, std::vector<Drawable>>>;
     using vaoQueue_t = std::unordered_map<GLuint, meshQueue_t>;
 
@@ -127,7 +126,6 @@ private:
     std::shared_ptr<Terrain> m_terrain;
     std::shared_ptr<Skybox> m_skybox;
 
-    void initGLFW();
     static void initGL();
     void initShaders();
 
@@ -157,16 +155,26 @@ private:
     void renderSkybox();
 
     static inline void renderMesh(const MeshInfo& mesh);
+     */
+
+    bool m_isInitialized = false;
+
+    std::unique_ptr<Window> m_window;
+    Keyboard m_keyboard;
+    Cursor m_cursor;
 
     int32_t m_windowWidth{};
     int32_t m_windowHeight{};
 
     std::shared_ptr<GameCamera> m_gameCamera = nullptr;
+
+    /*
     DirectionalLight* m_dirLight = nullptr;
     std::array<SpotLight, MAX_SPOT_LIGHTS>* m_spotLights = nullptr;
     decltype(MAX_SPOT_LIGHTS) m_spotLightsCount = 0;
     std::array<PointLight, MAX_POINT_LIGHTS>* m_pointLights = nullptr;
     decltype(MAX_POINT_LIGHTS) m_pointLightsCount = 0;
+    */
 
     bool m_cursorPressed = false;
     int32_t m_cursorPosX = 0, m_cursorPosY = 0;

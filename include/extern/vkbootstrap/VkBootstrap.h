@@ -840,7 +840,7 @@ class SwapchainBuilder {
 
 
     // Desired size of the swapchain. By default, the swapchain will use the size
-    // of the window being drawn to.
+    // of the m_window being drawn to.
     SwapchainBuilder& set_desired_extent(uint32_t width, uint32_t height);
 
     // When determining the surface format, make this the first to be used if supported.

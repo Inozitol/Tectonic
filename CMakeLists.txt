@@ -12,9 +12,9 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/extern)
 
 add_executable(Tectonic
         src/main.cpp
-        src/VulkanCore.cpp
+        src/VktCore.cpp
         src/Logger.cpp
-        src/VulkanStucts.cpp
+        src/VktStructs.cpp
         src/VktUtils.cpp
         src/VktDescriptors.cpp
         src/VktPipelines.cpp
@@ -22,7 +22,7 @@ add_executable(Tectonic
         src/VktLoader.cpp
         src/VktTypes.cpp
         src/Window.cpp
-        src/utils.cpp)
+        src/utils.cpp src/GameCamera.cpp src/Camera.cpp src/EngineCore.cpp src/Keyboard.cpp src/Cursor.cpp)
 
 target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic assimp)

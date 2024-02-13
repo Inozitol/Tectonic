@@ -501,8 +501,8 @@ struct InstanceDispatchTable {
     }
 #endif
 #if (defined(VK_QNX_screen_surface))
-    VkBool32 getPhysicalDeviceScreenPresentationSupportQNX(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex, struct _screen_window* window) const noexcept {
-        return fp_vkGetPhysicalDeviceScreenPresentationSupportQNX(physicalDevice, queueFamilyIndex, window);
+    VkBool32 getPhysicalDeviceScreenPresentationSupportQNX(VkPhysicalDevice physicalDevice, uint32_t queueFamilyIndex, struct _screen_window* m_window) const noexcept {
+        return fp_vkGetPhysicalDeviceScreenPresentationSupportQNX(physicalDevice, queueFamilyIndex, m_window);
     }
 #endif
 #if (defined(VK_EXT_debug_report))

@@ -1,5 +1,32 @@
 #include "engine/EngineCore.h"
 
+
+void EngineCore::run() {
+    m_vktCore.setProjMatrix(m_gameCamera->getProjectionMatrix());
+
+    // TODO
+    //  Seems like a bad idea to use shouldClose().
+    //  The m_window isn't a hamster in a wheel.
+    //  Should get close bool with a signal from Window class.
+    while(!m_vktCore.shouldClose()) {
+        glfwPollEvents();
+        m_gameCamera->createView();
+        m_vktCore.setViewMatrix(m_gameCamera->getViewMatrix());
+        m_vktCore.run();
+    }
+}
+
+void EngineCore::clean() {
+    if(m_isInitialized) {
+        m_vktCore.clean();
+        m_window.reset();
+        glfwTerminate();
+
+        m_isInitialized = false;
+    }
+}
+
+/*
 void EngineCore::queueModelRender(const ObjectData &object, Model* model) {
     GLuint vao = model->getVAO();
     if(!m_drawQueue.contains(vao)) {
@@ -442,19 +469,46 @@ void EngineCore::renderSkybox() {
     m_skybox->m_cubemapTex->bind(SKYBOX_CUBE_MAP_TEXTURE_UNIT);
     renderMesh(m_skybox->m_meshes.at(0));
 }
+*/
+
+void EngineCore::initGLFW(){
+    glfwSetErrorCallback(glfwErrorCallback);
+
+    if (!glfwInit()) {
+        throw engineException("Engine couldn't initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
+}
 
 void EngineCore::setWindowSize(int32_t width, int32_t height) {
     m_windowWidth = width;
     m_windowHeight = height;
 
     // Need to change picking texture dimensions
-    m_pickingTexture.init(m_windowWidth, m_windowHeight);
+    //m_pickingTexture.init(m_windowWidth, m_windowHeight);
 }
 
 EngineCore::EngineCore() {
     try {
-        //initGLFW();
-        //initGL();
+        initGLFW();
+        m_window = std::make_unique<Window>();
+        m_vktCore.setWindow(m_window.get());
+        m_vktCore.init();
+
+        m_window->connectKeyboard(m_keyboard);
+        m_window->connectCursor(m_cursor);
+
+        initGameCamera();
+        initCursor();
+        initKeyboard();
+
+        m_isInitialized = true;
+
+        m_gameCamera->setPosition({0.0f, 0.0f, 5.0f});
         //initShaders();
     }catch(tectonicException& e){
         fprintf(stderr, "EXCEPTION: %s", e.what());
@@ -463,8 +517,10 @@ EngineCore::EngineCore() {
 }
 
 EngineCore::~EngineCore() {
-    window.reset();
 
+    clean();
+
+    /*
     // Cleanup shaders
     m_lightingShader.clean();
     m_pickingShader.clean();
@@ -476,10 +532,65 @@ EngineCore::~EngineCore() {
     m_pickingTexture.clean();
     m_shadowCubeMapFBO.clean();
     m_shadowMapFBO.clean();
-
-    glfwTerminate();
+    */
 }
 
+void EngineCore::initKeyGroups(){
+    // TODO
+    //  Would be way better with external config file.
+    //  Maybe in 5 years? ...maybe? :`)
+
+    m_keyboard.addKeyGroup("controls", {
+            GLFW_KEY_W,
+            GLFW_KEY_S,
+            GLFW_KEY_A,
+            GLFW_KEY_D,
+            GLFW_KEY_SPACE,
+            GLFW_KEY_C
+    });
+    m_keyboard.addKeyGroup("close", {GLFW_KEY_ESCAPE});
+    m_keyboard.addKeyGroup("cursorToggle", {
+            GLFW_KEY_LEFT_CONTROL,
+            GLFW_KEY_RIGHT_CONTROL});
+    m_keyboard.addKeyGroup("polygonToggle", {GLFW_KEY_Z});
+    m_keyboard.addKeyGroup("perspectiveToggle", {GLFW_KEY_X});
+    m_keyboard.addKeyGroup("debugToggle", {GLFW_KEY_V});
+    m_keyboard.addKeyGroup("alphaNumerics", {
+            GLFW_KEY_0,
+            GLFW_KEY_1,
+            GLFW_KEY_2,
+            GLFW_KEY_3,
+            GLFW_KEY_4,
+            GLFW_KEY_5
+    });
+    m_keyboard.addKeyGroup("generateTerrain",{GLFW_KEY_T});
+
+    m_keyboard.connectKeyGroup("controls", m_gameCamera->slt_keyEvent);
+    m_keyboard.connectKeyGroup("close", m_window->slt_setClose);
+    m_keyboard.connectKeyGroup("cursorToggle", m_window->slt_toggleCursor);
+}
+
+void EngineCore::initGameCamera() {
+    m_gameCamera = std::make_unique<GameCamera>();
+    m_gameCamera->setPerspectiveInfo({CAMERA_PPROJ_FOV,
+                                    m_window->getRatio(),
+                                    CAMERA_PPROJ_NEAR,
+                                    CAMERA_PPROJ_FAR});
+    m_gameCamera->createProjectionMatrix();
+    m_gameCamera->setSpeed(0.5f);
+}
+
+void EngineCore::initKeyboard() {
+    initKeyGroups();
+}
+
+void EngineCore::initCursor() {
+    //m_window->disableCursor();
+    CONNECT(m_cursor.sig_updatePos, m_gameCamera->slt_mouseMovement);
+    CONNECT(m_window->sig_cursorEnabled, m_gameCamera->slt_cursorEnabled);
+}
+
+/*
 void EngineCore::initGL() {
     gladLoadGL();
     glfwSwapInterval(0);
@@ -528,32 +639,9 @@ void EngineCore::initShaders() {
     m_skyboxShader.enable();
     m_skyboxShader.setCubemapUnit(SKYBOX_CUBE_MAP_TEXTURE_UNIT_INDEX);
 }
+*/
 
 void EngineCore::glfwErrorCallback(int, const char *msg) {
     fprintf(stderr, "Error: %s\n", msg);
-}
-
-void EngineCore::openGLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
-                                     const GLchar *message, const void *userParam) {
-    switch(severity){
-        case GL_DEBUG_SEVERITY_NOTIFICATION:
-        case GL_DEBUG_SEVERITY_LOW:
-            break;
-        case GL_DEBUG_SEVERITY_MEDIUM:
-            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = MEDIUM, message = %s\n",
-                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
-                     type, message );
-            break;
-        case GL_DEBUG_SEVERITY_HIGH:
-            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = HIGH, message = %s\n",
-                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
-                     type, message );
-            break;
-        default:
-            fprintf( stderr, "GL CALLBACK:%s type = 0x%x, severity = UNKNOWN, message = %s\n",
-                     ( type == GL_DEBUG_TYPE_ERROR ? " ** GL ERROR **" : "" ),
-                     type, message );
-            break;
-    }
 }
 

@@ -45,3 +45,7 @@ void GameCamera::handleMouseEvent(double x_in, double y_in) {
 
     m_lastMousePos = {x, y};
 }
+
+void GameCamera::setSpeed(float speed) {
+    m_speed = speed;
+}

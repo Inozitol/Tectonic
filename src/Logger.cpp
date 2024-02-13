@@ -66,6 +66,13 @@ Logger& operator<<(Logger& l, char ch) {
     return l;
 }
 
+Logger &operator<<(Logger &l, uint64_t num) {
+    if(l.m_messageLevel >= l.m_logLevel){
+        l.m_outStream << '[' << num << ']';
+    }
+    return l;
+}
+
 Logger& operator<<(Logger& l, uint32_t num) {
     if(l.m_messageLevel >= l.m_logLevel){
         l.m_outStream << '[' << num << ']';

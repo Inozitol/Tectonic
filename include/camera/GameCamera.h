@@ -2,6 +2,7 @@
 #define TECTONIC_GAMECAMERA_H
 
 #include "camera/Camera.h"
+#include "Keyboard.h"
 #include "meta/Signal.h"
 #include "meta/Slot.h"
 
@@ -31,6 +32,26 @@ public:
      * @param y Current mouse Y local_position.
      */
     void handleMouseEvent(double x, double y);
+
+    /**
+     * @brief Sets a new camera speed.
+     * @param speed New camera speed.
+     */
+    void setSpeed(float speed);
+
+    /**
+     * Handles incoming keyboard presses.
+     */
+    Slot<int32_t> slt_keyEvent{[this](int32_t key){
+        handleKeyEvent(key);
+    }};
+
+    /**
+     * Handles new mouse positions.
+     */
+    Slot<double, double> slt_mouseMovement{[this](double x, double y){
+        handleMouseEvent(x,y);
+    }};
 
     /**
      * Enables or disables cursor for the camera.

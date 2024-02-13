@@ -232,7 +232,7 @@ struct ImGui_ImplVulkan_Data
     VkCommandPool               FontCommandPool;
     VkCommandBuffer             FontCommandBuffer;
 
-    // Render buffers for main window
+    // Render buffers for main m_window
     ImGui_ImplVulkanH_WindowRenderBuffers MainWindowRenderBuffers;
 
     ImGui_ImplVulkan_Data()
@@ -1505,7 +1505,7 @@ void ImGui_ImplVulkanH_CreateWindowSwapChain(VkPhysicalDevice physical_device, V
     }
 }
 
-// Create or resize window
+// Create or resize m_window
 void ImGui_ImplVulkanH_CreateOrResizeWindow(VkInstance instance, VkPhysicalDevice physical_device, VkDevice device, ImGui_ImplVulkanH_Window* wd, uint32_t queue_family, const VkAllocationCallbacks* allocator, int width, int height, uint32_t min_image_count)
 {
     IM_ASSERT(g_FunctionsLoaded && "Need to call ImGui_ImplVulkan_LoadFunctions() if IMGUI_IMPL_VULKAN_NO_PROTOTYPES or VK_NO_PROTOTYPES are set!");

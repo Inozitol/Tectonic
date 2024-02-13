@@ -155,7 +155,7 @@ VkDescriptorPool DescriptorAllocatorDynamic::createPool(VkDevice device, uint32_
     return newPool;
 }
 
-void DescriptorWriter::writeBuffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
+void DescriptorWriter::writeBuffer(uint32_t binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type) {
     VkDescriptorBufferInfo& info = bufferInfos.emplace_back(VkDescriptorBufferInfo{
         .buffer = buffer,
         .offset = offset,
@@ -171,7 +171,7 @@ void DescriptorWriter::writeBuffer(int binding, VkBuffer buffer, size_t size, si
     writes.push_back(write);
 }
 
-void DescriptorWriter::writeImage(int binding, VkImageView view, VkSampler sampler, VkImageLayout layout, VkDescriptorType type) {
+void DescriptorWriter::writeImage(uint32_t binding, VkImageView view, VkSampler sampler, VkImageLayout layout, VkDescriptorType type) {
     VkDescriptorImageInfo& info = imageInfos.emplace_back(VkDescriptorImageInfo{
             .sampler = sampler,
             .imageView = view,
