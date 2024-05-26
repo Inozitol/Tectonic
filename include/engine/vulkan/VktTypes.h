@@ -87,6 +87,9 @@ namespace VktTypes{
         VkDeviceAddress vertexBuffer = 0;
     };
 
+    /**
+     * @brief Environmental scene data.
+     */
     struct GPUSceneData{
         glm::mat4 view = glm::identity<glm::mat4>();
         glm::mat4 proj  = glm::identity<glm::mat4>();;
@@ -96,7 +99,10 @@ namespace VktTypes{
         glm::vec4 sunlightColor = {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
-    struct MaterialPipeline{
+    /**
+     * @brief Vulkan pipeline for material rendering.
+     */
+    struct MaterialPipeline {
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkPipelineLayout layout = VK_NULL_HANDLE;
     };
@@ -119,7 +125,7 @@ namespace VktTypes{
         uint32_t firstIndex = 0;
         VkBuffer indexBuffer = VK_NULL_HANDLE;
 
-        MaterialInstance* material = nullptr;
+        const MaterialInstance* material = nullptr;
 
         glm::mat4 transform = glm::identity<glm::mat4>();
         VkDeviceAddress vertexBufferAddress = 0;
@@ -130,29 +136,46 @@ namespace VktTypes{
         std::vector<RenderObject> transparentSurfaces;
     };
 
-    class IRenderable{
-        virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
+    struct GLTFMaterial{
+        explicit GLTFMaterial(VktTypes::MaterialInstance data): data(data){}
+        GLTFMaterial() = default;
+        VktTypes::MaterialInstance data;
     };
 
-    struct Node : public IRenderable{
-        std::weak_ptr<Node> parent;
-        std::vector<std::shared_ptr<Node>> children;
+    struct GeoSurface{
+        uint32_t startIndex;
+        uint32_t count;
+        const GLTFMaterial* material;
+    };
+
+    struct MeshAsset{
+        std::vector<GeoSurface> surfaces;
+        VktTypes::GPUMeshBuffers meshBuffers;
+    };
+
+    struct Node {
+        const Node* parent = nullptr;
+        std::vector<Node*> children;
+        const MeshAsset* mesh = nullptr;
+        std::string name;
 
         glm::mat4 localTransform;
         glm::mat4 worldTransform;
 
-        void refreshTransform(const glm::mat4& parentMatrix){
-            worldTransform = parentMatrix * localTransform;
-            for(const auto& c : children){
-                c->refreshTransform(worldTransform);
-            }
-        }
+        /**
+         * @brief Updates all nodes of the asset with a transformation matrix.
+         * @param root Root of the tree to update.
+         * @param parentMatrix Transformation matrix.
+         */
+        static void refreshTransform(Node& root, const glm::mat4& parentMatrix);
 
-        virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) {
-            for(auto& c : children){
-                c->draw(topMatrix, ctx);
-            }
-        }
+        /**
+         * @brief Fills the DrawContext with rendering data.
+         * @param root Root of the tree.
+         * @param topMatrix Transformation matrix.
+         * @param ctx DrawContext to fill with rendering data.
+         */
+        static void gatherContext(const Node& root, const glm::mat4& topMatrix, DrawContext& ctx);
     };
 }
 

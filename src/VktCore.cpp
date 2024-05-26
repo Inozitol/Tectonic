@@ -10,6 +10,8 @@ VktCore &VktCore::getInstance() {
 void VktCore::init() {
     assert(m_window != nullptr);
 
+    m_logger(Logger::INFO) << "Initializing VktCore\n";
+
     initVulkan();
     initSwapchain();
     initCommands();
@@ -21,7 +23,7 @@ void VktCore::init() {
 
     m_isInitialized = true;
 
-    std::string structurePath = {"meshes/structure.glb"};
+    std::string structurePath = "meshes/structure.glb";
     auto structureFile = loadGltfMeshes(structurePath);
     assert(structureFile.has_value());
     loadedScenes["structure"] = *structureFile;
@@ -64,12 +66,13 @@ VktCore::~VktCore(){
 
 void VktCore::initVulkan() {
     vkb::InstanceBuilder vkBuilder;
-
     auto instance = vkBuilder.set_app_name("Tectonic")
             .request_validation_layers(true)
             .set_debug_callback(VktCore::debugCallback)
             .require_api_version(1,3,0)
             .build();
+
+    m_logger(Logger::INFO) << "Finished building vkbInstance\n";
 
     vkb::Instance vkbInstance = instance.value();
 
@@ -77,12 +80,23 @@ void VktCore::initVulkan() {
     m_surface = m_window->createWindowSurface(m_instance);
 
     VkPhysicalDeviceVulkan13Features features13{};
+
+    m_logger(Logger::DEBUG) << "Enabling dynamicRendering feature\n";
     features13.dynamicRendering = true;
+
+    m_logger(Logger::DEBUG) << "Enabling synchronization2 feature\n";
     features13.synchronization2 = true;
+
+    m_logger(Logger::DEBUG) << "Enabling maintenance4 feature\n";
     features13.maintenance4 = true;     // TODO remove this, used to keep performance warning quiet
 
+
     VkPhysicalDeviceVulkan12Features features12{};
+
+    m_logger(Logger::DEBUG) << "Enabling bufferDeviceAddress feature\n";
     features12.bufferDeviceAddress = true;
+
+    m_logger(Logger::DEBUG) << "Enabling descriptorIndexing feature\n";
     features12.descriptorIndexing = true;
 
     vkb::PhysicalDeviceSelector vkbSelector{vkbInstance};
@@ -97,6 +111,8 @@ void VktCore::initVulkan() {
     vkb::DeviceBuilder vkbDeviceBuilder{vkbPhysicalDevice};
     vkb::Device vkbDevice = vkbDeviceBuilder.build().value();
 
+    m_logger(Logger::INFO) << "Found physical device: " << vkbDevice.physical_device.name << '\n';
+
     m_device = vkbDevice.device;
     m_physicalDevice = vkbPhysicalDevice.physical_device;
 
@@ -110,6 +126,8 @@ void VktCore::initVulkan() {
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &m_vmaAllocator);
 
+    m_logger(Logger::INFO) << "Finished creating vmaAllocator\n";
+
     m_coreDeletionQueue.setInstance(m_instance);
     m_coreDeletionQueue.setDevice(m_device);
     m_coreDeletionQueue.setVmaAllocator(m_vmaAllocator);
@@ -121,6 +139,8 @@ void VktCore::initVulkan() {
 
     m_coreDeletionQueue.pushDeletable(DeletableType::VMA_ALLOCATOR, m_vmaAllocator);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_DEBUG_UTILS_MESSENGER, vkbInstance.debug_messenger);
+
+    m_logger(Logger::INFO) << "Finished initializing Vulkan device\n";
 }
 
 void VktCore::initSwapchain() {
@@ -155,6 +175,11 @@ void VktCore::initSwapchain() {
     VK_CHECK(vkCreateImageView(m_device, &rviewInfo, nullptr, &m_drawImage.view));
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, m_drawImage.view);
 
+    m_logger(Logger::INFO) << "Finished creating draw image with format: "
+                                << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
+                                << " and extent dimensions: "
+                                << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
+
     m_depthImage.format = VK_FORMAT_D32_SFLOAT;
     m_depthImage.extent = drawImageExtent;
     VkImageUsageFlags depthImageUsages{};
@@ -167,6 +192,11 @@ void VktCore::initSwapchain() {
     VkImageViewCreateInfo dViewInfo = VktStructs::imageViewCreateInfo(m_depthImage.format, m_depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
     VK_CHECK(vkCreateImageView(m_device, &dViewInfo, nullptr, &m_depthImage.view));
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, m_depthImage.view);
+
+    m_logger(Logger::INFO) << "Finished creating depth image with format: "
+                           << string_VkFormat(VK_FORMAT_D32_SFLOAT)
+                           << " and extent dimensions: "
+                           << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
 
 }
 
@@ -209,6 +239,8 @@ void VktCore::initSyncStructs() {
 }
 
 void VktCore::createSwapchain(uint32_t width, uint32_t height) {
+    m_logger(Logger::INFO) << "Creating swapchain of dimensions: " << width << 'x' << height << '\n';
+
     vkb::SwapchainBuilder vkbSwapchainBuilder(m_physicalDevice, m_device, m_surface);
     m_swapchainImageFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
@@ -227,6 +259,8 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
     m_swapchainImages = vkbSwapchain.get_images().value();
     m_swapchainImageViews = vkbSwapchain.get_image_views().value();
     m_swapchainImageFormat = vkbSwapchain.image_format;     // Builder might choose different format
+    m_logger(Logger::INFO) << "Finished building swapchain with format: " << string_VkFormat(vkbSwapchain.image_format) << '\n';
+
 }
 
 void VktCore::destroySwapchain() {
@@ -242,6 +276,7 @@ VktTypes::FrameData &VktCore::getCurrentFrame() {
 }
 
 void VktCore::draw() {
+    // Updates relevant scene rendering data buffers
     updateScene();
 
     VK_CHECK(vkWaitForFences(m_device, 1, &getCurrentFrame().renderFence, true, 1000000000));
@@ -340,6 +375,11 @@ void VktCore::drawBackground(VkCommandBuffer cmd) {
 }
 
 void VktCore::drawGeometry(VkCommandBuffer cmd) {
+
+    m_stats.drawCallCount = 0;
+    m_stats.trigDrawCount = 0;
+    auto startTime = std::chrono::system_clock::now();
+
     // Fetch scene uniform buffer allocated memory
     VktTypes::AllocatedBuffer& gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
@@ -357,29 +397,14 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
         writer.updateSet(m_device, globalDescriptor);
     }
 
-    /*
-    // Bind texture
-    VkDescriptorSet imageSet = getCurrentFrame().descriptors.allocate(m_device, m_singleImageDescriptorLayout);
-
-    //Write texture to sampler
-    {
-        DescriptorWriter writer;
-        writer.writeImage(0, m_errorCheckboardImage.view,
-                          m_defaultSamplerNearest,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        writer.updateSet(m_device, imageSet);
-    }
-
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_meshPipelineLayout, 0, 1, &imageSet, 0, nullptr);
-*/
-
     VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
     VkRenderingAttachmentInfo depthAttachment = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
     VkRenderingInfo renderingInfo = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
     vkCmdBeginRendering(cmd, &renderingInfo);
 
     auto draw = [&](const VktTypes::RenderObject& renderObject){
+        m_stats.drawCallCount++;
+        m_stats.trigDrawCount += renderObject.indexCount / 3;
 
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderObject.material->pipeline->pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -434,6 +459,11 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
     m_mainDrawContext.transparentSurfaces.clear();
 
     vkCmdEndRendering(cmd);
+
+    auto endTime = std::chrono::system_clock::now();
+    auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    m_stats.meshDrawTime = static_cast<float>(drawDuration.count()) / 1000.0f;
+
 }
 
 void VktCore::initDescriptors() {
@@ -678,6 +708,9 @@ bool VktCore::shouldClose() {
 }
 
 void VktCore::run() {
+
+    auto startTime = std::chrono::system_clock::now();
+
     if(m_resizeSwapchain){
         resizeSwapchain();
     }
@@ -703,23 +736,20 @@ void VktCore::run() {
         ImGui::End();
     }
 
-    ImGui::Render();
-
-    static double deltaTime = 0.0f;
-    static double animPrevTime = glfwGetTime();
-    static double fpsPrevTime = glfwGetTime();
-    static uint32_t frameCounter = 0;
-
-    double currentTime = glfwGetTime();
-    deltaTime = currentTime - animPrevTime;
-    animPrevTime = currentTime;
-    frameCounter++;
-    if(currentTime - fpsPrevTime > 1.0) {
-        std::cout << "FPS: " << frameCounter  << std::endl;
-        fpsPrevTime = currentTime;
-        frameCounter = 0;
+    if(ImGui::Begin("Stats")){
+        uint32_t frames = 1000 / m_stats.frametime;
+        ImGui::Text("Frames %u", frames);
+        ImGui::Text("Frametime %f ms", m_stats.frametime);
+        ImGui::Text("Drawtime %f ms", m_stats.meshDrawTime);
+        ImGui::Text("Update time %f ms", m_stats.sceneUpdateTime);
+        ImGui::Text("Triangles %u", m_stats.trigDrawCount);
+        ImGui::Text("Draws: %u", m_stats.drawCallCount);
+        ImGui::End();
     }
 
+    ImGui::Render();
+
+    double currentTime = glfwGetTime();
     m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[0] = static_cast<float>(m_drawExtent.width);
     m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[1] = static_cast<float>(m_drawExtent.height);
 
@@ -728,6 +758,10 @@ void VktCore::run() {
     }
 
     draw();
+
+    auto endTime = std::chrono::system_clock::now();
+    auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    m_stats.frametime = static_cast<float>(drawDuration.count()) / 1000.0f;
 }
 
 VktTypes::AllocatedBuffer VktCore::createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) {
@@ -981,7 +1015,7 @@ void VktCore::setWindow(Window *window) {
 
 void VktCore::updateScene() {
     m_mainDrawContext.opaqueSurfaces.clear();
-    //glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(static_cast<float>(glfwGetTime())*50), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(static_cast<float>(glfwGetTime())*50), glm::vec3(0.0f, 1.0f, 0.0f));
     //m_loadedNodes["Suzanne"]->draw(glm::identity<glm::mat4>() * rotation, m_mainDrawContext);
     m_sceneData.view = m_viewMatrix;
     m_sceneData.proj = m_projMatrix;
@@ -998,7 +1032,10 @@ void VktCore::updateScene() {
 
         m_loadedNodes["Cube"]->draw(translation * scale, m_mainDrawContext);
     }*/
-    loadedScenes["structure"]->draw(glm::identity<glm::mat4>(), m_mainDrawContext);
+
+    //glm::mat4 transform = glm::scale(glm::identity<glm::mat4>(), {0.01,0.01,0.01}) * rotation;
+
+    loadedScenes["structure"]->gatherContext(glm::identity<glm::mat4>(), m_mainDrawContext);
 }
 
 void VktCore::setViewMatrix(const glm::mat4 &viewMatrix) {
@@ -1125,30 +1162,3 @@ VktTypes::MaterialInstance VktCore::GLTFMetallicRoughness::writeMaterial(VkDevic
     return matData;
 }
 
-void VktCore::MeshNode::draw(const glm::mat4 &topMatrix, VktTypes::DrawContext &ctx) {
-    glm::mat4 nodeMatrix = topMatrix * worldTransform;
-
-    for(auto& s : mesh->surfaces){
-        VktTypes::RenderObject def;
-        def.indexCount = s.count;
-        def.firstIndex = s.startIndex;
-        def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
-        def.material = &s.material->data;
-
-        def.transform = nodeMatrix;
-        def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
-
-        switch(s.material->data.passType){
-            case VktTypes::MaterialPass::OPAQUE:
-                ctx.opaqueSurfaces.push_back(def);
-                break;
-            case VktTypes::MaterialPass::TRANSPARENT:
-                ctx.transparentSurfaces.push_back(def);
-                break;
-            case VktTypes::MaterialPass::OTHER:
-                break;
-        }
-    }
-
-    Node::draw(topMatrix, ctx);
-}

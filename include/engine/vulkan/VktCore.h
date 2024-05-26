@@ -90,13 +90,13 @@ public:
 
         VkDescriptorSetLayout materialLayout{};
 
-        struct MaterialConstants{
+        struct MaterialConstants {
             glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
             glm::vec4 metalRoughFactors = {0.0f, 0.0f, 0.0f, 0.0f};
             glm::vec4 extra[14];
         };
 
-        struct MaterialResources{
+        struct MaterialResources {
             VktTypes::AllocatedImage colorImage;
             VkSampler colorSampler = VK_NULL_HANDLE;
             VktTypes::AllocatedImage metalRoughImage;
@@ -116,9 +116,16 @@ public:
                                                  DescriptorAllocatorDynamic& descriptorAllocator);
     };
 
-    struct MeshNode : public VktTypes::Node{
-        std::shared_ptr<MeshAsset> mesh;
-        virtual void draw(const glm::mat4& topMatrix, VktTypes::DrawContext& ctx) override;
+    struct ObjectHandle{
+
+    };
+
+    struct PerfStats{
+        float frametime;
+        uint32_t trigDrawCount;
+        uint32_t drawCallCount;
+        float sceneUpdateTime;
+        float meshDrawTime;
     };
 
     // TODO REMOVE LATER
@@ -227,6 +234,8 @@ private:
 
     glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
     glm::mat4 m_projMatrix = glm::identity<glm::mat4>();
+
+    PerfStats m_stats;
 
     Logger m_logger = Logger("VulkanCore");
 };
