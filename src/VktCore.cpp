@@ -1,3 +1,4 @@
+
 #include "engine/vulkan/VktCore.h"
 #define VMA_IMPLEMENTATION
 #include "extern/vma/vk_mem_alloc.h"
@@ -22,18 +23,21 @@ void VktCore::init() {
     initDefaultData();
 
     m_isInitialized = true;
-
-    std::string structurePath = "meshes/structure.glb";
-    auto structureFile = loadGltfMeshes(structurePath);
-    assert(structureFile.has_value());
-    loadedScenes["structure"] = *structureFile;
 }
 
 void VktCore::clean() {
     if(m_isInitialized){
         vkDeviceWaitIdle(m_device);
 
-        loadedScenes.clear();
+        for(auto& [k,object] : loadedObjects){
+            for(auto& buffer : object.skins){
+                destroyBuffer(buffer.jointsBuffer);
+            }
+        }
+
+        for(auto& [k,model] : loadedModels){
+            delete(model.resources);
+        }
 
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -387,6 +391,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
     memcpy(reinterpret_cast<VktTypes::GPUSceneData*>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
 
     VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_gpuSceneDataDescriptorLayout);
+
     // Write scene data to uniforms
     {
         DescriptorWriter writer;
@@ -397,9 +402,9 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
         writer.updateSet(m_device, globalDescriptor);
     }
 
-    VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
-    VkRenderingAttachmentInfo depthAttachment = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo renderingInfo = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+    VkRenderingAttachmentInfo colorAttachment   = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+    VkRenderingAttachmentInfo depthAttachment   = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    VkRenderingInfo renderingInfo               = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
     vkCmdBeginRendering(cmd, &renderingInfo);
 
     auto draw = [&](const VktTypes::RenderObject& renderObject){
@@ -441,6 +446,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
 
         VktTypes::GPUDrawPushConstants pushConstants;
         pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
+        pushConstants.jointsBuffer = renderObject.jointsBufferAddress;
         pushConstants.worldMatrix = renderObject.transform;
         vkCmdPushConstants(cmd, renderObject.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VktTypes::GPUDrawPushConstants), &pushConstants);
 
@@ -715,6 +721,24 @@ void VktCore::run() {
         resizeSwapchain();
     }
 
+    runImGui();
+
+    double currentTime = glfwGetTime();
+    m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[0] = static_cast<float>(m_drawExtent.width);
+    m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[1] = static_cast<float>(m_drawExtent.height);
+
+    if(m_currentBackgroundEffect == 2 || m_currentBackgroundEffect == 3){
+        m_backgroundEffect.at(m_currentBackgroundEffect).data.data1[0] = currentTime;
+    }
+
+    draw();
+
+    auto endTime = std::chrono::system_clock::now();
+    auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    m_stats.frametime = static_cast<float>(drawDuration.count()) / 1000.0f;
+}
+
+void VktCore::runImGui(){
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -736,7 +760,7 @@ void VktCore::run() {
         ImGui::End();
     }
 
-    if(ImGui::Begin("Stats")){
+    if(ImGui::Begin("Performance")){
         uint32_t frames = 1000 / m_stats.frametime;
         ImGui::Text("Frames %u", frames);
         ImGui::Text("Frametime %f ms", m_stats.frametime);
@@ -747,21 +771,64 @@ void VktCore::run() {
         ImGui::End();
     }
 
-    ImGui::Render();
+    if(ImGui::Begin("Models")){
+        for(const auto& [mID,model] : loadedModels){
+            if(ImGui::CollapsingHeader(model.name.c_str())){
+                ImGui::Text("ID: %u", mID);
+                ImGui::Text("Name: %s", model.name.c_str());
+                for(const auto& [oID,object] : model.objects){
+                    if(ImGui::TreeNode(std::to_string(oID).c_str())){
 
-    double currentTime = glfwGetTime();
-    m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[0] = static_cast<float>(m_drawExtent.width);
-    m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[1] = static_cast<float>(m_drawExtent.height);
+                        if(ImGui::TreeNode("Transformation")){
+                            // Change position
+                            glm::vec3 pos = object->transformation.getTranslation();
+                            if(ImGui::DragFloat3("Pos",(float*)& (pos))){
+                                object->transformation.setTranslation(pos.x, pos.y, pos.z);
+                            }
 
-    if(m_currentBackgroundEffect == 2 || m_currentBackgroundEffect == 3){
-        m_backgroundEffect.at(m_currentBackgroundEffect).data.data1[0] = currentTime;
+                            // Change rotation
+                            glm::vec3 rotation = object->transformation.getRotation();
+                            if(ImGui::DragFloat3("Rotation",(float*)& (rotation))){
+                                object->transformation.setRotation(rotation.x, rotation.y, rotation.z);
+                            }
+
+                            float scale = object->transformation.getScale();
+                            if(ImGui::DragFloat("Scale", &scale)){
+                                object->transformation.setScale(scale);
+                            }
+                            ImGui::TreePop();
+                        }
+
+                        if(ImGui::TreeNode("Animation")) {
+                            static std::size_t currentAnimation = 0;
+                            if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN,5 * ImGui::GetTextLineHeightWithSpacing()))){
+                                for(std::size_t animID = 0; animID < model.resources->animations.size(); animID++){
+                                    const bool isActive = (currentAnimation == animID);
+                                    VktTypes::Animation* animation = model.resources->animations[animID].get();
+                                    if(ImGui::Selectable(animation->name.c_str(), isActive)) {
+                                        object->activeAnimation = animation;
+                                        animation->currTime = animation->start;
+                                        currentAnimation = animID;
+                                    }
+                                    if(isActive){
+                                        ImGui::SetItemDefaultFocus();
+                                    }
+                                }
+                                ImGui::EndListBox();
+                            }
+                            ImGui::TreePop();
+                        }
+
+                    ImGui::TreePop();
+                    }
+                }
+            }
+        }
+        ImGui::End();
     }
 
-    draw();
 
-    auto endTime = std::chrono::system_clock::now();
-    auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    m_stats.frametime = static_cast<float>(drawDuration.count()) / 1000.0f;
+    ImGui::Render();
 }
 
 VktTypes::AllocatedBuffer VktCore::createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) {
@@ -833,11 +900,25 @@ VktTypes::GPUMeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::s
     });
     destroyBuffer(staging);
 
-    // TODO Find where to delete buffers
-    //m_coreDeletionQueue.pushDeletable(DeletableType::VMA_BUFFER, newSurface.vertexBuffer.buffer, {newSurface.vertexBuffer.allocation});
-    //m_coreDeletionQueue.pushDeletable(DeletableType::VMA_BUFFER, newSurface.indexBuffer.buffer, {newSurface.indexBuffer.allocation});
-
     return newSurface;
+}
+
+VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4>& jointMatrices) {
+
+    const size_t jointsBufferSize = jointMatrices.size() * sizeof(glm::mat4);
+
+    VktTypes::GPUJointsBuffers newJoints{};
+    newJoints.jointsBuffer = createBuffer(jointsBufferSize,
+                                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
+    deviceAddressInfo.buffer = newJoints.jointsBuffer.buffer;
+    newJoints.jointsBufferAddress = vkGetBufferDeviceAddress(VktCore::device(), &deviceAddressInfo);
+
+    memcpy(newJoints.jointsBuffer.info.pMappedData, jointMatrices.data(), jointsBufferSize);
+
+    return newJoints;
 }
 
 void VktCore::initMeshPipeline() {
@@ -1015,8 +1096,6 @@ void VktCore::setWindow(Window *window) {
 
 void VktCore::updateScene() {
     m_mainDrawContext.opaqueSurfaces.clear();
-    glm::mat4 rotation = glm::rotate(glm::mat4(1.0f), glm::radians(static_cast<float>(glfwGetTime())*50), glm::vec3(0.0f, 1.0f, 0.0f));
-    //m_loadedNodes["Suzanne"]->draw(glm::identity<glm::mat4>() * rotation, m_mainDrawContext);
     m_sceneData.view = m_viewMatrix;
     m_sceneData.proj = m_projMatrix;
 
@@ -1026,16 +1105,22 @@ void VktCore::updateScene() {
     m_sceneData.sunlightColor = glm::vec4(1.0f);
     m_sceneData.sunlightDirection = glm::vec4(0.0f, 1.0f, 0.5f, 1.0f);
 
-    /*for(int x = -3; x < 3; x++){
-        glm::mat4 scale = glm::scale(glm::vec3{0.2f});
-        glm::mat4 translation = glm::translate(glm::vec3{x, 1.0f, 0.0f});
+    double currTime = glfwGetTime();
+    static double prevTime = currTime;
 
-        m_loadedNodes["Cube"]->draw(translation * scale, m_mainDrawContext);
-    }*/
+    currTime = glfwGetTime();
+    double delta = currTime - prevTime;
+    prevTime = currTime;
+    for(auto& [k,object] : loadedObjects){
+        if(object.activeAnimation){
+            VktTypes::Animation* animation = object.activeAnimation;
+            object.modelHandle->resources->updateAnimation(animation, object.skins, static_cast<float>(delta));
+        }
+    }
 
-    //glm::mat4 transform = glm::scale(glm::identity<glm::mat4>(), {0.01,0.01,0.01}) * rotation;
-
-    loadedScenes["structure"]->gatherContext(glm::identity<glm::mat4>(), m_mainDrawContext);
+    for(const auto& [oID, object] : loadedObjects){
+        object.modelHandle->resources->gatherContext(object.transformation.getMatrix(), object.skins, m_mainDrawContext);
+    }
 }
 
 void VktCore::setViewMatrix(const glm::mat4 &viewMatrix) {
@@ -1052,6 +1137,61 @@ VkDevice VktCore::device() {
         return vktCore.m_device;
     }
     return nullptr;
+}
+
+/**
+ * Initialize first model and object identifiers to 0.
+ */
+VktCore::modelID_t  VktCore::EngineModel::lastID = 0;
+VktCore::objectID_t  VktCore::EngineObject::lastID = 0;
+
+VktCore::EngineModel* VktCore::createModel(VktModelResources* resources, const std::string& name) {
+    assert(resources);
+
+    // Find free identifier
+    while(loadedModels.contains(EngineModel::lastID)) EngineModel::lastID++;
+    modelID_t freeID = EngineModel::lastID++;
+
+    // Create model
+    loadedModels[freeID] = {
+            .modelID = freeID,
+            .resources = resources,
+            .name = name
+    };
+
+    // Return handle
+    m_logger(Logger::INFO) << "Created a model at ID " << freeID << '\n';
+    return &loadedModels[freeID];
+}
+
+VktCore::EngineObject* VktCore::createObject(EngineModel* model) {
+    assert(model);
+
+    // Find free identifier
+    while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
+    objectID_t freeID = EngineObject::lastID++;
+
+    // Create object
+    loadedObjects[freeID] = EngineObject{
+            .objectID = freeID,
+            .modelHandle = model,
+            .activeAnimation = model->resources->animations[0].get()
+            // Skins are auto-constructed
+    };
+
+    // Copy skins for per-object animation
+    loadedObjects[freeID].skins.reserve(model->resources->skins.size());
+    for(const auto& skin : model->resources->skins){
+        // Create and store new buffer with joints matrices
+        // TODO Destroy buffer
+        loadedObjects[freeID].skins.emplace_back(uploadJoints(skin->inverseBindMatrices));
+    }
+
+    model->objects[freeID] = &loadedObjects[freeID];
+
+    // Return handle
+    m_logger(Logger::INFO) << "Created an object with ID " << freeID << " from model at ID " << model->modelID << '\n';
+    return &loadedObjects[freeID];
 }
 
 void VktCore::GLTFMetallicRoughness::buildPipelines(VktCore *core) {
@@ -1079,11 +1219,19 @@ void VktCore::GLTFMetallicRoughness::buildPipelines(VktCore *core) {
         core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, materialLayout);
     }
 
-    VkDescriptorSetLayout layouts[] = {core->m_gpuSceneDataDescriptorLayout, materialLayout};
+    {
+        DescriptorLayoutBuilder layoutBuilder;
+        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+
+        jointsLayout = layoutBuilder.build(core->m_device,VK_SHADER_STAGE_VERTEX_BIT);
+        core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, jointsLayout);
+    }
+
+    VkDescriptorSetLayout layouts[] = {core->m_gpuSceneDataDescriptorLayout, materialLayout, jointsLayout};
 
     // Create pipeline layout with provided descriptors and push constants
     VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
-    meshLayoutInfo.setLayoutCount = 2;
+    meshLayoutInfo.setLayoutCount = 3;
     meshLayoutInfo.pSetLayouts = layouts;
     meshLayoutInfo.pPushConstantRanges = &matrixRange;
     meshLayoutInfo.pushConstantRangeCount = 1;

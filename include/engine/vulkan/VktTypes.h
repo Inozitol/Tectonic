@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <memory>
+#include <glm/detail/type_quat.hpp>
 #include "extern/imgui/imgui_impl_glfw.h"
 #include "VktDeletableQueue.h"
 #include "VktDescriptors.h"
@@ -54,7 +55,10 @@ namespace VktTypes{
         float uvX = 0.0f;
         glm::vec3 normal = {1.0f, 0.0f, 0.0f};
         float uvY = 0.0f;
-        glm::vec4 color = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+        glm::vec4 jointIndices = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
     /**
@@ -82,9 +86,20 @@ namespace VktTypes{
         VkDeviceAddress vertexBufferAddress = 0;
     };
 
+    struct GPUJointsBuffers{
+        AllocatedBuffer jointsBuffer{};
+        VkDeviceAddress jointsBufferAddress = 0;
+    };
+
+    /**
+     * @brief Push constants pushed to GPU every frame.
+     *
+     * This contains the world matrix and GPU pointers to vertices and joints matrices (if available).
+     */
     struct GPUDrawPushConstants{
         glm::mat4 worldMatrix = glm::mat4(1.0f);
         VkDeviceAddress vertexBuffer = 0;
+        VkDeviceAddress jointsBuffer = 0;
     };
 
     /**
@@ -100,9 +115,9 @@ namespace VktTypes{
     };
 
     /**
-     * @brief Vulkan pipeline for material rendering.
+     * @brief Vulkan pipeline for model rendering.
      */
-    struct MaterialPipeline {
+    struct ModelPipeline {
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkPipelineLayout layout = VK_NULL_HANDLE;
     };
@@ -114,8 +129,7 @@ namespace VktTypes{
     };
 
     struct MaterialInstance{
-        MaterialInstance() = default;
-        MaterialPipeline* pipeline = nullptr;
+        ModelPipeline* pipeline = nullptr;
         VkDescriptorSet materialSet = VK_NULL_HANDLE;
         MaterialPass passType = MaterialPass::OTHER;
     };
@@ -129,6 +143,7 @@ namespace VktTypes{
 
         glm::mat4 transform = glm::identity<glm::mat4>();
         VkDeviceAddress vertexBufferAddress = 0;
+        VkDeviceAddress jointsBufferAddress = 0;
     };
 
     struct DrawContext{
@@ -153,21 +168,24 @@ namespace VktTypes{
         VktTypes::GPUMeshBuffers meshBuffers;
     };
 
-    struct Node {
+    struct Skin;
+
+    struct Node{
         const Node* parent = nullptr;
         std::vector<Node*> children;
         const MeshAsset* mesh = nullptr;
         std::string name;
 
-        glm::mat4 localTransform;
-        glm::mat4 worldTransform;
+        glm::mat4 localTransform = glm::identity<glm::mat4>();
+        //glm::mat4 worldTransform;
 
-        /**
-         * @brief Updates all nodes of the asset with a transformation matrix.
-         * @param root Root of the tree to update.
-         * @param parentMatrix Transformation matrix.
-         */
-        static void refreshTransform(Node& root, const glm::mat4& parentMatrix);
+        glm::vec3 translation;
+        glm::vec3 scale{1.0f};
+        glm::quat rotation{};
+        Skin* skin = nullptr;
+
+        glm::mat4 localMatrix() const;
+        glm::mat4 nodeMatrix() const;
 
         /**
          * @brief Fills the DrawContext with rendering data.
@@ -175,8 +193,52 @@ namespace VktTypes{
          * @param topMatrix Transformation matrix.
          * @param ctx DrawContext to fill with rendering data.
          */
-        static void gatherContext(const Node& root, const glm::mat4& topMatrix, DrawContext& ctx);
+        static void gatherContext(const Node& root, const glm::mat4& topMatrix, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers, DrawContext& ctx);
+
+        static void updateJoints(const Node& root, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers);
     };
+
+    struct Skin{
+        std::size_t index;
+        std::string name;
+        Node* skeletonRoot = nullptr;
+        std::vector<glm::mat4> inverseBindMatrices;
+        std::vector<Node*> joints;
+    };
+
+    struct AnimationSampler{
+        enum class Interpolation{
+            LINEAR,
+            STEP,
+            CUBICSPLINE
+        };
+
+        Interpolation interpolation;
+        std::vector<float> inputs;
+        std::vector<glm::vec4> outputsVec4;
+    };
+
+    struct AnimationChannel{
+        enum class Path{
+            TRANSLATION,
+            ROTATION,
+            SCALE,
+            WEIGHTS
+        };
+        Path path;
+        Node* node;
+        uint32_t samplerIndex;
+    };
+
+    struct Animation{
+        std::string name;
+        std::vector<AnimationSampler> samplers;
+        std::vector<AnimationChannel> channels;
+        float start = std::numeric_limits<float>::max();
+        float end = std::numeric_limits<float>::min();
+        float currTime = 0.0f;
+    };
+
 }
 
 #endif //TECTONIC_VKTTYPES_H

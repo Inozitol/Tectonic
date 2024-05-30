@@ -22,6 +22,7 @@
 #include "exceptions.h"
 #include "engine/Window.h"
 #include "Logger.h"
+#include "Transformation.h"
 #include "VktStructs.h"
 #include "VktTypes.h"
 #include "VktUtils.h"
@@ -52,6 +53,9 @@ public:
 
     /** @brief Uploads a mesh into the created Vulkan device memory. */
     static VktTypes::GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex> vertices);
+
+    /** @brief Uploads joint matrices */
+    static VktTypes::GPUJointsBuffers uploadJoints(const std::span<glm::mat4>& jointMatrices);
 
     /**
      * @brief Checks if the Window inside should close.
@@ -85,10 +89,11 @@ public:
     static void destroyImage(const VktTypes::AllocatedImage& img);
 
     struct GLTFMetallicRoughness{
-        VktTypes::MaterialPipeline opaquePipeline{};
-        VktTypes::MaterialPipeline transparentPipeline{};
+        VktTypes::ModelPipeline opaquePipeline{};
+        VktTypes::ModelPipeline transparentPipeline{};
 
         VkDescriptorSetLayout materialLayout{};
+        VkDescriptorSetLayout jointsLayout{};
 
         struct MaterialConstants {
             glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -116,16 +121,51 @@ public:
                                                  DescriptorAllocatorDynamic& descriptorAllocator);
     };
 
-    struct ObjectHandle{
 
+    using modelID_t = uint32_t;
+    using objectID_t = uint32_t;
+
+    struct EngineObject;
+
+    /**
+     * @brief Represents a handle to manipulate with created 3D models.
+     */
+    struct EngineModel{
+        modelID_t modelID = 0;
+        static modelID_t lastID;
+
+        VktModelResources* resources = nullptr;
+        std::unordered_map<objectID_t, EngineObject*> objects;
+
+        std::string name;
     };
 
+    VktCore::EngineModel* createModel(VktModelResources* model, const std::string& name = "");
+
+    /**
+     * @brief Represents a objects created from 3D model.
+     */
+    struct EngineObject{
+        objectID_t objectID = 0;
+        static objectID_t lastID;
+
+        EngineModel* modelHandle = nullptr;
+        Transformation transformation;
+        VktTypes::Animation* activeAnimation = nullptr;
+        std::vector<VktTypes::GPUJointsBuffers> skins;
+    };
+
+    VktCore::EngineObject* createObject(EngineModel* modelHandle);
+
+    /**
+     * @brief Stores performance measurements
+     */
     struct PerfStats{
-        float frametime;
-        uint32_t trigDrawCount;
-        uint32_t drawCallCount;
-        float sceneUpdateTime;
-        float meshDrawTime;
+        float frametime = 0.0f;
+        uint32_t trigDrawCount = 0;
+        uint32_t drawCallCount = 0;
+        float sceneUpdateTime = 0.0;
+        float meshDrawTime = 0.0;
     };
 
     // TODO REMOVE LATER
@@ -137,7 +177,8 @@ public:
     VkSampler m_defaultSamplerNearest{};
     GLTFMetallicRoughness m_metalRoughMaterial;
 
-    std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
+    std::unordered_map<modelID_t, EngineModel> loadedModels;
+    std::unordered_map<objectID_t, EngineObject> loadedObjects;
 
 private:
     VktCore() = default;
@@ -158,6 +199,8 @@ private:
     void destroySwapchain();
 
     VktTypes::FrameData& getCurrentFrame();
+
+    void runImGui();
 
     void draw();
 

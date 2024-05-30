@@ -499,6 +499,18 @@ EngineCore::EngineCore() {
         m_vktCore.setWindow(m_window.get());
         m_vktCore.init();
 
+        VktModelResources* shrek = loadGltfModel("meshes/shrek.glb");
+
+        if(!shrek) throw engineException("Oops, no Shrek");
+
+        VktCore::EngineModel* model = m_vktCore.createModel(shrek, "shrek");
+        m_models.insert({"shrek", model});
+        VktCore::EngineObject* shrekObject1 = m_vktCore.createObject(model);
+        m_objects.insert({shrekObject1->objectID, shrekObject1});
+
+        VktCore::EngineObject* shrekObject2 = m_vktCore.createObject(model);
+        m_objects.insert({shrekObject2->objectID, shrekObject2});
+
         m_window->connectKeyboard(m_keyboard);
         m_window->connectCursor(m_cursor);
 
@@ -588,6 +600,8 @@ void EngineCore::initCursor() {
     //m_window->disableCursor();
     CONNECT(m_cursor.sig_updatePos, m_gameCamera->slt_mouseMovement);
     CONNECT(m_window->sig_cursorEnabled, m_gameCamera->slt_cursorEnabled);
+    m_window->disableCursor();
+    m_window->enableCursor();
 }
 
 /*
