@@ -12,6 +12,8 @@
 #include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <set>
+#include <queue>
 
 #include "Logger.h"
 
@@ -347,8 +349,8 @@ void loadMeshes(fastgltf::Asset& gltf, VktModelResources& file, const std::files
             {
                 auto joints = p.findAttribute("JOINTS_0");
                 if(joints != p.attributes.end()){
-                    fastgltf::iterateAccessorWithIndex<glm::u16vec4>(gltf, gltf.accessors[joints->second],
-                                                                  [&](const glm::u16vec4& v, size_t index){
+                    fastgltf::iterateAccessorWithIndex<glm::uvec4>(gltf, gltf.accessors[joints->second],
+                                                                  [&](const glm::uvec4& v, size_t index){
                                                                       vertices[initialVtx + index].jointIndices = v;
                                                                   });
 
@@ -400,55 +402,63 @@ void loadNodes(fastgltf::Asset& gltf, VktModelResources& file, const std::filesy
                     newNode->translation = glm::make_vec3(transform.translation.data());
                     newNode->rotation = glm::mat4(glm::make_quat(transform.rotation.data()));
                     newNode->scale = glm::make_vec3(transform.scale.data());
+
+                    glm::mat4 tm = glm::translate(glm::identity<glm::mat4>(), newNode->translation);
+                    glm::mat4 rm = glm::toMat4(newNode->rotation);
+                    glm::mat4 sm = glm::scale(glm::identity<glm::mat4>(), newNode->scale);
+
+                    //newNode->localTransform = tm * rm * sm;
                 }},node.transform);
 
         vktLoaderLogger(Logger::DEBUG) << path << " Loaded node with name " << node.name.c_str() << " at ID " << file.nodes.size()-1 << '\n';
     }
 }
 
-void loadSkins(fastgltf::Asset& gltf, VktModelResources& file, const std::filesystem::path& path){
-    std::size_t index = 0;
-    for(const fastgltf::Skin& skin : gltf.skins){
-        file.skins.push_back(std::make_unique<VktTypes::Skin>());
-        file.namedSkins[skin.name.c_str()] = file.skins.back().get();
-        VktTypes::Skin* newSkin = file.skins.back().get();
-        newSkin->name = skin.name;
+void loadSkin(fastgltf::Asset& gltf, VktModelResources& file, const std::filesystem::path& path){
 
-        newSkin->skeletonRoot = file.nodes[skin.skeleton.value()].get();
-        newSkin->index = index++;
+    if(gltf.skins.empty()) return;
+    if(gltf.skins.size() > 1){
+        vktLoaderLogger(Logger::WARNING) << path << " Model has more than 1 skin, loading the first one\n";
+    }
+    fastgltf::Skin& skin = gltf.skins[0];
+    file.skin = std::make_unique<VktTypes::Skin>();
+    VktTypes::Skin* newSkin = file.skin.get();
+    newSkin->name = skin.name;
 
-        for(auto jointIndex : skin.joints){
-            VktTypes::Node* node = file.nodes[jointIndex].get();
-            if(node) {
-                newSkin->joints.push_back(node);
-            }
-        }
+    newSkin->skeletonRoot = file.nodes[skin.skeleton.value()].get();
 
-        if(skin.inverseBindMatrices.has_value()){
-            const fastgltf::Accessor&   accessor    = gltf.accessors[skin.inverseBindMatrices.value()];
-            const fastgltf::BufferView& bufferView  = gltf.bufferViews[accessor.bufferViewIndex.value()];
-            const fastgltf::Buffer&     buffer      = gltf.buffers[bufferView.bufferIndex];
-            newSkin->inverseBindMatrices.resize(accessor.count);
-            std::visit(fastgltf::visitor{
-                    [&accessor, &bufferView, &newSkin](const fastgltf::sources::Vector& vector){
-                        memcpy(newSkin->inverseBindMatrices.data(), vector.bytes.data() + accessor.byteOffset + bufferView.byteOffset, accessor.count * sizeof(glm::mat4));
-                    },
-                    [&path](auto){vktLoaderLogger(Logger::WARNING) << path << " Unhandled variant type while loading model inverse bind matrices\n";}
-            }, buffer.data);
-            //newSkin->jointsBuffer = VktCore::uploadJoints(newSkin->inverseBindMatrices);
+    for(auto jointIndex : skin.joints){
+        VktTypes::Node* node = file.nodes[jointIndex].get();
+        if(node) {
+            newSkin->joints.push_back(node);
         }
     }
-    file.isSkinned = !file.skins.empty();
+
+    if(skin.inverseBindMatrices.has_value()){
+        const fastgltf::Accessor&   accessor    = gltf.accessors[skin.inverseBindMatrices.value()];
+        const fastgltf::BufferView& bufferView  = gltf.bufferViews[accessor.bufferViewIndex.value()];
+        const fastgltf::Buffer&     buffer      = gltf.buffers[bufferView.bufferIndex];
+        newSkin->inverseBindMatrices.resize(accessor.count);
+        std::visit(fastgltf::visitor{
+            [&accessor, &bufferView, &newSkin](const fastgltf::sources::Vector& vector){
+                memcpy(newSkin->inverseBindMatrices.data(), vector.bytes.data() + accessor.byteOffset + bufferView.byteOffset, accessor.count * sizeof(glm::mat4));
+                },
+                [&path](auto){vktLoaderLogger(Logger::WARNING) << path << " Unhandled variant type while loading model inverse bind matrices\n";}},
+                buffer.data);
+    }
 }
 
 /**
- * Connects skin pointers to relevant nodes
+ * Connects skin pointer to relevant nodes
  */
-void updateSkins(fastgltf::Asset& gltf, VktModelResources& file, const std::filesystem::path& path) {
+void updateSkin(fastgltf::Asset& gltf, VktModelResources& file, const std::filesystem::path& path) {
     for(std::size_t i = 0; i < gltf.nodes.size(); i++) {
         fastgltf::Node& node = gltf.nodes[i];
         if(node.skinIndex.has_value()){
-            file.nodes[i]->skin = file.skins[node.skinIndex.value()].get();
+            assert(node.skinIndex == 0);            // Make sure there aren't pointers to different skins
+            file.nodes[i]->skin = file.skin.get();  // Store pointer to only the single skin
+            file.skin->connectedNodes.push_back(file.nodes[i].get());   // Store nodes in hierarchy order
+            vktLoaderLogger(Logger::DEBUG) << path << " Connected model skin with node " << i << '\n';
         }
     }
 }
@@ -538,26 +548,73 @@ void loadAnimations(fastgltf::Asset& gltf, VktModelResources& file, const std::f
         }
 
         newAnim->channels.reserve(animation.channels.size());
+        std::vector<std::pair<VktTypes::Node*,VktTypes::AnimationChannel*>> tmpAnimatedNodes;
         for(const auto& channel : animation.channels) {
             newAnim->channels.emplace_back();
             VktTypes::AnimationChannel &newChannel = newAnim->channels.back();
             switch(channel.path){
                 case fastgltf::AnimationPath::Translation:
-                    newChannel.path = VktTypes::AnimationChannel::Path::TRANSLATION;
+                    newChannel.translationSampler = &newAnim->samplers[channel.samplerIndex];
                     break;
                 case fastgltf::AnimationPath::Rotation:
-                    newChannel.path = VktTypes::AnimationChannel::Path::ROTATION;
+                    newChannel.rotationSampler = &newAnim->samplers[channel.samplerIndex];
                     break;
                 case fastgltf::AnimationPath::Scale:
-                    newChannel.path = VktTypes::AnimationChannel::Path::SCALE;
+                    newChannel.scaleSampler = &newAnim->samplers[channel.samplerIndex];
                     break;
                 case fastgltf::AnimationPath::Weights:
-                    newChannel.path = VktTypes::AnimationChannel::Path::WEIGHTS;
+                    vktLoaderLogger(Logger::DEBUG) << path << " Ignored WEIGHTS channel\n";
                     break;
             }
-            newChannel.samplerIndex = channel.samplerIndex;
             newChannel.node = file.nodes[channel.nodeIndex].get();
+            tmpAnimatedNodes.emplace_back(file.nodes[channel.nodeIndex].get(),&newChannel);
         }
+
+        // Remove duplicate nodes
+        std::set<std::pair<VktTypes::Node*,VktTypes::AnimationChannel*>> nodeSet(tmpAnimatedNodes.begin(), tmpAnimatedNodes.end());
+        tmpAnimatedNodes.assign(nodeSet.begin(), nodeSet.end());
+
+        // Sort by BFS reordering so that top nodes are before their children
+        std::sort(tmpAnimatedNodes.begin(), tmpAnimatedNodes.end(),[](auto& l, auto& r){
+            const auto& [lNode,lChannel] = l;
+            const auto& [rNode,rChannel] = r;
+            const VktTypes::Node* root = lNode;
+            while(root->parent){
+                root = root->parent;
+            }
+            std::queue<const VktTypes::Node*> q;
+            q.push(root);
+            while(!q.empty()){
+                const VktTypes::Node* frontNode = q.front();
+                if(frontNode == lNode) return true;
+                if(frontNode == rNode) return false;
+                q.pop();
+                for(const auto& child : frontNode->children){
+                    q.push(child);
+                }
+            }
+            return false;
+        });
+
+        auto lastPair = *tmpAnimatedNodes.begin();
+        tmpAnimatedNodes.erase(tmpAnimatedNodes.cbegin());
+        for(const auto& [node,channel] : tmpAnimatedNodes){
+            if(node != lastPair.first){
+                newAnim->animatedNodes.push_back(lastPair);
+                lastPair = {node, channel};
+            }else{
+                if(channel->scaleSampler){
+                    lastPair.second->scaleSampler = channel->scaleSampler;
+                }
+                if(channel->rotationSampler){
+                    lastPair.second->rotationSampler = channel->rotationSampler;
+                }
+                if(channel->translationSampler){
+                    lastPair.second->translationSampler = channel->translationSampler;
+                }
+            }
+        }
+        newAnim->animatedNodes.push_back(lastPair);
 
         vktLoaderLogger(Logger::DEBUG) << path << " Loaded animation [" << newAnim->name << "]\n";
     }
@@ -642,19 +699,22 @@ VktModelResources* loadGltfModel(const std::filesystem::path& filePath){
     loadMaterials(gltf,file,filePath);
     loadMeshes(gltf,file,filePath);
     loadNodes(gltf,file,filePath);
-    loadSkins(gltf,file,filePath);
-    updateSkins(gltf,file,filePath);
-    loadAnimations(gltf,file,filePath);
-
     connectNodes(gltf,file,filePath);
     createTrees(file,filePath);
+
+    for(auto& node : file.topNodes){
+        VktTypes::Node::refreshTransform(*node, glm::identity<glm::mat4>());
+    }
+    loadSkin(gltf, file, filePath);
+    updateSkin(gltf, file, filePath);
+    loadAnimations(gltf,file,filePath);
 
     return scene;
 }
 
-void VktModelResources::gatherContext(const glm::mat4 &topMatrix, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers, VktTypes::DrawContext &ctx) {
+void VktModelResources::gatherContext(const glm::mat4 &topMatrix, const VktTypes::GPUJointsBuffers& jointsBuffer, VktTypes::DrawContext &ctx) {
     for(auto& n : topNodes){
-        VktTypes::Node::gatherContext(*n, topMatrix, jointsBuffers, ctx);
+        VktTypes::Node::gatherContext(*n, topMatrix, jointsBuffer, ctx);
     }
 }
 
@@ -682,15 +742,19 @@ void VktModelResources::clean() {
     }
 }
 
-void VktModelResources::updateAnimation(VktTypes::Animation* animation, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers, float delta) {
+/*
+void VktModelResources::updateAnimation(VktTypes::Animation* animation, float delta) {
     animation->currTime += delta;
     if(animation->currTime > animation->end){
         animation->currTime -= animation->end;
     }
 
     for(auto& channel : animation->channels){
-        VktTypes::AnimationSampler& sampler = animation->samplers[channel.samplerIndex];
-        for(std::size_t i = 0; i < sampler.inputs.size() - 1; i++){
+        // Start looking for sampler from last used sampler
+        for(std::size_t i = channel.lastSampler;
+            i != (channel.lastSampler == 0 ? sampler.inputs.size() - 1 : channel.lastSampler - 1);
+            i =  (sampler.inputs.size() == 1) ? i+1 : (i+1) % (sampler.inputs.size() - 1)){
+
             if(sampler.interpolation != VktTypes::AnimationSampler::Interpolation::LINEAR){
                 vktLoaderLogger(Logger::WARNING) << "Non-linear interpolation is not supported\n";
                 continue;
@@ -729,10 +793,10 @@ void VktModelResources::updateAnimation(VktTypes::Animation* animation, const st
                     default:
                         break;
                 }
+                channel.lastSampler = i;
+                break;
             }
         }
     }
-    for(auto& node : topNodes){
-        VktTypes::Node::updateJoints(*node, jointsBuffers);
-    }
 }
+*/

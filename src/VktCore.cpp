@@ -30,9 +30,7 @@ void VktCore::clean() {
         vkDeviceWaitIdle(m_device);
 
         for(auto& [k,object] : loadedObjects){
-            for(auto& buffer : object.skins){
-                destroyBuffer(buffer.jointsBuffer);
-            }
+            destroyBuffer(object.jointsBuffer.jointsBuffer);
         }
 
         for(auto& [k,model] : loadedModels){
@@ -252,7 +250,7 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
             .set_desired_format(VkSurfaceFormatKHR{
                 .format = m_swapchainImageFormat,
                 .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-            .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+            .set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
             .set_desired_extent(width, height)
             .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
             .build()
@@ -1114,12 +1112,14 @@ void VktCore::updateScene() {
     for(auto& [k,object] : loadedObjects){
         if(object.activeAnimation){
             VktTypes::Animation* animation = object.activeAnimation;
-            object.modelHandle->resources->updateAnimation(animation, object.skins, static_cast<float>(delta));
+            //VktModelResources::updateAnimation(animation, static_cast<float>(delta));
+            animation->updateTime(static_cast<float>(delta));
+            object.modelHandle->resources->skin->updateJoints(animation,object.jointsBuffer);
         }
     }
 
     for(const auto& [oID, object] : loadedObjects){
-        object.modelHandle->resources->gatherContext(object.transformation.getMatrix(), object.skins, m_mainDrawContext);
+        object.modelHandle->resources->gatherContext(object.transformation.getMatrix(), object.jointsBuffer, m_mainDrawContext);
     }
 }
 
@@ -1179,13 +1179,11 @@ VktCore::EngineObject* VktCore::createObject(EngineModel* model) {
             // Skins are auto-constructed
     };
 
-    // Copy skins for per-object animation
-    loadedObjects[freeID].skins.reserve(model->resources->skins.size());
-    for(const auto& skin : model->resources->skins){
-        // Create and store new buffer with joints matrices
-        // TODO Destroy buffer
-        loadedObjects[freeID].skins.emplace_back(uploadJoints(skin->inverseBindMatrices));
-    }
+    // Create buffer for joints matrices
+    loadedObjects[freeID].jointsBuffer = uploadJoints(model->resources->skin->inverseBindMatrices);
+
+    // Upload default position
+    //model->resources->skin->updateJoints(loadedObjects[freeID].jointsBuffer);
 
     model->objects[freeID] = &loadedObjects[freeID];
 

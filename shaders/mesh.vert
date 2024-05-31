@@ -15,7 +15,7 @@ struct Vertex{
     vec3 normal;
     float uvY;
     vec4 color;
-    vec4 jointIndices;
+    uvec4 jointIndices;
     vec4 jointWeights;
 };
 

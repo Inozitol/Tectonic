@@ -152,7 +152,7 @@ public:
         EngineModel* modelHandle = nullptr;
         Transformation transformation;
         VktTypes::Animation* activeAnimation = nullptr;
-        std::vector<VktTypes::GPUJointsBuffers> skins;
+        VktTypes::GPUJointsBuffers jointsBuffer;
     };
 
     VktCore::EngineObject* createObject(EngineModel* modelHandle);

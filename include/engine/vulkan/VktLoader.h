@@ -20,9 +20,7 @@ struct VktModelResources {
     std::vector<std::unique_ptr<VktTypes::GLTFMaterial>> materials;
     std::unordered_map<std::string, VktTypes::GLTFMaterial*> namedMaterials;
 
-    std::vector<std::unique_ptr<VktTypes::Skin>> skins;
-    std::unordered_map<std::string, VktTypes::Skin*> namedSkins;
-    bool isSkinned = false;
+    std::unique_ptr<VktTypes::Skin> skin;
 
     std::vector<std::unique_ptr<VktTypes::Animation>> animations;
     std::unordered_map<std::string, VktTypes::Animation*> namedAnimations;
@@ -33,8 +31,7 @@ struct VktModelResources {
     VktTypes::AllocatedBuffer materialDataBuffer;
 
     ~VktModelResources(){ clean(); }
-    void gatherContext(const glm::mat4& topMatrix, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers, VktTypes::DrawContext& ctx);
-    void updateAnimation(VktTypes::Animation* animation, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers, float delta);
+    void gatherContext(const glm::mat4& topMatrix, const VktTypes::GPUJointsBuffers& jointsBuffers, VktTypes::DrawContext& ctx);
 private:
     void clean();
 };

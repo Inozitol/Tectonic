@@ -57,7 +57,7 @@ namespace VktTypes{
         float uvY = 0.0f;
         glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
 
-        glm::vec4 jointIndices = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::uvec4 jointIndices = {0, 0, 0, 0};
         glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
@@ -177,33 +177,32 @@ namespace VktTypes{
         std::string name;
 
         glm::mat4 localTransform = glm::identity<glm::mat4>();
-        //glm::mat4 worldTransform;
+        glm::mat4 worldTransform = glm::identity<glm::mat4>();
 
-        glm::vec3 translation;
+        glm::mat4 animationTransform = glm::identity<glm::mat4>();
+        glm::vec3 translation{0.0f,0.0f,0.0f};
         glm::vec3 scale{1.0f};
-        glm::quat rotation{};
+        glm::quat rotation{1.0f,0.0f,0.0f,0.0f};
         Skin* skin = nullptr;
 
         glm::mat4 localMatrix() const;
         glm::mat4 nodeMatrix() const;
 
         /**
+         * @brief Updates all nodes of the asset with a transformation matrix.
+         * @param root Root of the tree to update.
+         * @param parentMatrix Transformation matrix.
+         */
+        static void refreshTransform(Node& root, const glm::mat4& parentMatrix);
+
+        /**
          * @brief Fills the DrawContext with rendering data.
          * @param root Root of the tree.
          * @param topMatrix Transformation matrix.
+         * @param jointsBuffer GPU buffer with joints matrices data.
          * @param ctx DrawContext to fill with rendering data.
          */
-        static void gatherContext(const Node& root, const glm::mat4& topMatrix, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers, DrawContext& ctx);
-
-        static void updateJoints(const Node& root, const std::vector<VktTypes::GPUJointsBuffers>& jointsBuffers);
-    };
-
-    struct Skin{
-        std::size_t index;
-        std::string name;
-        Node* skeletonRoot = nullptr;
-        std::vector<glm::mat4> inverseBindMatrices;
-        std::vector<Node*> joints;
+        static void gatherContext(const Node& root, const glm::mat4& topMatrix, const VktTypes::GPUJointsBuffers& jointsBuffer, DrawContext& ctx);
     };
 
     struct AnimationSampler{
@@ -219,24 +218,35 @@ namespace VktTypes{
     };
 
     struct AnimationChannel{
-        enum class Path{
-            TRANSLATION,
-            ROTATION,
-            SCALE,
-            WEIGHTS
-        };
-        Path path;
-        Node* node;
-        uint32_t samplerIndex;
+        Node* node = nullptr;
+
+        AnimationSampler* scaleSampler = nullptr;
+        AnimationSampler* rotationSampler = nullptr;
+        AnimationSampler* translationSampler = nullptr;
+
+        uint32_t lastSampler = 0;
     };
 
     struct Animation{
         std::string name;
         std::vector<AnimationSampler> samplers;
         std::vector<AnimationChannel> channels;
+        std::vector<std::pair<Node*,AnimationChannel*>> animatedNodes;
         float start = std::numeric_limits<float>::max();
         float end = std::numeric_limits<float>::min();
         float currTime = 0.0f;
+
+        void updateTime(float delta);
+    };
+
+    struct Skin{
+        std::string name;
+        Node* skeletonRoot = nullptr;
+        std::vector<Node*> connectedNodes;
+        std::vector<glm::mat4> inverseBindMatrices;
+        std::vector<Node*> joints;
+
+        void updateJoints(VktTypes::Animation* animation, const VktTypes::GPUJointsBuffers& jointsBuffer) const;
     };
 
 }
