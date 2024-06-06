@@ -13,14 +13,13 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include/extern)
 add_executable(Tectonic
         src/main.cpp
         src/VktCore.cpp
-        src/Logger.cpp
         src/VktStructs.cpp
         src/VktUtils.cpp
         src/VktDescriptors.cpp
         src/VktPipelines.cpp
         src/VktDeletableQueue.cpp
-        src/VktLoader.cpp
         src/VktTypes.cpp
+        src/Logger.cpp
         src/Window.cpp
         src/utils.cpp
         src/GameCamera.cpp
@@ -28,16 +27,16 @@ add_executable(Tectonic
         src/EngineCore.cpp
         src/Keyboard.cpp
         src/Cursor.cpp
-        src/Transformation.cpp)
+        src/Transformation.cpp
+        src/Model.cpp
+        include/utils/Serial.h)
 
 target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic assimp)
 target_link_libraries(Tectonic Vulkan::Vulkan)
 target_link_libraries(Tectonic vkbootstrap)
 target_link_libraries(Tectonic vma)
-target_link_libraries(Tectonic stb)
 target_link_libraries(Tectonic imgui)
-target_link_libraries(Tectonic fastgltf)
 
 include_directories(include)
 
@@ -64,3 +63,11 @@ endforeach(GLSL)
 add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
 
 add_dependencies(${PROJECT_NAME} Shaders)
+
+add_executable(gltf2tec
+        src/gltf2tec.cpp
+        src/Logger.cpp)
+
+target_link_libraries(gltf2tec stb)
+target_link_libraries(gltf2tec fastgltf)
+

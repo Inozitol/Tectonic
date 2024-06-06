@@ -80,6 +80,7 @@ namespace VktTypes{
         AllocatedBuffer sceneUniformBuffer{};
     };
 
+    /** @brief Buffers on GPU holding mesh data */
     struct GPUMeshBuffers{
         AllocatedBuffer indexBuffer{};
         AllocatedBuffer vertexBuffer{};
@@ -114,6 +115,19 @@ namespace VktTypes{
         glm::vec4 sunlightColor = {0.0f, 0.0f, 0.0f, 0.0f};
     };
 
+    /** @brief Holds index, size and material index to buffers inside GPU */
+    struct MeshSurface{
+        uint32_t startIndex;
+        uint32_t count;
+        uint32_t materialIndex;
+    };
+
+    /** @brief Mesh surfaces with GPU buffers reference */
+    struct MeshAsset{
+        std::vector<MeshSurface> surfaces;
+        VktTypes::GPUMeshBuffers meshBuffers;
+    };
+
     /**
      * @brief Vulkan pipeline for model rendering.
      */
@@ -127,6 +141,31 @@ namespace VktTypes{
         TRANSPARENT,
         OTHER
     };
+
+    struct GLTFMetallicRoughness{
+        VktTypes::ModelPipeline opaquePipeline{};
+        VktTypes::ModelPipeline transparentPipeline{};
+
+        VkDescriptorSetLayout materialLayout{};
+
+        struct MaterialConstants {
+            glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec4 metalRoughFactors = {0.0f, 0.0f, 0.0f, 0.0f};
+            std::array<glm::vec4,14> extra;
+        };
+
+        struct MaterialResources {
+            VktTypes::AllocatedImage colorImage;
+            VkSampler colorSampler = VK_NULL_HANDLE;
+            VktTypes::AllocatedImage metalRoughImage;
+            VkSampler metalRoughSampler = VK_NULL_HANDLE;
+            VkBuffer dataBuffer = VK_NULL_HANDLE;
+            uint32_t dataBufferOffset = 0;
+        };
+
+        DescriptorWriter writer;
+    };
+
 
     struct MaterialInstance{
         ModelPipeline* pipeline = nullptr;
@@ -149,104 +188,6 @@ namespace VktTypes{
     struct DrawContext{
         std::vector<RenderObject> opaqueSurfaces;
         std::vector<RenderObject> transparentSurfaces;
-    };
-
-    struct GLTFMaterial{
-        explicit GLTFMaterial(VktTypes::MaterialInstance data): data(data){}
-        GLTFMaterial() = default;
-        VktTypes::MaterialInstance data;
-    };
-
-    struct GeoSurface{
-        uint32_t startIndex;
-        uint32_t count;
-        const GLTFMaterial* material;
-    };
-
-    struct MeshAsset{
-        std::vector<GeoSurface> surfaces;
-        VktTypes::GPUMeshBuffers meshBuffers;
-    };
-
-    struct Skin;
-
-    struct Node{
-        const Node* parent = nullptr;
-        std::vector<Node*> children;
-        const MeshAsset* mesh = nullptr;
-        std::string name;
-
-        glm::mat4 localTransform = glm::identity<glm::mat4>();
-        glm::mat4 worldTransform = glm::identity<glm::mat4>();
-
-        glm::mat4 animationTransform = glm::identity<glm::mat4>();
-        glm::vec3 translation{0.0f,0.0f,0.0f};
-        glm::vec3 scale{1.0f};
-        glm::quat rotation{1.0f,0.0f,0.0f,0.0f};
-        Skin* skin = nullptr;
-
-        glm::mat4 localMatrix() const;
-        glm::mat4 nodeMatrix() const;
-
-        /**
-         * @brief Updates all nodes of the asset with a transformation matrix.
-         * @param root Root of the tree to update.
-         * @param parentMatrix Transformation matrix.
-         */
-        static void refreshTransform(Node& root, const glm::mat4& parentMatrix);
-
-        /**
-         * @brief Fills the DrawContext with rendering data.
-         * @param root Root of the tree.
-         * @param topMatrix Transformation matrix.
-         * @param jointsBuffer GPU buffer with joints matrices data.
-         * @param ctx DrawContext to fill with rendering data.
-         */
-        static void gatherContext(const Node& root, const glm::mat4& topMatrix, const VktTypes::GPUJointsBuffers& jointsBuffer, DrawContext& ctx);
-    };
-
-    struct AnimationSampler{
-        enum class Interpolation{
-            LINEAR,
-            STEP,
-            CUBICSPLINE
-        };
-
-        Interpolation interpolation;
-        std::vector<float> inputs;
-        std::vector<glm::vec4> outputsVec4;
-    };
-
-    struct AnimationChannel{
-        Node* node = nullptr;
-
-        AnimationSampler* scaleSampler = nullptr;
-        AnimationSampler* rotationSampler = nullptr;
-        AnimationSampler* translationSampler = nullptr;
-
-        uint32_t lastSampler = 0;
-    };
-
-    struct Animation{
-        std::string name;
-        std::vector<AnimationSampler> samplers;
-        std::vector<AnimationChannel> channels;
-        std::vector<std::pair<Node*,AnimationChannel*>> animatedNodes;
-        float start = std::numeric_limits<float>::max();
-        float end = std::numeric_limits<float>::min();
-        float currTime = 0.0f;
-
-        void updateTime(float delta);
-    };
-
-    struct Skin{
-        std::string name;
-        Node* skeletonRoot = nullptr;
-        std::vector<Node*> connectedNodes;
-        std::vector<glm::mat4> inverseBindMatrices;
-        std::vector<Node*> joints;
-
-        void updateJoints(VktTypes::Animation* animation, const VktTypes::GPUJointsBuffers& jointsBuffer) const;
     };
 
 }

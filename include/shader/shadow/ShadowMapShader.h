@@ -8,7 +8,7 @@
 #include "defs/ConfigDefs.h"
 #include "defs/ShaderDefines.h"
 #include "model/ModelTypes.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 class ShadowMapShader : public Shader {
 public:

@@ -1,5 +1,4 @@
-#ifndef TECTONIC_MODEL_H
-#define TECTONIC_MODEL_H
+#pragma once
 
 #include <string>
 #include <utility>
@@ -10,59 +9,58 @@
 #include <functional>
 
 #include "exceptions.h"
-#include "defs/TextureDefs.h"
-#include "defs/ShaderDefines.h"
+#include "utils/Serial.h"
 
+#include <filesystem>
 #include "Transformation.h"
-#include "Material.h"
-#include "utils.h"
-#include "engine/model/anim/Animation.h"
-#include "engine/model/anim/Bone.h"
 #include "ModelTypes.h"
-#include "meta/meta.h"
+#include "Logger.h"
 
 /**
  * Used to load a model from file into the scene.
- * Handles loading of vertices, indices, textures and rendering.
+ * Handles loading of vertices, indices and textures.
  */
 class Model {
-    friend class AssimpLoader;
-    friend class SkinnedModel;
-    friend class EngineCore;
 public:
     Model() = default;
+    void clear();
 
-    const Material* getMaterial(uint32_t materialIndex) const { return m_materials.size() > materialIndex ? &m_materials.at(materialIndex) : nullptr; }
-    const NodeData& getRootNode() const { return m_rootNode; }
-    uint32_t getNodeCount() const { return m_nodeCount; }
-    GLuint getVAO() const {return m_VAO;};
-    uint32_t getMaterialCount() { return m_materials.size(); }
-    NodeData* findNode(const std::string& nodeName);
+    explicit Model(const std::filesystem::path& path);
+    void gatherDrawContext(VktTypes::DrawContext& ctx);
+    void updateAnimationTime(float delta);
+    void updateJoints();
+    uint32_t currentAnimation() const;
+    void setAnimation(uint32_t aID);
+    std::string_view animationName(uint32_t aID);
+    uint32_t animationCount();
+    Transformation transformation;
+private:
+    std::vector<VktTypes::MeshAsset>        m_meshes;
+    std::vector<VktTypes::AllocatedImage>   m_images;
+    std::vector<VkSampler>                  m_samplers;
+    std::vector<ModelTypes::Node>           m_nodes;
+    std::vector<ModelTypes::GLTFMaterial>   m_materials;
+    ModelTypes::Skin                        m_skin;
+    std::vector<ModelTypes::Animation>      m_animations;
+    uint32_t                                m_rootNode = ModelTypes::NULL_ID;
 
-    virtual void bufferMeshes();
-    virtual void eraseBuffers();
-    virtual void clear();
+    uint32_t                                m_activeAnimation = 0;
 
-protected:
-    
-    enum BUFFER_TYPE{
-        INDEX_BUFFER = 0,
-        POS_VB       = 1,
-        NUM_BUFFERS  = 2
-    };
+    static void readMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readImage(VktTypes::AllocatedImage& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readSampler(VkSampler& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readNode(ModelTypes::Node& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readSkin(ModelTypes::Skin& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readAnimation(ModelTypes::Animation& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readAnimationSampler(ModelTypes::AnimationSampler& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    void readMaterial(ModelTypes::GLTFMaterial& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset, uint32_t mIndex);
 
-    GLuint m_VAO = -1;
-    GLuint m_buffers[NUM_BUFFERS] = {0};
+    VktTypes::AllocatedBuffer               m_materialBuffer;
+    DescriptorAllocatorDynamic              m_descriptorPool;
+    VktTypes::GPUJointsBuffers              m_jointsBuffer;
 
-    std::vector<MeshInfo>       m_meshes;
-    std::vector<Material>       m_materials;
-    std::vector<Vertex>         m_vertices;
-    std::vector<uint32_t>       m_indices;
+    static void loadModelData(const std::filesystem::path& path);
 
-    NodeData m_rootNode;
-    uint32_t m_nodeCount = 0;
-
+    static std::unordered_map<std::filesystem::path, SerialTypes::BinDataVec_t> m_loadedModels;
+    static Logger m_logger;
 };
-
-
-#endif //TECTONIC_MODEL_H

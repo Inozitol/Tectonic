@@ -1,6 +1,5 @@
 #include "engine/EngineCore.h"
 
-
 void EngineCore::run() {
     m_vktCore.setProjMatrix(m_gameCamera->getProjectionMatrix());
 
@@ -499,17 +498,17 @@ EngineCore::EngineCore() {
         m_vktCore.setWindow(m_window.get());
         m_vktCore.init();
 
-        VktModelResources* shrek = loadGltfModel("meshes/shrek.glb");
 
-        if(!shrek) throw engineException("Oops, no Shrek");
+        for(uint32_t i = 0; i < 5; i++){
+            VktCore::EngineObject* shrek = m_vktCore.createObject("meshes/shrek.tecm", "shrek");
 
-        VktCore::EngineModel* model = m_vktCore.createModel(shrek, "shrek");
-        m_models.insert({"shrek", model});
-        VktCore::EngineObject* shrekObject1 = m_vktCore.createObject(model);
-        m_objects.insert({shrekObject1->objectID, shrekObject1});
+            if(!shrek) throw engineException("Oops, no Shrek");
 
-        VktCore::EngineObject* shrekObject2 = m_vktCore.createObject(model);
-        m_objects.insert({shrekObject2->objectID, shrekObject2});
+            m_objects.insert({shrek->objectID, shrek});
+            //obj->activeAnimation = obj->resources->animations[i].get();
+            shrek->model.transformation.translate(i*1.5,0,0);
+            shrek->model.transformation.rotate(0.0f,180.0f,0.0f);
+        }
 
         m_window->connectKeyboard(m_keyboard);
         m_window->connectCursor(m_cursor);

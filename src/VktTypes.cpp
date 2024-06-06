@@ -1,25 +1,10 @@
 #include <queue>
 #include <glm/gtx/quaternion.hpp>
 #include "engine/vulkan/VktTypes.h"
+#include "engine/model/ModelTypes.h"
 
-void VktTypes::Node::refreshTransform(Node& root, const glm::mat4& parentMatrix){
-    std::queue<std::pair<Node*, const glm::mat4>> q;
-    q.emplace(&root, parentMatrix);
-
-    while(!q.empty()) {
-        auto [n,t] = q.front();
-        q.pop();
-
-        n->worldTransform = t * glm::translate(glm::mat4(1.0f), n->translation) * glm::toMat4(n->rotation) * glm::scale(glm::mat4(1.0f), n->scale) * n->localTransform;
-        n->animationTransform = n->worldTransform;
-
-        for(const auto& c : n->children){
-            q.emplace(c, n->worldTransform);
-        }
-    }
-}
-
-void VktTypes::Node::gatherContext(const Node& root, const glm::mat4& topMatrix, const VktTypes::GPUJointsBuffers& jointsBuffer, DrawContext& ctx){
+/*
+void Node::gatherContext(const Node& root, const glm::mat4& topMatrix, const VktTypes::GPUJointsBuffers& jointsBuffer, VktTypes::DrawContext& ctx){
     std::queue<const Node*> q;
     q.push(&root);
 
@@ -62,7 +47,8 @@ void VktTypes::Node::gatherContext(const Node& root, const glm::mat4& topMatrix,
         }
     }
 }
-
+*/
+/*
 void VktTypes::Skin::updateJoints(VktTypes::Animation* animation, const VktTypes::GPUJointsBuffers& jointsBuffer) const {
 
     glm::mat4 identity = glm::identity<glm::mat4>();
@@ -81,23 +67,25 @@ void VktTypes::Skin::updateJoints(VktTypes::Animation* animation, const VktTypes
 
         if(channel->scaleSampler){
             VktTypes::AnimationSampler* sampler = channel->scaleSampler;
-            for (std::size_t i = 0; i < sampler->inputs.size(); i++) {
-
+            std::size_t i = sampler->lastInput;
+            do{
                 if ((animation->currTime >= sampler->inputs[i]) && (animation->currTime <= sampler->inputs[i + 1])) {
                     float a = (animation->currTime - sampler->inputs[i]) / (sampler->inputs[i + 1] - sampler->inputs[i]);
                     glm::vec3 scale = glm::mix(sampler->outputsVec4[i], sampler->outputsVec4[i + 1], a);
                     sm = glm::scale(glm::identity<glm::mat4>(),scale);
                     node->scale = scale;
-                    channel->lastSampler = i;
+                    sampler->lastInput = i;
                     break;
                 }
-            }
+                i++;
+                if(i >= sampler->inputs.size()) i = 0;
+            }while(i != sampler->lastInput);
         }
 
         if(channel->rotationSampler){
             VktTypes::AnimationSampler* sampler = channel->rotationSampler;
-            for (std::size_t i = 0; i < sampler->inputs.size(); i++) {
-
+            std::size_t i = sampler->lastInput;
+            do{
                 if ((animation->currTime >= sampler->inputs[i]) && (animation->currTime <= sampler->inputs[i + 1])) {
                     float a = (animation->currTime - sampler->inputs[i]) / (sampler->inputs[i + 1] - sampler->inputs[i]);
                     glm::quat q1;
@@ -115,72 +103,30 @@ void VktTypes::Skin::updateJoints(VktTypes::Animation* animation, const VktTypes
                     glm::quat q = glm::normalize(glm::slerp(q1, q2, a));
                     rm = glm::toMat4(q);
                     node->rotation = q;
-                    channel->lastSampler = i;
+                    sampler->lastInput = i;
                     break;
                 }
-            }
+                i++;
+                if(i >= sampler->inputs.size()) i = 0;
+            }while(i != sampler->lastInput);
         }
 
         if(channel->translationSampler){
             VktTypes::AnimationSampler* sampler = channel->translationSampler;
-            for (std::size_t i = 0; i < sampler->inputs.size(); i++) {
-
+            std::size_t i = sampler->lastInput;
+            do{
                 if ((animation->currTime >= sampler->inputs[i]) && (animation->currTime <= sampler->inputs[i + 1])) {
                     float a = (animation->currTime - sampler->inputs[i]) / (sampler->inputs[i + 1] - sampler->inputs[i]);
                     glm::vec3 translation = glm::mix(sampler->outputsVec4[i], sampler->outputsVec4[i + 1], a);
                     tm = glm::translate(glm::identity<glm::mat4>(), translation);
                     node->translation = translation;
-                    channel->lastSampler = i;
+                    sampler->lastInput = i;
                     break;
                 }
-            }
+                i++;
+                if(i >= sampler->inputs.size()) i = 0;
+            }while(i != sampler->lastInput);
         }
-
-
-
-        // Start looking for sampler time from last used sampler
-        /*for(std::size_t i = channel.lastSampler;
-            i != (channel.lastSampler == 0 ? sampler.inputs.size() - 1 : channel.lastSampler - 1);
-            i =  (sampler.inputs.size() == 1) ? i+1 : (i+1) % (sampler.inputs.size() - 1)){
-            if ((animation->currTime >= sampler.inputs[i]) && (animation->currTime <= sampler.inputs[i + 1])) {
-                float a = (animation->currTime - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
-                switch (channel->path) {
-                    case VktTypes::AnimationChannel::Path::TRANSLATION: {
-                        //channel.node->translation = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i+1], a);
-                        glm::vec3 translation = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], a);
-                        node->animationTransform = glm::translate(node->animationTransform, translation);
-                        break;
-                    }
-                    case VktTypes::AnimationChannel::Path::ROTATION: {
-                        glm::quat q1;
-                        q1.x = sampler.outputsVec4[i].x;
-                        q1.y = sampler.outputsVec4[i].y;
-                        q1.z = sampler.outputsVec4[i].z;
-                        q1.w = sampler.outputsVec4[i].w;
-
-                        glm::quat q2;
-                        q2.x = sampler.outputsVec4[i + 1].x;
-                        q2.y = sampler.outputsVec4[i + 1].y;
-                        q2.z = sampler.outputsVec4[i + 1].z;
-                        q2.w = sampler.outputsVec4[i + 1].w;
-
-                        // channel.node->rotation = glm::normalize(glm::slerp(q1, q2, a));
-                        node->animationTransform *= glm::toMat4(glm::normalize(glm::slerp(q1, q2, a)));
-                        break;
-                    }
-                    case VktTypes::AnimationChannel::Path::SCALE: {
-                        // channel.node->scale = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i+1], a);
-                        glm::vec3 scale = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], a);
-                        node->animationTransform = glm::scale(node->animationTransform, scale);
-                        break;
-                    }
-                    default:
-                        break;
-                }
-                channel->lastSampler = i;
-                break;
-            }
-        }*/
 
         glm::mat4 animTransform = tm * rm * sm * node->localTransform;
         node->animationTransform = (*parentTransform) * animTransform;
@@ -188,15 +134,24 @@ void VktTypes::Skin::updateJoints(VktTypes::Animation* animation, const VktTypes
 
     std::size_t numJoints = joints.size();
     std::vector<glm::mat4> jointMatrices(numJoints);
-    for(std::size_t nodeID = 0; nodeID < connectedNodes.size(); nodeID++){
-        VktTypes::Node* node = connectedNodes[nodeID];
+    /*
+    for(std::size_t nodeID = 0; nodeID < skinNodes.size(); nodeID++){
+        VktTypes::Node* node = skinNodes[nodeID];
         glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
 
         for (std::size_t i = 0; i < numJoints; i++) {
             jointMatrices[i] = inverseTransform * joints[i]->animationTransform * inverseBindMatrices[i];
         }
         memcpy(jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+    }*/
+/*
+    VktTypes::Node* node = skinNodes[0];
+    glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
+
+    for (std::size_t i = 0; i < numJoints; i++) {
+        jointMatrices[i] = inverseTransform * joints[i]->animationTransform * inverseBindMatrices[i];
     }
+    memcpy(jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
 
 }
 
@@ -221,3 +176,4 @@ void VktTypes::Animation::updateTime(float delta) {
         currTime -= end;
     }
 }
+*/

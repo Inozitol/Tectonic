@@ -1,6 +1,6 @@
 
 #include <array>
-#include "utils.h"
+#include "utils/utils.h"
 
 namespace Utils{
     WindowDimension::WindowDimension(uint32_t width, uint32_t height) {

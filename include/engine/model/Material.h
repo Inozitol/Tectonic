@@ -5,7 +5,7 @@
 #include <glm/vec3.hpp>
 #include <memory>
 
-#include "utils.h"
+#include "utils/utils.h"
 #include "engine/model/texture/Texture.h"
 #include "defs/TextureDefs.h"
 

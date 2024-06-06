@@ -19,6 +19,8 @@
 #include "extern/imgui/imgui_impl_vulkan.h"
 #include "extern/imgui/imgui_impl_glfw.h"
 
+#include "engine/model/Model.h"
+#include "engine/model/ModelTypes.h"
 #include "exceptions.h"
 #include "engine/Window.h"
 #include "Logger.h"
@@ -29,7 +31,6 @@
 #include "VktDescriptors.h"
 #include "VktPipelines.h"
 #include "VktDeletableQueue.h"
-#include "VktLoader.h"
 
 class VktCore {
 public:
@@ -83,64 +84,18 @@ public:
     static constexpr uint8_t FRAMES_OVERLAP = 2;
 
     static VktTypes::AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-    static VktTypes::AllocatedImage  createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
-    static VktTypes::AllocatedImage  createImage(void* data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
+    static VktTypes::AllocatedImage createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
+    static VktTypes::AllocatedImage createImage(void* data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
     static void destroyBuffer(const VktTypes::AllocatedBuffer& buffer);
     static void destroyImage(const VktTypes::AllocatedImage& img);
 
-    struct GLTFMetallicRoughness{
-        VktTypes::ModelPipeline opaquePipeline{};
-        VktTypes::ModelPipeline transparentPipeline{};
-
-        VkDescriptorSetLayout materialLayout{};
-        VkDescriptorSetLayout jointsLayout{};
-
-        struct MaterialConstants {
-            glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
-            glm::vec4 metalRoughFactors = {0.0f, 0.0f, 0.0f, 0.0f};
-            glm::vec4 extra[14];
-        };
-
-        struct MaterialResources {
-            VktTypes::AllocatedImage colorImage;
-            VkSampler colorSampler = VK_NULL_HANDLE;
-            VktTypes::AllocatedImage metalRoughImage;
-            VkSampler metalRoughSampler = VK_NULL_HANDLE;
-            VkBuffer dataBuffer = VK_NULL_HANDLE;
-            uint32_t dataBufferOffset = 0;
-        };
-
-        DescriptorWriter writer;
-
-        void buildPipelines(VktCore* core);
-        void clearResources(VkDevice device);
-
-        VktTypes::MaterialInstance writeMaterial(VkDevice device,
-                                                 VktTypes::MaterialPass pass,
-                                                 const MaterialResources& resources,
-                                                 DescriptorAllocatorDynamic& descriptorAllocator);
-    };
+    VktTypes::MaterialInstance writeMaterial(VkDevice device,
+                                             VktTypes::MaterialPass pass,
+                                             const VktTypes::GLTFMetallicRoughness::MaterialResources& resources,
+                                             DescriptorAllocatorDynamic& descriptorAllocator);
 
 
-    using modelID_t = uint32_t;
     using objectID_t = uint32_t;
-
-    struct EngineObject;
-
-    /**
-     * @brief Represents a handle to manipulate with created 3D models.
-     */
-    struct EngineModel{
-        modelID_t modelID = 0;
-        static modelID_t lastID;
-
-        VktModelResources* resources = nullptr;
-        std::unordered_map<objectID_t, EngineObject*> objects;
-
-        std::string name;
-    };
-
-    VktCore::EngineModel* createModel(VktModelResources* model, const std::string& name = "");
 
     /**
      * @brief Represents a objects created from 3D model.
@@ -149,13 +104,11 @@ public:
         objectID_t objectID = 0;
         static objectID_t lastID;
 
-        EngineModel* modelHandle = nullptr;
-        Transformation transformation;
-        VktTypes::Animation* activeAnimation = nullptr;
-        VktTypes::GPUJointsBuffers jointsBuffer;
+        std::string name;
+        Model model;
     };
 
-    VktCore::EngineObject* createObject(EngineModel* modelHandle);
+    VktCore::EngineObject* createObject(const std::filesystem::path& filePath, const std::string& name);
 
     /**
      * @brief Stores performance measurements
@@ -175,9 +128,8 @@ public:
     VktTypes::AllocatedImage m_greyImage{};
     VkSampler m_defaultSamplerLinear{};
     VkSampler m_defaultSamplerNearest{};
-    GLTFMetallicRoughness m_metalRoughMaterial;
+    VktTypes::GLTFMetallicRoughness metalRoughMaterial;
 
-    std::unordered_map<modelID_t, EngineModel> loadedModels;
     std::unordered_map<objectID_t, EngineObject> loadedObjects;
 
 private:
@@ -190,8 +142,8 @@ private:
     void initSyncStructs();
     void initDescriptors();
     void initPipelines();
+    void initMaterialPipelines();
     void initBackgroundPipelines();
-    void initMeshPipeline();
     void initImGui();
     void initDefaultData();
 

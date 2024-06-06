@@ -4,7 +4,7 @@
 
 #include "shader/LightingShader.h"
 
-#include "utils.h"
+#include "utils/utils.h"
 
 DirectionalLight::DirectionalLight() {
     m_lightView.switchOrthographic();

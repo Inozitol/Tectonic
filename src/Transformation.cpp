@@ -76,14 +76,14 @@ glm::vec3 Transformation::invertDirection(const glm::vec3& dir) const {
     return glm::normalize(world3 * dir);
 }
 
-float Transformation::getScale() {
+float Transformation::getScale() const {
     return m_scale;
 }
 
-glm::vec3 Transformation::getRotation() {
+glm::vec3 Transformation::getRotation() const {
     return m_rotation;
 }
 
-glm::vec3 Transformation::getTranslation() {
+glm::vec3 Transformation::getTranslation() const {
     return m_translation;
 }

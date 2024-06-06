@@ -7,7 +7,7 @@
 #include "Shader.h"
 #include "defs/ShaderDefines.h"
 #include "defs/ConfigDefs.h"
-#include "utils.h"
+#include "utils/utils.h"
 #include "model/ModelTypes.h"
 
 class DebugShader : public Shader{

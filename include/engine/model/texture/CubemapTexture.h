@@ -4,7 +4,7 @@
 #include <string>
 #include <array>
 
-#include "utils.h"
+#include "utils/utils.h"
 #include "Logger.h"
 #include "extern/stb/stb_image.h"
 #include "exceptions.h"

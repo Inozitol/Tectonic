@@ -11,7 +11,7 @@
 #include "defs/ConfigDefs.h"
 
 #include "vulkan/VktCore.h"
-#include "vulkan/VktLoader.h"
+#include "engine/model/gltf2tec.h"
 
 class EngineCore {
 public:
@@ -108,7 +108,6 @@ private:
     ~EngineCore();
 
     VktCore& m_vktCore = VktCore::getInstance();
-    std::unordered_map<std::string, VktCore::EngineModel*> m_models;
     std::unordered_map<VktCore::objectID_t, VktCore::EngineObject*> m_objects;
 
     static void initGLFW();

@@ -69,9 +69,9 @@ public:
      */
     [[nodiscard]] glm::mat4 getInverseMatrix() const;
 
-    float getScale();
-    glm::vec3 getRotation();
-    glm::vec3 getTranslation();
+    float getScale() const;
+    glm::vec3 getRotation() const;
+    glm::vec3 getTranslation() const;
 
     [[nodiscard]] glm::vec3 invertPosition(const glm::vec3& pos) const;
     [[nodiscard]] glm::vec3 invertDirection(const glm::vec3& dir) const;

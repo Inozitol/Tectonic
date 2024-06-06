@@ -30,11 +30,7 @@ void VktCore::clean() {
         vkDeviceWaitIdle(m_device);
 
         for(auto& [k,object] : loadedObjects){
-            destroyBuffer(object.jointsBuffer.jointsBuffer);
-        }
-
-        for(auto& [k,model] : loadedModels){
-            delete(model.resources);
+            object.model.clear();
         }
 
         ImGui_ImplVulkan_Shutdown();
@@ -540,7 +536,8 @@ void VktCore::initDescriptors() {
 void VktCore::initPipelines() {
     initBackgroundPipelines();
     //initMeshPipeline();
-    m_metalRoughMaterial.buildPipelines(this);
+    initMaterialPipelines();
+    m_logger(Logger::INFO) << "Finished initializing graphics pipelines\n";
 }
 
 void VktCore::initBackgroundPipelines() {
@@ -559,28 +556,14 @@ void VktCore::initBackgroundPipelines() {
     VK_CHECK(vkCreatePipelineLayout(m_device, &computeLayout, nullptr, &m_gradientPipelineLayout));
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, m_gradientPipelineLayout);
 
-    VkShaderModule gradientShader = VktUtils::loadShaderModule("shaders/gradient_color.comp.spv", m_device);
     VkShaderModule skyShader = VktUtils::loadShaderModule("shaders/sky.comp.spv", m_device);
     VkShaderModule starNestShader = VktUtils::loadShaderModule("shaders/star_next.comp.spv", m_device);
-    VkShaderModule oceanShader = VktUtils::loadShaderModule("shaders/ocean.comp.spv", m_device);
 
-    VkPipelineShaderStageCreateInfo stageInfo = VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, gradientShader);
+    VkPipelineShaderStageCreateInfo stageInfo = VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, skyShader);
 
     VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
     computePipelineCreateInfo.layout = m_gradientPipelineLayout;
     computePipelineCreateInfo.stage = stageInfo;
-
-    VktTypes::ComputeEffect gradient{};
-    gradient.layout = m_gradientPipelineLayout;
-    gradient.name = "gradient";
-    gradient.data = {};
-
-    gradient.data.data1 = glm::vec4(1,0,0,1);
-    gradient.data.data2 = glm::vec4(0,0,1,1);
-
-    VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
-
-    computePipelineCreateInfo.stage.module = skyShader;
 
     VktTypes::ComputeEffect sky{};
     sky.layout = m_gradientPipelineLayout;
@@ -602,32 +585,15 @@ void VktCore::initBackgroundPipelines() {
 
     VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &star.pipeline));
 
-    computePipelineCreateInfo.stage.module = oceanShader;
-
-    VktTypes::ComputeEffect ocean{};
-    ocean.layout = m_gradientPipelineLayout;
-    ocean.name = "ocean";
-    ocean.data = {};
-
-    ocean.data.data1[0] = 0.0;
-
-    VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &ocean.pipeline));
-
-    m_backgroundEffect.push_back(gradient);
     m_backgroundEffect.push_back(sky);
     m_backgroundEffect.push_back(star);
-    m_backgroundEffect.push_back(ocean);
 
-    vkDestroyShaderModule(m_device, gradientShader, nullptr);
     vkDestroyShaderModule(m_device, skyShader, nullptr);
     vkDestroyShaderModule(m_device, starNestShader, nullptr);
-    vkDestroyShaderModule(m_device, oceanShader, nullptr);
 
-    m_currentBackgroundEffect = 2;
+    m_currentBackgroundEffect = 0;
 
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, ocean.pipeline);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, star.pipeline);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, gradient.pipeline);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, sky.pipeline);
 }
 
@@ -725,7 +691,7 @@ void VktCore::run() {
     m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[0] = static_cast<float>(m_drawExtent.width);
     m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[1] = static_cast<float>(m_drawExtent.height);
 
-    if(m_currentBackgroundEffect == 2 || m_currentBackgroundEffect == 3){
+    if(m_currentBackgroundEffect == 1){
         m_backgroundEffect.at(m_currentBackgroundEffect).data.data1[0] = currentTime;
     }
 
@@ -770,55 +736,49 @@ void VktCore::runImGui(){
     }
 
     if(ImGui::Begin("Models")){
-        for(const auto& [mID,model] : loadedModels){
-            if(ImGui::CollapsingHeader(model.name.c_str())){
+        for(auto& [mID,object] : loadedObjects){
+            if(ImGui::CollapsingHeader(object.name.c_str())){
                 ImGui::Text("ID: %u", mID);
-                ImGui::Text("Name: %s", model.name.c_str());
-                for(const auto& [oID,object] : model.objects){
-                    if(ImGui::TreeNode(std::to_string(oID).c_str())){
+                ImGui::Text("Name: %s", object.name.c_str());
+                if(ImGui::TreeNode("Transformation")){
 
-                        if(ImGui::TreeNode("Transformation")){
-                            // Change position
-                            glm::vec3 pos = object->transformation.getTranslation();
-                            if(ImGui::DragFloat3("Pos",(float*)& (pos))){
-                                object->transformation.setTranslation(pos.x, pos.y, pos.z);
-                            }
-
-                            // Change rotation
-                            glm::vec3 rotation = object->transformation.getRotation();
-                            if(ImGui::DragFloat3("Rotation",(float*)& (rotation))){
-                                object->transformation.setRotation(rotation.x, rotation.y, rotation.z);
-                            }
-
-                            float scale = object->transformation.getScale();
-                            if(ImGui::DragFloat("Scale", &scale)){
-                                object->transformation.setScale(scale);
-                            }
-                            ImGui::TreePop();
-                        }
-
-                        if(ImGui::TreeNode("Animation")) {
-                            static std::size_t currentAnimation = 0;
-                            if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN,5 * ImGui::GetTextLineHeightWithSpacing()))){
-                                for(std::size_t animID = 0; animID < model.resources->animations.size(); animID++){
-                                    const bool isActive = (currentAnimation == animID);
-                                    VktTypes::Animation* animation = model.resources->animations[animID].get();
-                                    if(ImGui::Selectable(animation->name.c_str(), isActive)) {
-                                        object->activeAnimation = animation;
-                                        animation->currTime = animation->start;
-                                        currentAnimation = animID;
-                                    }
-                                    if(isActive){
-                                        ImGui::SetItemDefaultFocus();
-                                    }
-                                }
-                                ImGui::EndListBox();
-                            }
-                            ImGui::TreePop();
-                        }
-
-                    ImGui::TreePop();
+                    // Change position
+                    glm::vec3 pos = object.model.transformation.getTranslation();
+                    if(ImGui::DragFloat3("Pos",(float*)& (pos))){
+                        object.model.transformation.setTranslation(pos.x, pos.y, pos.z);
                     }
+
+                    // Change rotation
+                    glm::vec3 rotation = object.model.transformation.getRotation();
+                    if(ImGui::DragFloat3("Rotation",(float*)& (rotation))){
+                        object.model.transformation.setRotation(rotation.x, rotation.y, rotation.z);
+                    }
+
+                    // Change scale
+                    float scale = object.model.transformation.getScale();
+                    if(ImGui::DragFloat("Scale", &scale)){
+                        object.model.transformation.setScale(scale);
+                    }
+                    ImGui::TreePop();
+                }
+
+                if(ImGui::TreeNode("Animation")) {
+                    static std::size_t currentAnimation = object.model.currentAnimation();
+                    if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN,5 * ImGui::GetTextLineHeightWithSpacing()))){
+                        uint32_t animCount = object.model.animationCount();
+                        for(std::size_t animID = 0; animID < animCount; animID++){
+                            const bool isActive = (currentAnimation == animID);
+                            if(ImGui::Selectable(object.model.animationName(animID).data(), isActive)) {
+                                object.model.setAnimation(animID);
+                                currentAnimation = animID;
+                            }
+                            if(isActive){
+                                ImGui::SetItemDefaultFocus();
+                            }
+                        }
+                        ImGui::EndListBox();
+                    }
+                    ImGui::TreePop();
                 }
             }
         }
@@ -917,43 +877,6 @@ VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4>& joi
     memcpy(newJoints.jointsBuffer.info.pMappedData, jointMatrices.data(), jointsBufferSize);
 
     return newJoints;
-}
-
-void VktCore::initMeshPipeline() {
-    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/coloredTriangleMesh.vert.spv", m_device);
-    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/texImage.frag.spv", m_device);
-
-    VkPushConstantRange bufferRange{};
-    bufferRange.offset = 0;
-    bufferRange.size = sizeof(VktTypes::GPUDrawPushConstants);
-    bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr};
-    pipelineLayoutInfo.pPushConstantRanges = &bufferRange;
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &m_singleImageDescriptorLayout;
-    pipelineLayoutInfo.setLayoutCount = 1;
-
-    VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_meshPipelineLayout));
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, m_meshPipelineLayout);
-
-    VktPipelineBuilder pipelineBuilder;
-    pipelineBuilder.setPipelineLayout(m_meshPipelineLayout);
-    pipelineBuilder.setShaders(vertShader, fragShader);
-    pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-    pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-    pipelineBuilder.setMultisamplingNone();
-    pipelineBuilder.disableBlending();
-    pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS);
-    pipelineBuilder.setColorAttachmentFormat(m_drawImage.format);
-    pipelineBuilder.setDepthFormat(m_depthImage.format);
-
-    m_meshPipeline = pipelineBuilder.buildPipeline(m_device);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_meshPipeline);
-
-    vkDestroyShaderModule(m_device, vertShader, nullptr);
-    vkDestroyShaderModule(m_device, fragShader, nullptr);
 }
 
 void VktCore::initDefaultData() {
@@ -1109,17 +1032,12 @@ void VktCore::updateScene() {
     currTime = glfwGetTime();
     double delta = currTime - prevTime;
     prevTime = currTime;
-    for(auto& [k,object] : loadedObjects){
-        if(object.activeAnimation){
-            VktTypes::Animation* animation = object.activeAnimation;
-            //VktModelResources::updateAnimation(animation, static_cast<float>(delta));
-            animation->updateTime(static_cast<float>(delta));
-            object.modelHandle->resources->skin->updateJoints(animation,object.jointsBuffer);
+    for(auto& [oID,object] : loadedObjects){
+        if(object.model.currentAnimation() != ModelTypes::NULL_ID){
+            object.model.updateAnimationTime(static_cast<float>(delta));
+            object.model.updateJoints();
         }
-    }
-
-    for(const auto& [oID, object] : loadedObjects){
-        object.modelHandle->resources->gatherContext(object.transformation.getMatrix(), object.jointsBuffer, m_mainDrawContext);
+        object.model.gatherDrawContext(m_mainDrawContext);
     }
 }
 
@@ -1140,33 +1058,11 @@ VkDevice VktCore::device() {
 }
 
 /**
- * Initialize first model and object identifiers to 0.
+ * Initialize first object identifiers to 0.
  */
-VktCore::modelID_t  VktCore::EngineModel::lastID = 0;
 VktCore::objectID_t  VktCore::EngineObject::lastID = 0;
 
-VktCore::EngineModel* VktCore::createModel(VktModelResources* resources, const std::string& name) {
-    assert(resources);
-
-    // Find free identifier
-    while(loadedModels.contains(EngineModel::lastID)) EngineModel::lastID++;
-    modelID_t freeID = EngineModel::lastID++;
-
-    // Create model
-    loadedModels[freeID] = {
-            .modelID = freeID,
-            .resources = resources,
-            .name = name
-    };
-
-    // Return handle
-    m_logger(Logger::INFO) << "Created a model at ID " << freeID << '\n';
-    return &loadedModels[freeID];
-}
-
-VktCore::EngineObject* VktCore::createObject(EngineModel* model) {
-    assert(model);
-
+VktCore::EngineObject* VktCore::createObject(const std::filesystem::path& filePath, const std::string& name) {
     // Find free identifier
     while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
     objectID_t freeID = EngineObject::lastID++;
@@ -1174,30 +1070,24 @@ VktCore::EngineObject* VktCore::createObject(EngineModel* model) {
     // Create object
     loadedObjects[freeID] = EngineObject{
             .objectID = freeID,
-            .modelHandle = model,
-            .activeAnimation = model->resources->animations[0].get()
-            // Skins are auto-constructed
+            .name = name,
+            .model = Model(filePath),
     };
 
-    // Create buffer for joints matrices
-    loadedObjects[freeID].jointsBuffer = uploadJoints(model->resources->skin->inverseBindMatrices);
-
     // Upload default position
-    //model->resources->skin->updateJoints(loadedObjects[freeID].jointsBuffer);
-
-    model->objects[freeID] = &loadedObjects[freeID];
+    loadedObjects[freeID].model.updateJoints();
 
     // Return handle
-    m_logger(Logger::INFO) << "Created an object with ID " << freeID << " from model at ID " << model->modelID << '\n';
+    m_logger(Logger::INFO) << "Created an object " << name << " with ID " << freeID << '\n';
     return &loadedObjects[freeID];
 }
 
-void VktCore::GLTFMetallicRoughness::buildPipelines(VktCore *core) {
+void VktCore::initMaterialPipelines() {
     // Load shaders
     VkShaderModule fragShader;
     VkShaderModule vertShader;
-    fragShader = VktUtils::loadShaderModule("shaders/mesh.frag.spv", core->m_device);
-    vertShader = VktUtils::loadShaderModule("shaders/mesh.vert.spv", core->m_device);
+    fragShader = VktUtils::loadShaderModule("shaders/mesh.frag.spv", m_device);
+    vertShader = VktUtils::loadShaderModule("shaders/mesh.vert.spv", m_device);
 
     // Create vertex shader push constants range
     VkPushConstantRange matrixRange{};
@@ -1212,38 +1102,30 @@ void VktCore::GLTFMetallicRoughness::buildPipelines(VktCore *core) {
         layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-        materialLayout = layoutBuilder.build(core->m_device,
+        metalRoughMaterial.materialLayout = layoutBuilder.build(m_device,
                                              VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, materialLayout);
+        m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, metalRoughMaterial.materialLayout);
     }
 
-    {
-        DescriptorLayoutBuilder layoutBuilder;
-        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-
-        jointsLayout = layoutBuilder.build(core->m_device,VK_SHADER_STAGE_VERTEX_BIT);
-        core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, jointsLayout);
-    }
-
-    VkDescriptorSetLayout layouts[] = {core->m_gpuSceneDataDescriptorLayout, materialLayout, jointsLayout};
+    VkDescriptorSetLayout layouts[] = {m_gpuSceneDataDescriptorLayout, metalRoughMaterial.materialLayout};
 
     // Create pipeline layout with provided descriptors and push constants
     VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
-    meshLayoutInfo.setLayoutCount = 3;
+    meshLayoutInfo.setLayoutCount = 2;
     meshLayoutInfo.pSetLayouts = layouts;
     meshLayoutInfo.pPushConstantRanges = &matrixRange;
     meshLayoutInfo.pushConstantRangeCount = 1;
 
     VkPipelineLayout newLayout;
-    VK_CHECK(vkCreatePipelineLayout(core->m_device,
+    VK_CHECK(vkCreatePipelineLayout(m_device,
                                     &meshLayoutInfo,
                                     nullptr,
                                     &newLayout));
-    core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, newLayout);
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, newLayout);
 
     // Set the pipeline layout for both opaque and transparent material pipeline
-    opaquePipeline.layout = newLayout;
-    transparentPipeline.layout = newLayout;
+    metalRoughMaterial.opaquePipeline.layout = newLayout;
+    metalRoughMaterial.transparentPipeline.layout = newLayout;
 
     // Build two pipelines fo opaque and transparent material rendering
     VktPipelineBuilder pipelineBuilder;
@@ -1254,56 +1136,52 @@ void VktCore::GLTFMetallicRoughness::buildPipelines(VktCore *core) {
     pipelineBuilder.setMultisamplingNone();
     pipelineBuilder.disableBlending();
     pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS);
-    pipelineBuilder.setColorAttachmentFormat(core->m_drawImage.format);
-    pipelineBuilder.setDepthFormat(core->m_depthImage.format);
+    pipelineBuilder.setColorAttachmentFormat(m_drawImage.format);
+    pipelineBuilder.setDepthFormat(m_depthImage.format);
     pipelineBuilder.setPipelineLayout(newLayout);
 
-    opaquePipeline.pipeline = pipelineBuilder.buildPipeline(core->m_device);
-    core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, opaquePipeline.pipeline);
+    metalRoughMaterial.opaquePipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.opaquePipeline.pipeline);
 
     // Switch from opaque to transparent
     pipelineBuilder.enableBlendingAdditive();
     pipelineBuilder.enableDepthTest(false, VK_COMPARE_OP_LESS);
 
-    transparentPipeline.pipeline = pipelineBuilder.buildPipeline(core->m_device);
-    core->m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, transparentPipeline.pipeline);
+    metalRoughMaterial.transparentPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.transparentPipeline.pipeline);
 
     // Destroy unnecessary shader modules
-    vkDestroyShaderModule(core->m_device, fragShader, nullptr);
-    vkDestroyShaderModule(core->m_device, vertShader, nullptr);
+    vkDestroyShaderModule(m_device, fragShader, nullptr);
+    vkDestroyShaderModule(m_device, vertShader, nullptr);
 }
 
-void VktCore::GLTFMetallicRoughness::clearResources(VkDevice device) {
-
-}
-
-VktTypes::MaterialInstance VktCore::GLTFMetallicRoughness::writeMaterial(VkDevice device, VktTypes::MaterialPass pass,
-                                                                         const VktCore::GLTFMetallicRoughness::MaterialResources &resources,
-                                                                         DescriptorAllocatorDynamic &descriptorAllocator) {
+VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::MaterialPass pass,
+                                                  const VktTypes::GLTFMetallicRoughness::MaterialResources &resources,
+                                                  DescriptorAllocatorDynamic &descriptorAllocator) {
     VktTypes::MaterialInstance matData{};
     matData.passType = pass;
     if(pass == VktTypes::MaterialPass::OPAQUE){
-        matData.pipeline = &opaquePipeline;
+        matData.pipeline = &metalRoughMaterial.opaquePipeline;
     }else if(pass == VktTypes::MaterialPass::TRANSPARENT){
-        matData.pipeline = &transparentPipeline;
+        matData.pipeline = &metalRoughMaterial.transparentPipeline;
     }
 
-    matData.materialSet = descriptorAllocator.allocate(device, materialLayout);
+    matData.materialSet = descriptorAllocator.allocate(device, metalRoughMaterial.materialLayout);
 
-    writer.clear();
-    writer.writeBuffer(0,resources.dataBuffer,
-                       sizeof(MaterialConstants),
+    metalRoughMaterial.writer.clear();
+    metalRoughMaterial.writer.writeBuffer(0,resources.dataBuffer,
+                       sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants),
                        resources.dataBufferOffset,
                        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    writer.writeImage(1, resources.colorImage.view,
+    metalRoughMaterial.writer.writeImage(1, resources.colorImage.view,
                       resources.colorSampler,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    writer.writeImage(2, resources.metalRoughImage.view,
+    metalRoughMaterial.writer.writeImage(2, resources.metalRoughImage.view,
                       resources.metalRoughSampler,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                       VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    writer.updateSet(device, matData.materialSet);
+    metalRoughMaterial.writer.updateSet(device, matData.materialSet);
 
     return matData;
 }

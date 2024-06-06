@@ -11,7 +11,7 @@
 #include <assimp/scene.h>
 #include <map>
 
-#include "utils.h"
+#include "utils/utils.h"
 
 struct KeyPosition{
     glm::vec3 position;

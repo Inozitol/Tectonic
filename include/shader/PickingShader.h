@@ -5,7 +5,7 @@
 #include "defs/ShaderDefines.h"
 #include "defs/ConfigDefs.h"
 #include "model/ModelTypes.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 class PickingShader : public Shader {
 public:

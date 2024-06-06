@@ -8,7 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include "exceptions.h"
-#include "vk_mem_alloc.h"
+#include "extern/vma/vk_mem_alloc.h"
 #include "VktUtils.h"
 
 enum class DeletableType {

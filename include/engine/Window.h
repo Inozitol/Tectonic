@@ -9,7 +9,7 @@
 
 #include "exceptions.h"
 
-#include "utils.h"
+#include "utils/utils.h"
 #include "meta/Signal.h"
 #include "Cursor.h"
 #include "Keyboard.h"

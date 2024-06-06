@@ -1,6 +1,6 @@
 #include "shader/Shader.h"
 
-#include "utils.h"
+#include "utils/utils.h"
 
 Shader::Shader(Shader::ShaderType types) :m_shaderTypes(types) {}
 

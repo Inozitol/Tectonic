@@ -75,7 +75,6 @@ VkShaderModule VktUtils::loadShaderModule(const char* path, VkDevice device){
     file.seekg(0);
     file.read((char*)buffer.data(), fileSize);
     file.close();
-    file.close();
 
     VkShaderModuleCreateInfo createInfo{ .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .pNext = nullptr };
     createInfo.codeSize = buffer.size() * sizeof(uint32_t);
