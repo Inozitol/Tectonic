@@ -35,16 +35,36 @@ public:
     uint32_t animationCount();
     Transformation transformation;
 private:
-    std::vector<VktTypes::MeshAsset>        m_meshes;
-    std::vector<VktTypes::AllocatedImage>   m_images;
-    std::vector<VkSampler>                  m_samplers;
-    std::vector<ModelTypes::Node>           m_nodes;
-    std::vector<ModelTypes::GLTFMaterial>   m_materials;
-    ModelTypes::Skin                        m_skin;
-    std::vector<ModelTypes::Animation>      m_animations;
-    uint32_t                                m_rootNode = ModelTypes::NULL_ID;
 
-    uint32_t                                m_activeAnimation = 0;
+    struct Resources{
+        SerialTypes::BinDataVec_t               data;
+
+        std::vector<VktTypes::MeshAsset>        meshes;
+        std::vector<VktTypes::AllocatedImage>   images;
+        std::vector<VkSampler>                  samplers;
+        std::vector<ModelTypes::Node>           nodes;
+        std::vector<ModelTypes::GLTFMaterial>   materials;
+        ModelTypes::Skin                        skin;
+        std::vector<ModelTypes::Animation>      animations;
+        uint32_t                                rootNode;
+
+        DescriptorAllocatorDynamic              descriptorPool;
+        VktTypes::AllocatedBuffer               materialBuffer;
+
+        uint32_t                                activeModels = 0;
+    };
+    std::string                            m_modelPath;
+
+    std::vector<VktTypes::MeshAsset>*      m_meshes = nullptr;
+    std::vector<VktTypes::AllocatedImage>* m_images = nullptr;
+    std::vector<VkSampler>*                m_samplers = nullptr;
+    std::vector<ModelTypes::GLTFMaterial>* m_materials = nullptr;
+    std::vector<ModelTypes::Node>          m_nodes;
+    ModelTypes::Skin                       m_skin;
+    std::vector<ModelTypes::Animation>     m_animations;
+    uint32_t                               m_rootNode = ModelTypes::NULL_ID;
+
+    uint32_t                               m_activeAnimation = 0;
 
     static void readMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
     static void readImage(VktTypes::AllocatedImage& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
@@ -53,14 +73,16 @@ private:
     static void readSkin(ModelTypes::Skin& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
     static void readAnimation(ModelTypes::Animation& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
     static void readAnimationSampler(ModelTypes::AnimationSampler& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
-    void readMaterial(ModelTypes::GLTFMaterial& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset, uint32_t mIndex);
+    void readMaterial(ModelTypes::GLTFMaterial& dst,
+                      SerialTypes::BinDataVec_t& src,
+                      std::size_t& offset,
+                      uint32_t mIndex,
+                      Resources& resources);
 
-    VktTypes::AllocatedBuffer               m_materialBuffer;
-    DescriptorAllocatorDynamic              m_descriptorPool;
     VktTypes::GPUJointsBuffers              m_jointsBuffer;
 
-    static void loadModelData(const std::filesystem::path& path);
+    void loadModelData(const std::filesystem::path& path);
+    static std::unordered_map<std::string, Resources> m_loadedModels;
 
-    static std::unordered_map<std::filesystem::path, SerialTypes::BinDataVec_t> m_loadedModels;
     static Logger m_logger;
 };
