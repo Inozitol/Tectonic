@@ -45,12 +45,15 @@ find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{
 file(GLOB_RECURSE GLSL_SOURCE
         "${PROJECT_SOURCE_DIR}/shaders/*.vert"
         "${PROJECT_SOURCE_DIR}/shaders/*.frag"
-        "${PROJECT_SOURCE_DIR}/shaders/*.comp")
+        "${PROJECT_SOURCE_DIR}/shaders/*.comp"
+        "${PROJECT_SOURCE_DIR}/shaders/*.geom")
 
 foreach(GLSL ${GLSL_SOURCE})
     message(STATUS "BUILDING GLSL SHADER")
-    get_filename_component(FILE_NAME ${GLSL} NAME)
-    set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+    #get_filename_component(FILE_NAME ${GLSL} NAME)
+    #get_filename_component(FILE_ADDR ${GLSL} DIRECTORY)
+
+    set(SPIRV "${GLSL}.spv")
     message(STATUS ${GLSL})
 
     add_custom_command(

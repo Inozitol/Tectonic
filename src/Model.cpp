@@ -18,12 +18,22 @@ void Model::readMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, s
     dst.surfaces.resize(surfaces.size());
     std::memcpy(dst.surfaces.data(),surfaces.data(),surfaces.size()*sizeof(VktTypes::MeshSurface));
     SerialTypes::Span<uint32_t,uint32_t,false> indices(src,offset);
-    SerialTypes::Span<uint32_t,VktTypes::Vertex,false> vertices(src,offset);
+    SerialTypes::Span<uint32_t,VktTypes::Vertex<VktTypes::Static>,false> vertices(src,offset);
 
-    dst.meshBuffers = VktCore::uploadMesh(std::span<uint32_t>(indices.data(), indices.size()),
-                                          std::span<VktTypes::Vertex>(vertices.data(),vertices.size()));
+    dst.meshBuffers = VktCore::uploadMesh<VktTypes::Static>(std::span<uint32_t>(indices.data(), indices.size()),
+                                          std::span<VktTypes::Vertex<VktTypes::Static>>(vertices.data(),vertices.size()));
 }
 
+void Model::readSkinnedMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
+    SerialTypes::Span<uint32_t,VktTypes::MeshSurface> surfaces = SerialTypes::Span<uint32_t,VktTypes::MeshSurface>(src, offset);
+    dst.surfaces.resize(surfaces.size());
+    std::memcpy(dst.surfaces.data(),surfaces.data(),surfaces.size()*sizeof(VktTypes::MeshSurface));
+    SerialTypes::Span<uint32_t,uint32_t,false> indices(src,offset);
+    SerialTypes::Span<uint32_t,VktTypes::Vertex<VktTypes::Skinned>,false> vertices(src,offset);
+
+    dst.meshBuffers = VktCore::uploadMesh<VktTypes::Skinned>(std::span<uint32_t>(indices.data(), indices.size()),
+                                          std::span<VktTypes::Vertex<VktTypes::Skinned>>(vertices.data(),vertices.size()));
+}
 void Model::readImage(VktTypes::AllocatedImage& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
     SerialTypes::Span<uint32_t,char,false> name = SerialTypes::Span<uint32_t,char,false>(src, offset);
     VkExtent3D extent   = Serial::readDataAtInc<VkExtent3D>(src, offset);
@@ -72,13 +82,16 @@ void Model::readMaterial(ModelTypes::GLTFMaterial& dst,
     // Upload constants to GPU buffer
     static_cast<VktTypes::GLTFMetallicRoughness::MaterialConstants*>(resources.materialBuffer.info.pMappedData)[mIndex] = loadedConstants;
 
-    if(loadedResources.colorImage != ModelTypes::NULL_ID && loadedResources.colorSampler != ModelTypes::NULL_ID){
+    if(loadedResources.colorImage != ModelTypes::NULL_ID){
         gpuResources.colorImage = resources.images[loadedResources.colorImage];
+    }
+    if(loadedResources.colorSampler != ModelTypes::NULL_ID) {
         gpuResources.colorSampler = resources.samplers[loadedResources.colorSampler];
     }
-
-    if(loadedResources.metalRoughImage != ModelTypes::NULL_ID && loadedResources.metalRoughSampler != ModelTypes::NULL_ID){
+    if(loadedResources.metalRoughImage != ModelTypes::NULL_ID){
         gpuResources.metalRoughImage = resources.images[loadedResources.metalRoughImage];
+    }
+    if(loadedResources.metalRoughSampler != ModelTypes::NULL_ID) {
         gpuResources.metalRoughSampler = resources.samplers[loadedResources.metalRoughSampler];
     }
 
@@ -86,7 +99,7 @@ void Model::readMaterial(ModelTypes::GLTFMaterial& dst,
     gpuResources.dataBufferOffset = mIndex*sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants);
 
     // Create material in GPU
-    dst.data = VktCore::getInstance().writeMaterial(VktCore::device(), loadedPass, gpuResources, resources.descriptorPool);
+    dst.data = VktCore::getInstance().writeMaterial(VktCore::device(), loadedPass, gpuResources, resources.descriptorPool, resources.isSkinned);
 }
 
 void Model::readSkin(ModelTypes::Skin& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
@@ -127,10 +140,14 @@ Model::Model(const std::filesystem::path& path) {
     m_samplers = &resources.samplers;
     m_materials = &resources.materials;
     m_nodes = resources.nodes;
-    m_skin = resources.skin;
-    m_jointsBuffer = VktCore::uploadJoints(std::span<glm::mat4>(m_skin.inverseBindMatrices.data(),m_skin.inverseBindMatrices.size()));
-    m_animations = resources.animations;
     m_rootNode = resources.rootNode;
+    m_isSkinned = resources.isSkinned;
+    if(resources.isSkinned) {
+        m_skin = resources.skin;
+        m_jointsBuffer = VktCore::uploadJoints(
+                std::span<glm::mat4>(m_skin.inverseBindMatrices.data(), m_skin.inverseBindMatrices.size()));
+        m_animations = resources.animations;
+    }
     resources.activeModels++;
     m_modelPath = path;
 }
@@ -151,6 +168,7 @@ void Model::loadModelData(const std::filesystem::path& path){
     file.read(reinterpret_cast<char*>(data.data()), static_cast<long>(fileSize));
 
     const uint8_t version          = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::VERSION_OFFSET);
+    const uint8_t metabyte         = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::META_OFFSET);
     const uint32_t meshIndex       = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::MESHES_INDEX);
     const uint32_t imageIndex      = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::IMAGES_INDEX);
     const uint32_t samplerIndex    = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SAMPLERS_INDEX);
@@ -159,14 +177,25 @@ void Model::loadModelData(const std::filesystem::path& path){
     const uint32_t skinIndex       = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SKIN_INDEX);
     const uint32_t animationIndex  = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::ANIMATION_INDEX);
 
+    resources.isSkinned = Utils::enumBitSet(metabyte, SerialTypes::Model::MetaBits::SKINNED);
     std::size_t meshCount = Serial::readDataAt<uint32_t>(data, meshIndex);
     resources.meshes.resize(meshCount);
     std::size_t index = meshIndex + sizeof(uint32_t);
-    for(std::size_t i = 0; i < meshCount; i++){
-        readMesh(resources.meshes[i], data, index);
-        m_logger(Logger::DEBUG) << path << " Loaded mesh with " << resources.meshes[i].surfaces.size() << " surfaces\n";
+    if(resources.isSkinned) {
+        for (std::size_t i = 0; i < meshCount; i++) {
+            readSkinnedMesh(resources.meshes[i], data, index);
+            m_logger(Logger::DEBUG) << path << " Loaded skinned mesh with " << resources.meshes[i].surfaces.size()
+                                    << " surfaces\n";
+        }
+        m_logger(Logger::DEBUG) << path << " Finished loading " << meshCount << " skinned meshes\n";
+    }else{
+        for (std::size_t i = 0; i < meshCount; i++) {
+            readMesh(resources.meshes[i], data, index);
+            m_logger(Logger::DEBUG) << path << " Loaded mesh with " << resources.meshes[i].surfaces.size()
+                                    << " surfaces\n";
+        }
+        m_logger(Logger::DEBUG) << path << " Finished loading " << meshCount << " meshes\n";
     }
-    m_logger(Logger::DEBUG) << path << " Finished loading " << meshCount << " meshes\n";
 
     std::size_t imageCount = Serial::readDataAt<uint32_t>(data, imageIndex);
     resources.images.resize(imageCount);
@@ -215,23 +244,25 @@ void Model::loadModelData(const std::filesystem::path& path){
     }
     m_logger(Logger::DEBUG) << path << " Finished loading " << materialCount << " materials\n";
 
-    index = skinIndex;
-    readSkin(resources.skin, data, index);
-    m_logger(Logger::DEBUG) << path << " Finished loading skin\n";
+    if(resources.isSkinned) {
+        index = skinIndex;
+        readSkin(resources.skin, data, index);
+        m_logger(Logger::DEBUG) << path << " Finished loading skin\n";
 
-    std::size_t animationCount = Serial::readDataAt<uint32_t>(data,animationIndex);
-    resources.animations.resize(animationCount);
-    index = animationIndex + sizeof(uint32_t);
-    for(std::size_t i = 0; i < animationCount; i++){
-        readAnimation(resources.animations[i], data, index);
-        m_logger(Logger::DEBUG) << path
-                                << " Loaded animation named ["
-                                << resources.animations[i].name.data()
-                                << "] with "
-                                << resources.animations[i].samplers.size()
-                                << " samplers/channels\n";
+        std::size_t animationCount = Serial::readDataAt<uint32_t>(data, animationIndex);
+        resources.animations.resize(animationCount);
+        index = animationIndex + sizeof(uint32_t);
+        for (std::size_t i = 0; i < animationCount; i++) {
+            readAnimation(resources.animations[i], data, index);
+            m_logger(Logger::DEBUG) << path
+                                    << " Loaded animation named ["
+                                    << resources.animations[i].name.data()
+                                    << "] with "
+                                    << resources.animations[i].samplers.size()
+                                    << " samplers/channels\n";
+        }
+        m_logger(Logger::DEBUG) << path << " Finished loading " << animationCount << " animations\n";
     }
-    m_logger(Logger::DEBUG) << path << " Finished loading " << animationCount << " animations\n";
 }
 
 void Model::gatherDrawContext(VktTypes::DrawContext &ctx){
@@ -253,6 +284,7 @@ void Model::gatherDrawContext(VktTypes::DrawContext &ctx){
                 def.firstIndex = s.startIndex;
                 def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
                 def.material = &(*m_materials)[s.materialIndex].data;
+                def.isSkinned = m_isSkinned;
 
                 def.transform = worldM;
                 def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
@@ -411,14 +443,14 @@ void Model::setAnimation(uint32_t aID) {
     }
 }
 
-std::string_view Model::animationName(uint32_t aID) {
+std::string_view Model::animationName(uint32_t aID) const{
     if(aID < m_animations.size()){
         return m_animations[aID].name.data();
     }
     return "";
 }
 
-uint32_t Model::animationCount() {
+uint32_t Model::animationCount() const{
     return m_animations.size();
 }
 
@@ -442,5 +474,9 @@ void Model::clear() {
     }
     VktCore::destroyBuffer(m_jointsBuffer.jointsBuffer);
 
+}
+
+bool Model::isSkinned() const {
+    return m_isSkinned;
 }
 

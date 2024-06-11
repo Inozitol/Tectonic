@@ -56,6 +56,32 @@ namespace Utils{
         std::bitset<underlying(Enum_t::SIZE)> m_bits;
     };
 
+    template<typename E>
+    concept Enumerated = std::is_enum_v<E>;
+
+    /**
+     * Converts any enum value into underlying type.
+     * It will return identity if the type isn't constrained by is_enum.
+     * @tparam E Enum type
+     * @param val Enum value
+     * @return underlying_type_t<T>
+     */
+    template<Enumerated E>
+    auto enumVal(E const val) -> typename std::underlying_type_t<E>{
+        return static_cast<typename std::underlying_type_t<E>>(val);
+    }
+
+    template<typename E>
+    E enumVal(E const val){
+        return val;
+    }
+
+    /** Checks whether a bit of underlying enum value in comp is present in val */
+    template<typename T1, typename T2>
+    bool enumBitSet(const T1 val, const T2 comp){
+        return (enumVal(val) & enumVal(comp)) == enumVal(comp);
+    }
+
     /*
     class Frustum{
     public:

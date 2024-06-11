@@ -49,8 +49,30 @@ namespace VktTypes{
         VkFormat format = VK_FORMAT_UNDEFINED;
     };
 
-    /** @brief Graphics pipeline vertex. */
-    struct Vertex{
+    /** Helper constants to make templated structs more verbose. */
+    inline constexpr bool Static = false;
+    inline constexpr bool Skinned = true;
+
+    /**
+     * @brief GPU format of vertex data.
+     * @tparam S True if the vertex contains joints data.
+     */
+    template<bool S = Skinned>
+    struct Vertex;
+
+    /** @brief Graphics pipeline vertex */
+    template<>
+    struct Vertex<Static>{
+        glm::vec3 position = {0.0f, 0.0f, 0.0f};
+        float uvX = 0.0f;
+        glm::vec3 normal = {1.0f, 0.0f, 0.0f};
+        float uvY = 0.0f;
+        glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+    };
+
+    /** @brief Graphics pipeline vertex with joints data. */
+    template<>
+    struct Vertex<Skinned>{
         glm::vec3 position = {0.0f, 0.0f, 0.0f};
         float uvX = 0.0f;
         glm::vec3 normal = {1.0f, 0.0f, 0.0f};
@@ -87,6 +109,7 @@ namespace VktTypes{
         VkDeviceAddress vertexBufferAddress = 0;
     };
 
+    /** @brief Buffer on GPU holding joints data */
     struct GPUJointsBuffers{
         AllocatedBuffer jointsBuffer{};
         VkDeviceAddress jointsBufferAddress = 0;
@@ -94,25 +117,36 @@ namespace VktTypes{
 
     /**
      * @brief Push constants pushed to GPU every frame.
+     * @tparam S True if it should contain an address to joint matrices.
      *
      * This contains the world matrix and GPU pointers to vertices and joints matrices (if available).
      */
-    struct GPUDrawPushConstants{
-        glm::mat4 worldMatrix = glm::mat4(1.0f);
+    template<bool S>
+    struct GPUDrawPushConstants;
+
+    template<>
+    struct GPUDrawPushConstants<Static>{
+        glm::mat4 worldMatrix = glm::identity<glm::mat4>();
+        VkDeviceAddress vertexBuffer = 0;
+    };
+
+    template<>
+    struct GPUDrawPushConstants<Skinned>{
+        glm::mat4 worldMatrix = glm::identity<glm::mat4>();
         VkDeviceAddress vertexBuffer = 0;
         VkDeviceAddress jointsBuffer = 0;
     };
 
-    /**
-     * @brief Environmental scene data.
-     */
+    /** @brief Environmental scene data. */
     struct GPUSceneData{
         glm::mat4 view = glm::identity<glm::mat4>();
-        glm::mat4 proj  = glm::identity<glm::mat4>();;
-        glm::mat4 viewproj = glm::identity<glm::mat4>();;
-        glm::vec4 ambientColor = {0.0f, 0.0f, 0.0f, 0.0f};
-        glm::vec4 sunlightDirection = {0.0f, 0.0f, 0.0f, 0.0f};
-        glm::vec4 sunlightColor = {0.0f, 0.0f, 0.0f, 0.0f};
+        glm::mat4 proj  = glm::identity<glm::mat4>();
+        glm::mat4 viewproj = glm::identity<glm::mat4>();
+        glm::vec3 ambientColor = {0.0f, 0.0f, 0.0f};
+        glm::vec3 sunlightDirection = {0.0f, 0.0f, 0.0f};
+        glm::vec3 sunlightColor = {0.0f, 0.0f, 0.0f};
+        glm::vec3 cameraPosition = {0.0f, 0.0f, 0.0f};
+        glm::vec3 cameraDirection = {0.0f, 0.0f, 0.0f};
     };
 
     /** @brief Holds index, size and material index to buffers inside GPU */
@@ -128,26 +162,33 @@ namespace VktTypes{
         VktTypes::GPUMeshBuffers meshBuffers;
     };
 
-    /**
-     * @brief Vulkan pipeline for model rendering.
-     */
+    /** @brief Vulkan pipeline for model rendering. */
     struct ModelPipeline {
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkPipelineLayout layout = VK_NULL_HANDLE;
     };
 
+    /** @brief Different variations on material rendering. */
     enum class MaterialPass: uint8_t{
         OPAQUE,
         TRANSPARENT,
         OTHER
     };
 
+    /** @brief Structure holding data required to render a glTF Metallic-Roughness PBR material. */
     struct GLTFMetallicRoughness{
+        // TODO This isn't scalable, handle it better
         VktTypes::ModelPipeline opaquePipeline{};
         VktTypes::ModelPipeline transparentPipeline{};
+        VktTypes::ModelPipeline skinnedOpaquePipeline{};
+        VktTypes::ModelPipeline skinnedTransparentPipeline{};
 
         VkDescriptorSetLayout materialLayout{};
 
+        /**
+         * @brief Metallic-Roughness factors
+         * The data has to be aligned at 64 bytes (0x40), due to Vulkan constraint.
+         */
         struct MaterialConstants {
             glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
             glm::vec4 metalRoughFactors = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -166,17 +207,17 @@ namespace VktTypes{
         DescriptorWriter writer;
     };
 
-
     struct MaterialInstance{
-        ModelPipeline* pipeline = nullptr;
         VkDescriptorSet materialSet = VK_NULL_HANDLE;
         MaterialPass passType = MaterialPass::OTHER;
+        const ModelPipeline* pipeline = nullptr;
     };
 
     struct RenderObject{
         uint32_t indexCount = 0;
         uint32_t firstIndex = 0;
         VkBuffer indexBuffer = VK_NULL_HANDLE;
+        bool isSkinned = false;
 
         const MaterialInstance* material = nullptr;
 

@@ -133,7 +133,7 @@ public:
      * @brief Creates a normalized vector with the getDirection of the camera.
      * @return Normalized vector with the getDirection of the camera.
      */
-    glm::vec3 getDirection() const;
+    [[nodiscard]] glm::vec3 getDirection() const;
 
     /**
      * Sets the local_position of the camera in world space.

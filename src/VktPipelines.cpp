@@ -54,10 +54,13 @@ VkPipeline VktPipelineBuilder::buildPipeline(VkDevice device) {
     return graphicsPipeline;
 }
 
-void VktPipelineBuilder::setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader) {
+void VktPipelineBuilder::setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader, VkShaderModule geometryShader) {
     m_shaderStages.clear();
     m_shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
     m_shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
+    if(geometryShader != VK_NULL_HANDLE){
+        m_shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_GEOMETRY_BIT, geometryShader));
+    }
 }
 
 void VktPipelineBuilder::setInputTopology(VkPrimitiveTopology topology) {

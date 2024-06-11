@@ -31,13 +31,14 @@ public:
     void updateJoints();
     uint32_t currentAnimation() const;
     void setAnimation(uint32_t aID);
-    std::string_view animationName(uint32_t aID);
-    uint32_t animationCount();
+    std::string_view animationName(uint32_t aID) const;
+    uint32_t animationCount() const;
+    bool isSkinned() const;
     Transformation transformation;
 private:
-
     struct Resources{
         SerialTypes::BinDataVec_t               data;
+        bool                                    isSkinned;
 
         std::vector<VktTypes::MeshAsset>        meshes;
         std::vector<VktTypes::AllocatedImage>   images;
@@ -50,6 +51,7 @@ private:
 
         DescriptorAllocatorDynamic              descriptorPool;
         VktTypes::AllocatedBuffer               materialBuffer;
+        VktTypes::ModelPipeline*                pipeline;
 
         uint32_t                                activeModels = 0;
     };
@@ -63,10 +65,12 @@ private:
     ModelTypes::Skin                       m_skin;
     std::vector<ModelTypes::Animation>     m_animations;
     uint32_t                               m_rootNode = ModelTypes::NULL_ID;
+    bool                                   m_isSkinned = false;
 
     uint32_t                               m_activeAnimation = 0;
 
     static void readMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
+    static void readSkinnedMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
     static void readImage(VktTypes::AllocatedImage& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
     static void readSampler(VkSampler& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);
     static void readNode(ModelTypes::Node& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset);

@@ -5,39 +5,6 @@
 namespace SerialTypes{
     using BinDataVec_t = std::vector<std::byte>;
 
-    struct null_sentinal_t {
-        template<class Rhs,
-                std::enable_if_t<!std::is_same<Rhs, null_sentinal_t>{},int> =0
-        >
-        friend bool operator==(Rhs const& ptr, null_sentinal_t) {
-            return !*ptr;
-        }
-        template<class Rhs,
-                std::enable_if_t<!std::is_same<Rhs, null_sentinal_t>{},int> =0
-        >
-        friend bool operator!=(Rhs const& ptr, null_sentinal_t) {
-            return !(ptr==null_sentinal_t{});
-        }
-        template<class Lhs,
-                std::enable_if_t<!std::is_same<Lhs, null_sentinal_t>{},int> =0
-        >
-        friend bool operator==(null_sentinal_t, Lhs const& ptr) {
-            return !*ptr;
-        }
-        template<class Lhs,
-                std::enable_if_t<!std::is_same<Lhs, null_sentinal_t>{},int> =0
-        >
-        friend bool operator!=(null_sentinal_t, Lhs const& ptr) {
-            return !(null_sentinal_t{}==ptr);
-        }
-        friend bool operator==(null_sentinal_t, null_sentinal_t) {
-            return true;
-        }
-        friend bool operator!=(null_sentinal_t, null_sentinal_t) {
-            return false;
-        }
-    };
-
     /**
      * @brief Custom span that's directly mappable to binary data in BinDataVec_t
      *
@@ -73,7 +40,7 @@ namespace SerialTypes{
         bool empty() const;
         void resize(I n);
         I size() const;
-        T* data();
+        T* data() const;
 
         struct iter{
         public:
@@ -94,7 +61,7 @@ namespace SerialTypes{
     };
 
     template<typename I, typename T, bool D>
-    T *Span<I, T, D>::data() {
+    T *Span<I, T, D>::data() const {
         return m_data;
     }
 
@@ -248,13 +215,18 @@ namespace SerialTypes{
 
         /** Each index is defined by the offset of type size from the previous one */
         constexpr std::size_t VERSION_OFFSET    = 0;
-        constexpr std::size_t MESHES_INDEX      = VERSION_OFFSET    + sizeof(std::byte);
+        constexpr std::size_t META_OFFSET       = VERSION_OFFSET    + sizeof(std::byte);
+        constexpr std::size_t MESHES_INDEX      = META_OFFSET       + sizeof(std::byte);
         constexpr std::size_t IMAGES_INDEX      = MESHES_INDEX      + sizeof(uint32_t);
         constexpr std::size_t SAMPLERS_INDEX    = IMAGES_INDEX      + sizeof(uint32_t);
         constexpr std::size_t NODES_INDEX       = SAMPLERS_INDEX    + sizeof(uint32_t);
         constexpr std::size_t MATERIALS_INDEX   = NODES_INDEX       + sizeof(uint32_t);
         constexpr std::size_t SKIN_INDEX        = MATERIALS_INDEX   + sizeof(uint32_t);
         constexpr std::size_t ANIMATION_INDEX   = SKIN_INDEX        + sizeof(uint32_t);
+
+        enum class MetaBits : uint8_t{
+            SKINNED = 1 << 0
+        };
 
         /** @brief Serializable mesh surface */
         struct MeshSurface{
@@ -264,10 +236,11 @@ namespace SerialTypes{
         };
 
         /** @brief Serializable mesh */
+        template<bool Skinned>
         struct MeshAsset{
             SerialTypes::Span<uint32_t,MeshSurface,true> surfaces;
             SerialTypes::Span<uint32_t,uint32_t,true> indices;
-            SerialTypes::Span<uint32_t,VktTypes::Vertex,true> vertices;
+            SerialTypes::Span<uint32_t,VktTypes::Vertex<Skinned>,true> vertices;
         };
 
         /** @brief Serializable image */

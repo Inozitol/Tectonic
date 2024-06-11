@@ -11,6 +11,8 @@
 
 namespace Serial {
     /*
+    // TODO Finish this mess
+    // Maybe with C++26 when reflection comes out?
     namespace Convert{
         namespace Model {
 

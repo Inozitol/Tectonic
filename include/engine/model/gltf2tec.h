@@ -8,6 +8,7 @@
 #include <vulkan/vulkan_core.h>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/detail/type_quat.hpp>
+#include <variant>
 
 #include "Logger.h"
 #include "utils/Serial.h"
@@ -17,7 +18,10 @@
 namespace gltf2tec{
 
     struct GLTFResources {
-        std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset>> meshes;
+        using StaticMeshVec_t = std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset<VktTypes::Static>>>;
+        using SkinnedMeshVec_t = std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset<VktTypes::Skinned>>>;
+
+        std::variant<StaticMeshVec_t,SkinnedMeshVec_t> meshes;
         std::vector<std::unique_ptr<SerialTypes::Model::Image>> images;
         std::vector<std::unique_ptr<SerialTypes::Model::Node>> nodes;
         std::vector<std::unique_ptr<SerialTypes::Model::GLTFMaterial>> materials;
@@ -25,6 +29,7 @@ namespace gltf2tec{
         std::vector<std::unique_ptr<SerialTypes::Model::Animation>> animations;
         SerialTypes::Model::NodeID_t topNode = SerialTypes::Model::NULL_ID;
         std::vector<VkSamplerCreateInfo> samplers;
+        bool isSkinned = false;
     };
 
     struct TectonicResources{

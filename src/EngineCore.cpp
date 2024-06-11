@@ -8,6 +8,9 @@ void EngineCore::run() {
     //  The m_window isn't a hamster in a wheel.
     //  Should get close bool with a signal from Window class.
     while(!m_vktCore.shouldClose()) {
+        //m_objects[0]->model.transformation.setRotation(0.0f,glfwGetTime()*50.0f, 0.0f);
+        m_vktCore.cameraPosition = m_gameCamera->getPosition();
+        m_vktCore.cameraDirection = m_gameCamera->getDirection();
         glfwPollEvents();
         m_gameCamera->createView();
         m_vktCore.setViewMatrix(m_gameCamera->getViewMatrix());
@@ -498,9 +501,20 @@ EngineCore::EngineCore() {
         m_vktCore.setWindow(m_window.get());
         m_vktCore.init();
 
+        VktCore::EngineObject* shrek = m_vktCore.createObject("meshes/shrek.tecm", "shrek");
+        if(!shrek) throw engineException("Oops, no Shrek");
+        m_objects.insert({shrek->objectID, shrek});
 
+        VktCore::EngineObject* bottle = m_vktCore.createObject("meshes/WaterBottle.tecm", "bottle");
+        if(!bottle) throw engineException("Oops, no bottle");
+        m_objects.insert({bottle->objectID, bottle});
+        m_objects[1]->model.transformation.setScale(5.0);
+        m_objects[1]->model.transformation.setTranslation(1.0f, 3.0f, 0.0f);
+
+
+        /*
         for(uint32_t i = 0; i < 5; i++){
-            VktCore::EngineObject* shrek = m_vktCore.createObject("meshes/shrek.tecm", "shrek");
+            VktCore::EngineObject* shrek = m_vktCore.createObject("meshes/WaterBottle.tecm", "shrek");
 
             if(!shrek) throw engineException("Oops, no Shrek");
 
@@ -508,7 +522,7 @@ EngineCore::EngineCore() {
             //obj->activeAnimation = obj->resources->animations[i].get();
             shrek->model.transformation.translate(i*1.5,0,0);
             shrek->model.transformation.rotate(0.0f,180.0f,0.0f);
-        }
+        }*/
 
         m_window->connectKeyboard(m_keyboard);
         m_window->connectCursor(m_cursor);

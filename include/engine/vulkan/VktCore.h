@@ -53,7 +53,8 @@ public:
     void setWindow(Window* window);
 
     /** @brief Uploads a mesh into the created Vulkan device memory. */
-    static VktTypes::GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex> vertices);
+    template <bool S>
+    static VktTypes::GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex<S>> vertices);
 
     /** @brief Uploads joint matrices */
     static VktTypes::GPUJointsBuffers uploadJoints(const std::span<glm::mat4>& jointMatrices);
@@ -92,7 +93,8 @@ public:
     VktTypes::MaterialInstance writeMaterial(VkDevice device,
                                              VktTypes::MaterialPass pass,
                                              const VktTypes::GLTFMetallicRoughness::MaterialResources& resources,
-                                             DescriptorAllocatorDynamic& descriptorAllocator);
+                                             DescriptorAllocatorDynamic& descriptorAllocator,
+                                             bool isSkinned);
 
 
     using objectID_t = uint32_t;
@@ -121,6 +123,13 @@ public:
         float meshDrawTime = 0.0;
     };
 
+    /**
+     * @brief Various configurations to enable debugging information in pipeline
+     */
+    struct DebugConfig{
+        bool enableDebugPipeline = false;
+    };
+
     // TODO REMOVE LATER
     VktTypes::AllocatedImage m_errorCheckboardImage{};
     VktTypes::AllocatedImage m_whiteImage{};
@@ -129,6 +138,9 @@ public:
     VkSampler m_defaultSamplerLinear{};
     VkSampler m_defaultSamplerNearest{};
     VktTypes::GLTFMetallicRoughness metalRoughMaterial;
+
+    glm::vec3 cameraPosition;
+    glm::vec3 cameraDirection;
 
     std::unordered_map<objectID_t, EngineObject> loadedObjects;
 
@@ -142,6 +154,7 @@ private:
     void initSyncStructs();
     void initDescriptors();
     void initPipelines();
+    void initGeometryPipeline();
     void initMaterialPipelines();
     void initBackgroundPipelines();
     void initImGui();
@@ -159,6 +172,7 @@ private:
     void drawBackground(VkCommandBuffer cmd);
     void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
     void drawGeometry(VkCommandBuffer cmd);
+    void drawDebug(VkCommandBuffer cmd);
 
     void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func);
 
@@ -227,10 +241,15 @@ private:
     VktTypes::DrawContext m_mainDrawContext;
     //std::unordered_map<std::string, std::shared_ptr<VktTypes::Node>> m_loadedNodes;
 
+    VkDescriptorSetLayout m_debugSceneDataDescriptorLayout{};
+    VktTypes::ModelPipeline m_normalsDebugStaticPipeline;
+    VktTypes::ModelPipeline m_normalsDebugSkinnedPipeline;
+
     glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
     glm::mat4 m_projMatrix = glm::identity<glm::mat4>();
 
     PerfStats m_stats;
+    DebugConfig m_debugConf;
 
     Logger m_logger = Logger("VulkanCore");
 };

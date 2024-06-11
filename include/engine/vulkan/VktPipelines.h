@@ -11,7 +11,7 @@ public:
     VktPipelineBuilder();
     void clear();
     VkPipeline buildPipeline(VkDevice device);
-    void setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
+    void setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader, VkShaderModule geometryShader = VK_NULL_HANDLE);
     void setInputTopology(VkPrimitiveTopology topology);
     void setPolygonMode(VkPolygonMode mode);
     void setCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
