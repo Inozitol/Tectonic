@@ -12,6 +12,7 @@ layout (location = 3) out vec3 outWPos;
 
 void main(){
     Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
+
     mat4 skinMat =
         v.jointWeights.x * PushConstants.jointsBuffer.jointMatrices[int(v.jointIndices.x)] +
         v.jointWeights.y * PushConstants.jointsBuffer.jointMatrices[int(v.jointIndices.y)] +

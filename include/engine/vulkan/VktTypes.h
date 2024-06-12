@@ -49,6 +49,15 @@ namespace VktTypes{
         VkFormat format = VK_FORMAT_UNDEFINED;
     };
 
+    /** @brief Abstraction over Vma allocated cube map. */
+    struct AllocatedCubeMap{
+        VkImage image = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        VkExtent3D extent {.width = 0, .height = 0, .depth = 0}; // Defined for all 6 sides
+        VkFormat format = VK_FORMAT_UNDEFINED;
+    };
+
     /** Helper constants to make templated structs more verbose. */
     inline constexpr bool Static = false;
     inline constexpr bool Skinned = true;
@@ -147,6 +156,7 @@ namespace VktTypes{
         glm::vec3 sunlightColor = {0.0f, 0.0f, 0.0f};
         glm::vec3 cameraPosition = {0.0f, 0.0f, 0.0f};
         glm::vec3 cameraDirection = {0.0f, 0.0f, 0.0f};
+        float time = 0.0f;
     };
 
     /** @brief Holds index, size and material index to buffers inside GPU */
@@ -187,6 +197,7 @@ namespace VktTypes{
 
         /**
          * @brief Metallic-Roughness factors
+         *
          * The data has to be aligned at 64 bytes (0x40), due to Vulkan constraint.
          */
         struct MaterialConstants {
@@ -195,6 +206,7 @@ namespace VktTypes{
             std::array<glm::vec4,14> extra;
         };
 
+        /** @brief Handles for material textures and buffers located on GPU. */
         struct MaterialResources {
             VktTypes::AllocatedImage colorImage;
             VkSampler colorSampler = VK_NULL_HANDLE;
@@ -207,25 +219,29 @@ namespace VktTypes{
         DescriptorWriter writer;
     };
 
+    /** @brief Instance of a single material, generated after loading. */
     struct MaterialInstance{
         VkDescriptorSet materialSet = VK_NULL_HANDLE;
         MaterialPass passType = MaterialPass::OTHER;
         const ModelPipeline* pipeline = nullptr;
     };
 
+    /** @brief Structure that contains all the necessary data to render a mesh. */
     struct RenderObject{
         uint32_t indexCount = 0;
         uint32_t firstIndex = 0;
         VkBuffer indexBuffer = VK_NULL_HANDLE;
-        bool isSkinned = false;
 
+        bool isSkinned = false;
         const MaterialInstance* material = nullptr;
 
         glm::mat4 transform = glm::identity<glm::mat4>();
+
         VkDeviceAddress vertexBufferAddress = 0;
         VkDeviceAddress jointsBufferAddress = 0;
     };
 
+    /** @brief Separates various kinds of material passes to separate vectors for optimized drawing. */
     struct DrawContext{
         std::vector<RenderObject> opaqueSurfaces;
         std::vector<RenderObject> transparentSurfaces;

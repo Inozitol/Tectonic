@@ -1,7 +1,9 @@
 
 #include "engine/vulkan/VktCore.h"
 #define VMA_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
 #include "extern/vma/vk_mem_alloc.h"
+#include "extern/stb/stb_image.h"
 
 VktCore &VktCore::getInstance() {
     static VktCore instance;
@@ -32,6 +34,8 @@ void VktCore::clean() {
         for(auto& [k,object] : loadedObjects){
             object.model.clear();
         }
+
+        m_cube.clear();
 
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -252,7 +256,7 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
             .set_desired_format(VkSurfaceFormatKHR{
                 .format = m_swapchainImageFormat,
                 .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-            .set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+            .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
             .set_desired_extent(width, height)
             .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
             .build()
@@ -323,12 +327,25 @@ void VktCore::draw() {
     VkRenderingAttachmentInfo colorAttachment   = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
     VkRenderingAttachmentInfo depthAttachment   = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
     VkRenderingInfo renderingInfo               = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+
+
+    m_stats.drawCallCount = 0;
+    m_stats.trigDrawCount = 0;
+    auto startTime = std::chrono::system_clock::now();
+
     vkCmdBeginRendering(cmd, &renderingInfo);
+
+    drawSkybox(cmd);
     drawGeometry(cmd);
     if(m_debugConf.enableDebugPipeline){
         drawDebug(cmd);
     }
+
     vkCmdEndRendering(cmd);
+
+    auto endTime = std::chrono::system_clock::now();
+    auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    m_stats.meshDrawTime = static_cast<float>(drawDuration.count()) / 1000.0f;
 
     m_mainDrawContext.opaqueSurfaces.clear();
     m_mainDrawContext.transparentSurfaces.clear();
@@ -391,10 +408,6 @@ void VktCore::drawBackground(VkCommandBuffer cmd) {
 
 void VktCore::drawGeometry(VkCommandBuffer cmd) {
 
-    m_stats.drawCallCount = 0;
-    m_stats.trigDrawCount = 0;
-    auto startTime = std::chrono::system_clock::now();
-
     // Fetch scene uniform buffer allocated memory
     VktTypes::AllocatedBuffer& gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
@@ -412,11 +425,6 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
                            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         writer.updateSet(m_device, globalDescriptor);
     }
-
-    //VkRenderingAttachmentInfo colorAttachment   = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
-    //VkRenderingAttachmentInfo depthAttachment   = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    //VkRenderingInfo renderingInfo               = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
-    //vkCmdBeginRendering(cmd, &renderingInfo);
 
     auto draw = [&](const VktTypes::RenderObject& renderObject){
         m_stats.drawCallCount++;
@@ -480,12 +488,6 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
     for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.transparentSurfaces){
         draw(renderObject);
     }
-
-    //vkCmdEndRendering(cmd);
-
-    auto endTime = std::chrono::system_clock::now();
-    auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    m_stats.meshDrawTime = static_cast<float>(drawDuration.count()) / 1000.0f;
 }
 
 void VktCore::drawDebug(VkCommandBuffer cmd){
@@ -506,11 +508,6 @@ void VktCore::drawDebug(VkCommandBuffer cmd){
                            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         writer.updateSet(m_device, globalDescriptor);
     }
-
-    //VkRenderingAttachmentInfo colorAttachment   = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
-    //VkRenderingAttachmentInfo depthAttachment   = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    //VkRenderingInfo renderingInfo               = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
-    //vkCmdBeginRendering(cmd, &renderingInfo);
 
     auto draw = [&](const VktTypes::RenderObject& renderObject){
         m_stats.drawCallCount++;
@@ -577,10 +574,83 @@ void VktCore::drawDebug(VkCommandBuffer cmd){
     for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.transparentSurfaces){
         draw(renderObject);
     }
+}
 
+void VktCore::drawSkybox(VkCommandBuffer cmd) {
+    VktTypes::DrawContext drawContext;
+    m_cube.gatherDrawContext(drawContext);
 
-    //vkCmdEndRendering(cmd);
+    // Fetch scene uniform buffer allocated memory
+    VktTypes::AllocatedBuffer& gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
+    // Copy scene data to buffer
+    memcpy(reinterpret_cast<VktTypes::GPUSceneData*>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
+
+    VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_gpuSceneDataDescriptorLayout);
+
+    // Write scene data to uniforms
+    {
+        DescriptorWriter writer;
+        writer.writeBuffer(0, gpuSceneDataBuffer.buffer,
+                           sizeof(VktTypes::GPUSceneData),
+                           0,
+                           VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.updateSet(m_device, globalDescriptor);
+    }
+
+    auto draw = [&](const VktTypes::RenderObject& renderObject){
+        m_stats.drawCallCount++;
+        m_stats.trigDrawCount += renderObject.indexCount / 3;
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyboxPipeline.pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                m_skyboxPipeline.layout,
+                                0, 1,
+                                &globalDescriptor, 0,
+                                nullptr);
+
+        VkViewport viewport{};
+        viewport.x = 0;
+        viewport.y = 0;
+        viewport.width = static_cast<float>(m_drawExtent.width);
+        viewport.height = static_cast<float>(m_drawExtent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissors{};
+        scissors.offset.x = 0;
+        scissors.offset.y = 0;
+        scissors.extent.width = m_drawExtent.width;
+        scissors.extent.height = m_drawExtent.height;
+
+        vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                m_skyboxPipeline.layout,
+                                1, 1,
+                                &m_skyboxDescriptorSet, 0,
+                                nullptr);
+
+        vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
+        pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
+        pushConstants.worldMatrix = renderObject.transform;
+        vkCmdPushConstants(cmd, m_skyboxPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>), &pushConstants);
+
+        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+    };
+
+    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.opaqueSurfaces){
+        draw(renderObject);
+    }
+
+    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.transparentSurfaces){
+        draw(renderObject);
+    }
 }
 
 void VktCore::initDescriptors() {
@@ -655,6 +725,7 @@ void VktCore::initPipelines() {
     //initMeshPipeline();
     initMaterialPipelines();
     initGeometryPipeline();
+    initSkyboxPipeline();
     m_logger(Logger::INFO) << "Finished initializing graphics pipelines\n";
 }
 
@@ -717,12 +788,9 @@ void VktCore::initBackgroundPipelines() {
 
 void VktCore::initMaterialPipelines() {
     // Load shaders
-    VkShaderModule vertShader;
-    VkShaderModule fragShader;
-    VkShaderModule vertSkinShader;
-    vertShader = VktUtils::loadShaderModule("shaders/mesh.vert.spv", m_device);
-    fragShader = VktUtils::loadShaderModule("shaders/mesh.frag.spv", m_device);
-    vertSkinShader = VktUtils::loadShaderModule("shaders/mesh_skin.vert.spv", m_device);
+    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/mesh.vert.spv", m_device);
+    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/mesh.frag.spv", m_device);
+    VkShaderModule vertSkinShader = VktUtils::loadShaderModule("shaders/mesh_skin.vert.spv", m_device);
 
     // Create vertex shader push constants range
     VkPushConstantRange matrixRange{};
@@ -824,16 +892,11 @@ void VktCore::initMaterialPipelines() {
 }
 
 void VktCore::initGeometryPipeline() {
-    VkShaderModule vertShader;
-    VkShaderModule vertSkinShader;
-    VkShaderModule fragShader;
-    VkShaderModule geomShader;
-    VkShaderModule geomSkinShader;
-    vertShader = VktUtils::loadShaderModule("shaders/debug/normal.vert.spv", m_device);
-    vertSkinShader = VktUtils::loadShaderModule("shaders/debug/normal_skin.vert.spv", m_device);
-    fragShader = VktUtils::loadShaderModule("shaders/debug/normal.frag.spv", m_device);
-    geomShader = VktUtils::loadShaderModule("shaders/debug/normal.geom.spv", m_device);
-    geomSkinShader = VktUtils::loadShaderModule("shaders/debug/normal_skin.geom.spv", m_device);
+    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/debug/normal.vert.spv", m_device);
+    VkShaderModule vertSkinShader = VktUtils::loadShaderModule("shaders/debug/normal_skin.vert.spv", m_device);
+    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/debug/normal.frag.spv", m_device);
+    VkShaderModule geomShader = VktUtils::loadShaderModule("shaders/debug/normal.geom.spv", m_device);
+    VkShaderModule geomSkinShader = VktUtils::loadShaderModule("shaders/debug/normal_skin.geom.spv", m_device);
 
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
@@ -906,6 +969,59 @@ void VktCore::initGeometryPipeline() {
     vkDestroyShaderModule(m_device, fragShader, nullptr);
     vkDestroyShaderModule(m_device, geomShader, nullptr);
     vkDestroyShaderModule(m_device, geomSkinShader, nullptr);
+}
+
+void VktCore::initSkyboxPipeline(){
+    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/skybox.vert.spv", m_device);
+    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/skybox.frag.spv", m_device);
+
+    VkPushConstantRange matrixRange{};
+    matrixRange.offset = 0;
+    matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
+    matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    {
+        DescriptorLayoutBuilder builder;
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        m_skyboxDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+        m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, m_skyboxDescriptorLayout);
+    }
+
+    VkDescriptorSetLayout layouts[] = {m_gpuSceneDataDescriptorLayout, m_skyboxDescriptorLayout};
+
+    // Create pipeline layout with provided descriptors and push constants
+    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
+    meshLayoutInfo.setLayoutCount = 2;
+    meshLayoutInfo.pSetLayouts = layouts;
+    meshLayoutInfo.pushConstantRangeCount = 1;
+    meshLayoutInfo.pPushConstantRanges = &matrixRange;
+
+    VkPipelineLayout layout;
+    VK_CHECK(vkCreatePipelineLayout(m_device,
+                                    &meshLayoutInfo,
+                                    nullptr,
+                                    &layout))
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, layout);
+
+    m_skyboxPipeline.layout = layout;
+
+    VktPipelineBuilder pipelineBuilder;
+    pipelineBuilder.setShaders(vertShader, fragShader);
+    pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+    pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+    pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+    pipelineBuilder.setMultisamplingNone();
+    pipelineBuilder.disableBlending();
+    pipelineBuilder.disableDepthTest();
+    pipelineBuilder.setColorAttachmentFormat(m_drawImage.format);
+    pipelineBuilder.setDepthFormat(m_depthImage.format);
+    pipelineBuilder.setPipelineLayout(layout);
+
+    m_skyboxPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_skyboxPipeline.pipeline);
+
+    vkDestroyShaderModule(m_device, vertShader, nullptr);
+    vkDestroyShaderModule(m_device, fragShader, nullptr);
 }
 
 void VktCore::immediateSubmit(std::function<void(VkCommandBuffer)> &&func) {
@@ -1032,6 +1148,16 @@ void VktCore::runImGui(){
         ImGui::InputFloat4("data3", (float*)& selected.data.data3);
         ImGui::InputFloat4("data4", (float*)& selected.data.data4);
 
+        ImGui::End();
+    }
+
+    if(ImGui::Begin("Scene")){
+        ImGui::InputFloat3("Ambient color: ", (float*)&m_sceneData.ambientColor);
+        ImGui::InputFloat3("Sunlight direction: ", (float*)&m_sceneData.sunlightDirection);
+        ImGui::InputFloat3("Sunlight color: ", (float*)&m_sceneData.sunlightColor);
+        ImGui::InputFloat3("Camera position: ", (float*)&m_sceneData.cameraPosition);
+        ImGui::InputFloat3("Camera direction: ", (float*)&m_sceneData.cameraDirection);
+        ImGui::InputFloat("Time: ", &m_sceneData.time);
         ImGui::End();
     }
 
@@ -1231,6 +1357,43 @@ void VktCore::initDefaultData() {
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     vkCreateSampler(m_device, &samplerInfo, nullptr, &m_defaultSamplerLinear);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_SAMPLER, m_defaultSamplerLinear);
+
+    std::array<void*,6> cubeData{};
+    std::fill(cubeData.begin(), cubeData.end(), nullptr);
+    std::array<const char*,6> cubeSidesFiles = {
+            "terrain/skyboxtex/xpos.png",
+            "terrain/skyboxtex/xneg.png",
+            "terrain/skyboxtex/ypos.png",
+            "terrain/skyboxtex/yneg.png",
+            "terrain/skyboxtex/zpos.png",
+            "terrain/skyboxtex/zneg.png",
+    };
+    int width, height, channels;
+    for(uint8_t cubeSide = 0; cubeSide < 6; cubeSide++){
+        unsigned char* data = stbi_load(cubeSidesFiles[cubeSide], &width, &height, &channels, 4);
+        if(data){
+            cubeData[cubeSide] = data;
+            m_logger(Logger::DEBUG) << "Loaded cube map side from file: [" << cubeSidesFiles[cubeSide] << "]\n";
+        }else{
+            m_logger(Logger::ERROR) << "Failed to load cube map side from file: [" << cubeSidesFiles[cubeSide] << "]\n";
+        }
+    }
+    VkExtent3D extent = {.width = static_cast<uint32_t>(width), .height = static_cast<uint32_t>(height), .depth = 1};
+    m_skybox = createCubeMap(cubeData, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_cube = Model("meshes/cube.tecm");
+
+    m_skyboxDescriptorSet = m_globDescriptorAllocator.allocate(m_device, m_skyboxDescriptorLayout);
+    {
+        DescriptorWriter writer;
+        writer.clear();
+
+        // Write cube map skybox texture to GPU
+        writer.writeImage(0,m_skybox.view,
+                          m_defaultSamplerLinear,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.updateSet(m_device, m_skyboxDescriptorSet);
+    }
 }
 
 VkBool32 VktCore::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
@@ -1328,6 +1491,96 @@ void VktCore::destroyImage(const VktTypes::AllocatedImage &img){
     vmaDestroyImage(vktCore.m_vmaAllocator, img.image, img.allocation);
 }
 
+VktTypes::AllocatedCubeMap VktCore::createCubeMap(VkExtent3D allocSize,
+                                                  VkFormat format,
+                                                  VkImageUsageFlags usage,
+                                                  bool mipMapped){
+    VktCore& vktCore = getInstance();
+
+    VktTypes::AllocatedCubeMap newCubeMap{};
+    newCubeMap.format = format;
+    newCubeMap.extent = allocSize;
+
+    VkImageCreateInfo imgInfo = VktStructs::imageCreateInfo(format, usage, allocSize);
+    if(mipMapped){
+        imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(allocSize.width, allocSize.height)))) + 1;
+    }
+    imgInfo.arrayLayers = 6;
+    imgInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newCubeMap.image, &newCubeMap.allocation,nullptr))
+
+    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(format == VK_FORMAT_D32_SFLOAT){
+        aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+
+    VkImageViewCreateInfo viewInfo = VktStructs::imageViewCreateInfo(format, newCubeMap.image, aspectFlags);
+    viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
+    viewInfo.subresourceRange.layerCount = 6;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+
+    VK_CHECK(vkCreateImageView(vktCore.m_device, &viewInfo, nullptr, &newCubeMap.view))
+
+    // Delete created resources on end of program
+    // TODO Maybe not best place for this
+    vktCore.m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, newCubeMap.view);
+    vktCore.m_coreDeletionQueue.pushDeletable(DeletableType::VMA_IMAGE, newCubeMap.image, {newCubeMap.allocation});
+    return newCubeMap;
+}
+
+void VktCore::destroyCubeMap(const VktTypes::AllocatedCubeMap &cubemap){
+    VktCore& vktCore = getInstance();
+
+    vkDestroyImageView(vktCore.m_device, cubemap.view, nullptr);
+    vmaDestroyImage(vktCore.m_vmaAllocator, cubemap.image, cubemap.allocation);
+}
+
+
+VktTypes::AllocatedCubeMap VktCore::createCubeMap(std::array<void *, 6> data,
+                                                  VkExtent3D allocSize,
+                                                  VkFormat format,
+                                                  VkImageUsageFlags usage,
+                                                  bool mipMapped) {
+    VktCore& vktCore = getInstance();
+    size_t dataSize = allocSize.width * allocSize.height * allocSize.depth * 4 * 6; // 4 channels and 6 layers of cube
+
+    VktTypes::AllocatedBuffer stagingBuffer = createBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    // Copying data to staging buffer
+    for(uint8_t buffer = 0; buffer < 6; buffer++){
+        memcpy(static_cast<char*>(stagingBuffer.info.pMappedData) + (buffer * (dataSize/6)), data[buffer], (dataSize/6));
+    }
+
+    VktTypes::AllocatedCubeMap newCubeMap = createCubeMap(allocSize, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipMapped);
+
+    // Transfer data to image through staging buffer
+    vktCore.immediateSubmit([&newCubeMap,&allocSize,&stagingBuffer](VkCommandBuffer cmd){
+        VktUtils::transitionCubeMap(cmd, newCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        VkBufferImageCopy copyRegion{};
+        copyRegion.bufferOffset = 0;
+        copyRegion.bufferRowLength = 0;
+        copyRegion.bufferImageHeight = 0;
+        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyRegion.imageSubresource.mipLevel = 0;
+        copyRegion.imageSubresource.baseArrayLayer = 0;
+        copyRegion.imageSubresource.layerCount = 6;
+        copyRegion.imageExtent = allocSize;
+
+        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newCubeMap.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+        VktUtils::transitionImage(cmd, newCubeMap.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    });
+    destroyBuffer(stagingBuffer);
+
+    return newCubeMap;
+}
+
+
 void VktCore::setWindow(Window *window) {
     assert(window != nullptr);
     m_window = window;
@@ -1338,6 +1591,9 @@ void VktCore::setWindow(Window *window) {
 }
 
 void VktCore::updateScene() {
+    double currTime = glfwGetTime();
+    static double prevTime = currTime;
+
     m_mainDrawContext.opaqueSurfaces.clear();
     m_sceneData.view = m_viewMatrix;
     m_sceneData.proj = m_projMatrix;
@@ -1346,13 +1602,11 @@ void VktCore::updateScene() {
     m_sceneData.viewproj = m_sceneData.proj * m_sceneData.view;
     m_sceneData.ambientColor = glm::vec3(0.1f);
     m_sceneData.sunlightColor = glm::vec3(1.0f);
-    glm::vec4 sunPos = glm::vec4(0.0f,1.0f,0.0f,1.0f) * glm::rotate(glm::identity<glm::mat4>(),static_cast<float>(glm::radians(glfwGetTime()*50.f)),glm::vec3(0.0f,1.0f,0.0f));
+    glm::vec4 sunPos = glm::vec4(0.0f,0.0f,1.0f,1.0f) * glm::rotate(glm::identity<glm::mat4>(),static_cast<float>(glm::radians(currTime*50.f)),glm::vec3(0.0f,1.0f,0.0f));
     m_sceneData.sunlightDirection = glm::vec3(sunPos - glm::vec4(0.0f));
     m_sceneData.cameraPosition = cameraPosition;
     m_sceneData.cameraDirection = cameraDirection;
-
-    double currTime = glfwGetTime();
-    static double prevTime = currTime;
+    m_sceneData.time = currTime;
 
     currTime = glfwGetTime();
     double delta = currTime - prevTime;

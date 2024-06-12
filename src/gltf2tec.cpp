@@ -1020,11 +1020,23 @@ gltf2tec::TectonicResources convertGLTFModel(const gltf2tec::GLTFResources& gltf
 }
 
 int main(){
+    std::filesystem::path cube{"meshes/cube.gltf"};
+    std::filesystem::path outCube{"meshes/cube.tecm"};
     std::filesystem::path bottle{"meshes/WaterBottle.glb"};
     std::filesystem::path outBottle{"meshes/WaterBottle.tecm"};
     std::filesystem::path shrek{"meshes/shrek.glb"};
     std::filesystem::path outShrek{"meshes/shrek.tecm"};
-    gltf2tec::GLTFResources* resources = loadGltfModel(bottle);
+
+    gltf2tec::GLTFResources* resources = loadGltfModel(cube);
+    if(resources) {
+        gltf2tec::TectonicResources tecResources = convertGLTFModel(*resources);
+        std::ofstream outFile(outCube, std::ios::out | std::ios::binary);
+        outFile.write(reinterpret_cast<const char *>(&tecResources.data[0]), tecResources.data.size());
+    }
+    delete(resources);
+
+
+    resources = loadGltfModel(bottle);
     if(resources) {
         gltf2tec::TectonicResources tecResources = convertGLTFModel(*resources);
         std::ofstream outFile(outBottle, std::ios::out | std::ios::binary);

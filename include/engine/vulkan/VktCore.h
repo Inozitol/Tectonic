@@ -84,11 +84,32 @@ public:
 
     static constexpr uint8_t FRAMES_OVERLAP = 2;
 
-    static VktTypes::AllocatedBuffer createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-    static VktTypes::AllocatedImage createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
-    static VktTypes::AllocatedImage createImage(void* data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped = false);
+    static VktTypes::AllocatedBuffer    createBuffer(size_t allocSize,
+                                                     VkBufferUsageFlags usage,
+                                                     VmaMemoryUsage memoryUsage);
+    static VktTypes::AllocatedImage     createImage(VkExtent3D allocSize,
+                                                    VkFormat format,
+                                                    VkImageUsageFlags usage,
+                                                    bool mipMapped = false);
+    static VktTypes::AllocatedImage     createImage(void* data,
+                                                    VkExtent3D allocSize,
+                                                    VkFormat format,
+                                                    VkImageUsageFlags usage,
+                                                    bool mipMapped = false);
+
+    static VktTypes::AllocatedCubeMap   createCubeMap(VkExtent3D allocSize,
+                                                      VkFormat format,
+                                                      VkImageUsageFlags usage,
+                                                      bool mipMapped = false);
+
+    static VktTypes::AllocatedCubeMap   createCubeMap(std::array<void*,6> data,
+                                                      VkExtent3D allocSize,
+                                                      VkFormat format,
+                                                      VkImageUsageFlags usage,
+                                                      bool mipMapped = false);
     static void destroyBuffer(const VktTypes::AllocatedBuffer& buffer);
     static void destroyImage(const VktTypes::AllocatedImage& img);
+    static void destroyCubeMap(const VktTypes::AllocatedCubeMap &cubemap);
 
     VktTypes::MaterialInstance writeMaterial(VkDevice device,
                                              VktTypes::MaterialPass pass,
@@ -135,8 +156,10 @@ public:
     VktTypes::AllocatedImage m_whiteImage{};
     VktTypes::AllocatedImage m_blackImage{};
     VktTypes::AllocatedImage m_greyImage{};
-    VkSampler m_defaultSamplerLinear{};
+    VktTypes::AllocatedCubeMap m_skybox{};
+    Model m_cube;
     VkSampler m_defaultSamplerNearest{};
+    VkSampler m_defaultSamplerLinear{};
     VktTypes::GLTFMetallicRoughness metalRoughMaterial;
 
     glm::vec3 cameraPosition;
@@ -157,6 +180,7 @@ private:
     void initGeometryPipeline();
     void initMaterialPipelines();
     void initBackgroundPipelines();
+    void initSkyboxPipeline();
     void initImGui();
     void initDefaultData();
 
@@ -173,6 +197,7 @@ private:
     void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
     void drawGeometry(VkCommandBuffer cmd);
     void drawDebug(VkCommandBuffer cmd);
+    void drawSkybox(VkCommandBuffer cmd);
 
     void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func);
 
@@ -239,9 +264,12 @@ private:
     VkDescriptorSetLayout m_singleImageDescriptorLayout{};
 
     VktTypes::DrawContext m_mainDrawContext;
-    //std::unordered_map<std::string, std::shared_ptr<VktTypes::Node>> m_loadedNodes;
 
-    VkDescriptorSetLayout m_debugSceneDataDescriptorLayout{};
+    VkDescriptorSetLayout   m_skyboxDescriptorLayout = VK_NULL_HANDLE;
+    VkDescriptorSet         m_skyboxDescriptorSet = VK_NULL_HANDLE;
+    VktTypes::ModelPipeline m_skyboxPipeline;
+
+    VkDescriptorSetLayout   m_debugSceneDataDescriptorLayout = VK_NULL_HANDLE;
     VktTypes::ModelPipeline m_normalsDebugStaticPipeline;
     VktTypes::ModelPipeline m_normalsDebugSkinnedPipeline;
 

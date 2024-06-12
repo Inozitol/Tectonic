@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform SceneData{
     vec3 sunlightColor;
     vec3 cameraPosition;
     vec3 cameraDirection;
+    float time;
 } sceneData;
 
 layout(set = 1, binding = 0) uniform GLTFMaterialData{
