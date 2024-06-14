@@ -231,6 +231,7 @@ void loadMaterials(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const s
         if(mat.pbrData.baseColorTexture.has_value()){
             if(gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].imageIndex.has_value()) {
                 materialResources.colorImage = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].imageIndex.value();
+                materialConstants.bitFlags = Utils::enumSetBits(VktTypes::GLTFMetallicRoughness::MaterialConstants::Flags::ColorTex, materialConstants.bitFlags);
             }
             if(gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex.has_value()){
                 materialResources.colorSampler = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex.value();
@@ -239,6 +240,7 @@ void loadMaterials(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const s
         if(mat.pbrData.metallicRoughnessTexture.has_value()) {
             if(gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].imageIndex.has_value()) {
                 materialResources.metalRoughImage = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].imageIndex.value();
+                materialConstants.bitFlags = Utils::enumSetBits(VktTypes::GLTFMetallicRoughness::MaterialConstants::Flags::MetallicRoughnessTex, materialConstants.bitFlags);
             }
             if(gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].samplerIndex.has_value()){
                 materialResources.metalRoughSampler = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].samplerIndex.value();

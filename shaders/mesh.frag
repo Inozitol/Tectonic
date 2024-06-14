@@ -28,34 +28,13 @@ struct PBRInfo
 };
 
 const float PI = 3.14159265;
+const float PI_R = 1.0/PI;
 
 vec3 N = normalize(inNormal);
 vec3 V = normalize(sceneData.cameraPosition - inWPos);
 
 vec3 L = normalize(-sceneData.sunlightDirection).xyz;
 vec3 H = normalize(V + L);
-
-float D_GGX(float NoH, float roughness){
-    float a = NoH * roughness;
-    float k = roughness / (1.0f - NoH*NoH + a*a);
-    return k*k*(1.0f/PI);
-}
-
-float V_SmithGGXCorrelated(float NoV, float NoL, float roughness) {
-    float a2 = roughness * roughness;
-    float GGXV = NoL * sqrt(NoV * NoV * (1.0 - a2) + a2);
-    float GGXL = NoV * sqrt(NoL * NoL * (1.0 - a2) + a2);
-    return 0.5 / (GGXV + GGXL);
-}
-
-vec3 F_Schlick(float u, vec3 f0) {
-    float f = pow(1.0 - u, 5.0);
-    return f + f0 * (1.0 - f);
-}
-
-vec3 Fd_Lambert(vec3 color){
-    return (1/PI) * color;
-}
 
 vec3 specularReflection(PBRInfo pbrInputs)
 {
@@ -84,11 +63,33 @@ vec3 diffuse(PBRInfo pbrInputs)
 {
     return pbrInputs.diffuseColor / PI;
 }
+
+vec3 getIBLContrib(PBRInfo pbrInputs, vec3 reflection){
+    vec3 diffuse = texture(IBLCube, N).rgb;
+    vec3 specular = texture(IBLCube, reflection).rgb;
+    diffuse *= pbrInputs.diffuseColor;
+    specular *= pbrInputs.specularColor;
+    return diffuse + specular;
+}
+
 void main() {
-    float MatOcculsion = texture(metalRoughTex,inUV).x;
-    float MatRougness  = texture(metalRoughTex,inUV).y * materialData.metalRoughFactors.y;
-    float MatMetalness = texture(metalRoughTex,inUV).z * materialData.metalRoughFactors.x;
-    vec4  MatColor     = texture(colorTex,inUV) * materialData.colorFactors;
+    float MatOcclusion = 1.0f;
+    float MatRougness  = materialData.metalRoughFactors.y;
+    float MatMetalness = materialData.metalRoughFactors.x;
+    vec4  MatColor     = materialData.colorFactors;
+
+    if(bitSetM(MFlag_MetallicRoughnessTex)){
+        MatOcclusion  = texture(metalRoughTex,inUV).x;
+        MatRougness  *= texture(metalRoughTex,inUV).y;
+        MatMetalness *= texture(metalRoughTex,inUV).z;
+    }else{
+        MatRougness = clamp(MatRougness, 0.04, 1.0);
+        MatMetalness = clamp(MatMetalness, 0.0, 1.0);
+    }
+
+    if(bitSetM(MFlag_ColorTex)){
+        MatColor *= texture(colorTex, inUV);
+    }
 
     float alphaRoughness = MatRougness * MatRougness;
     vec3 f0 = vec3(0.04);
@@ -111,6 +112,7 @@ void main() {
     float NdotH = clamp(dot(N, H), 0.0, 1.0);
     float LdotH = clamp(dot(L, H), 0.0, 1.0);
     float VdotH = clamp(dot(V, H), 0.0, 1.0);
+    vec3 reflection = normalize(reflect(-V,N));
 
     PBRInfo pbrInputs = PBRInfo(
         NdotL,
@@ -134,25 +136,10 @@ void main() {
     vec3 diffuseContrib = (1.0f - F) * diffuse(pbrInputs);
     vec3 specContrib = F * G * D / (4.0f * NdotL * NdotV);
     vec3 color = NdotL * (diffuseContrib + specContrib); // TODO multiply with light color
-    
-    color = color * MatOcculsion;
+
+    color += getIBLContrib(pbrInputs, reflection);
+
+    color = color * MatOcclusion;
+
     outFragColor = vec4(color, 1.0f);
-
-    /*
-    float NoV = abs(dot(N,V)) + 1e-5;
-    float NoL = clamp(dot(N, L), 0.0f, 1.0f);
-    float NoH = clamp(dot(N, H), 0.0f, 1.0f);
-    float LoH = clamp(dot(L, H), 0.0f, 1.0f);
-
-    float roughness = MatRougness * MatRougness;
-
-    float D = D_GGX(NoH, MatRougness);
-    vec3  F = F_Schlick(LoH, MatColor);
-    float V = V_SmithGGXCorrelated(NoV, NoL, roughness);
-
-    vec3 Fr = (D * V) * F;
-    vec3 Fd = Fd_Lambert(MatColor);
-
-    outFragColor = vec4(Fr + Fd,1.0f);
-    */
 }

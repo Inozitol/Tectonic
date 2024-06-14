@@ -201,8 +201,13 @@ namespace VktTypes{
          * The data has to be aligned at 64 bytes (0x40), due to Vulkan constraint.
          */
         struct MaterialConstants {
+            enum class Flags : uint64_t{
+                ColorTex             = 1 << 0,
+                MetallicRoughnessTex = 1 << 1,
+            };
             glm::vec4 colorFactors = {0.0f, 0.0f, 0.0f, 0.0f};
-            glm::vec4 metalRoughFactors = {0.0f, 0.0f, 0.0f, 0.0f};
+            glm::vec2 metalRoughFactors = {0.0f, 0.0f};
+            Flags bitFlags{};
             std::array<glm::vec4,14> extra;
         };
 

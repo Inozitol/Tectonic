@@ -157,6 +157,7 @@ public:
     VktTypes::AllocatedImage m_blackImage{};
     VktTypes::AllocatedImage m_greyImage{};
     VktTypes::AllocatedCubeMap m_skybox{};
+    VktTypes::AllocatedCubeMap m_skyboxIBL{};   // TODO implement IBL renderer
     Model m_cube;
     VkSampler m_defaultSamplerNearest{};
     VkSampler m_defaultSamplerLinear{};

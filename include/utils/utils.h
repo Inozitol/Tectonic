@@ -76,9 +76,22 @@ namespace Utils{
         return val;
     }
 
+    /**
+     * Sets bits present in val into current and returns a new value.
+     * @tparam T1 Numeric or Enum type
+     * @tparam T2 Numeric or Enum type
+     * @param val Bits to add
+     * @param current Current bits
+     * @return Current with new bits
+     */
+    template<typename T1, typename T2>
+    T2 enumSetBits(const T1 val, const T2 current){
+        return static_cast<T2>((enumVal(val) | enumVal(current)));
+    }
+
     /** Checks whether a bit of underlying enum value in comp is present in val */
     template<typename T1, typename T2>
-    bool enumBitSet(const T1 val, const T2 comp){
+    bool enumCheckBit(const T1 val, const T2 comp){
         return (enumVal(val) & enumVal(comp)) == enumVal(comp);
     }
 

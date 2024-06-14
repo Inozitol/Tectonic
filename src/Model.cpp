@@ -177,7 +177,7 @@ void Model::loadModelData(const std::filesystem::path& path){
     const uint32_t skinIndex       = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SKIN_INDEX);
     const uint32_t animationIndex  = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::ANIMATION_INDEX);
 
-    resources.isSkinned = Utils::enumBitSet(metabyte, SerialTypes::Model::MetaBits::SKINNED);
+    resources.isSkinned = Utils::enumCheckBit(metabyte, SerialTypes::Model::MetaBits::SKINNED);
     std::size_t meshCount = Serial::readDataAt<uint32_t>(data, meshIndex);
     resources.meshes.resize(meshCount);
     std::size_t index = meshIndex + sizeof(uint32_t);

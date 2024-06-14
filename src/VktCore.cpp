@@ -294,11 +294,11 @@ void VktCore::draw() {
 
     uint32_t swapchainIndex;
     VkResult error = vkAcquireNextImageKHR(m_device,
-                                            m_swapchain,
-                                            1000000000,
-                                            getCurrentFrame().swapchainSemaphore,
-                                            nullptr,
-                                            &swapchainIndex);
+                                           m_swapchain,
+                                           1000000000,
+                                           getCurrentFrame().swapchainSemaphore,
+                                           nullptr,
+                                           &swapchainIndex);
     if(error == VK_ERROR_OUT_OF_DATE_KHR){
         m_resizeSwapchain = true;
         return;
@@ -327,7 +327,6 @@ void VktCore::draw() {
     VkRenderingAttachmentInfo colorAttachment   = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
     VkRenderingAttachmentInfo depthAttachment   = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
     VkRenderingInfo renderingInfo               = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
-
 
     m_stats.drawCallCount = 0;
     m_stats.trigDrawCount = 0;
@@ -809,6 +808,7 @@ void VktCore::initMaterialPipelines() {
         layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
         layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        layoutBuilder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
         metalRoughMaterial.materialLayout = layoutBuilder.build(m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, metalRoughMaterial.materialLayout);
@@ -1684,17 +1684,21 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
 
     metalRoughMaterial.writer.clear();
     metalRoughMaterial.writer.writeBuffer(0,resources.dataBuffer,
-                       sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants),
-                       resources.dataBufferOffset,
-                       VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+                                          sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants),
+                                          resources.dataBufferOffset,
+                                          VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     metalRoughMaterial.writer.writeImage(1, resources.colorImage.view,
-                      resources.colorSampler,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                                         resources.colorSampler,
+                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     metalRoughMaterial.writer.writeImage(2, resources.metalRoughImage.view,
-                      resources.metalRoughSampler,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                                         resources.metalRoughSampler,
+                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    metalRoughMaterial.writer.writeImage(3, m_skybox.view,
+                                         m_defaultSamplerLinear,
+                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     metalRoughMaterial.writer.updateSet(device, matData.materialSet);
 
     return matData;
