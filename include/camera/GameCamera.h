@@ -1,10 +1,11 @@
 #ifndef TECTONIC_GAMECAMERA_H
 #define TECTONIC_GAMECAMERA_H
 
+#include <set>
+
 #include "camera/Camera.h"
 #include "Keyboard.h"
-#include "meta/Signal.h"
-#include "meta/Slot.h"
+#include "connector/Slot.h"
 
 /**
  * Represents a controllable game camera. Usually only one per scene.
@@ -18,9 +19,9 @@ public:
 
     /**
      * @brief Handles an incoming key event and moves the camera accordingly.
-     * @param key Key to handle.
+     * @param buttonInfo Info about a keyboard button event.
      */
-    void handleKeyEvent(u_short key);
+    void handleKeyboardEvent(const keyboardButtonInfo& buttonInfo);
 
     /**
      * Calculates a new angle for the camera to rotate to.
@@ -40,10 +41,19 @@ public:
     void setSpeed(float speed);
 
     /**
+     * Calculate new world space position from direction angles and direction vectors.
+     * Should be called every frame.
+     *
+     * @brief Updates the world space of the camera.
+     * @param delta Delta time
+     */
+    void updatePosition(float delta);
+    
+    /**
      * Handles incoming keyboard presses.
      */
-    Slot<int32_t> slt_keyEvent{[this](int32_t key){
-        handleKeyEvent(key);
+    Slot<keyboardButtonInfo> slt_keyEvent{[this](keyboardButtonInfo buttonInfo){
+        handleKeyboardEvent(buttonInfo);
     }};
 
     /**
@@ -63,7 +73,16 @@ public:
     }};
 
 private:
-    float m_speed = 0.05f;
+    /// Contains the set of all currently holding buttons.
+    std::set<int32_t> m_holdingButtons;
+
+    /// Sum of holding key destination vectors, calculated on every button press/release event.
+    glm::vec3 m_destinationSumVec = {0.0f, 0.0f, 0.0f};
+
+    /// Unit vector pointing to the current destination, calculated on every button press/release event.
+    glm::vec3 m_destinationNormVec = {0.0f, 0.0f, 0.0f};
+
+    float m_speed = 1.0f;
     float m_sensitivity = 0.001f;
 
     bool m_firstMouse = true;

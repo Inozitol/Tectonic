@@ -3,9 +3,11 @@
 
 #include <GLFW/glfw3.h>
 #include <string>
+#include <utils/utils.h>
+
 #include "exceptions.h"
-#include "meta/Slot.h"
-#include "meta/Signal.h"
+#include "connector/Slot.h"
+#include "connector/Signal.h"
 
 struct keyboardButtonInfo {
     int32_t key;
@@ -24,29 +26,66 @@ public:
     Signal<int32_t> sig_updateKeyPressed;
 
     Slot<keyboardButtonInfo> slt_updateButtonInfo{[this](keyboardButtonInfo buttonInfo){
-        m_buttonInfo = buttonInfo;
-        sig_updateButtonInfo.emit(m_buttonInfo);
-        switch (m_buttonInfo.action){
-            case GLFW_PRESS:
-            case GLFW_REPEAT:
-                sig_updateKeyPressed.emit(m_buttonInfo.key);
-                invokeKeyGroups(buttonInfo.key);
-                break;
-        }
+        sig_updateButtonInfo.emit(buttonInfo);
+        invokeKeyGroups(buttonInfo);
     }};
 
-    void addKeyGroup(std::string&& name, std::vector<int32_t>&& group);
-    void connectKeyGroup(const std::string &name, Slot<int32_t> &slot);
+    enum class KeyboardGroupFlags : uint8_t {
+        NONE = 0,
+        EMIT_ON_RELEASE = 1 << 0,    /// Emits the group on GLFW_RELEASE
+        EMIT_ON_REPEAT = 1 << 1,     /// Emits the group on GLFW_REPEAT
+    };
+
+    void addKeyGroup(std::string&& name, std::vector<int32_t>&& group, KeyboardGroupFlags flags = KeyboardGroupFlags::NONE);
+    void connectKeyGroup(const std::string &name, Slot<keyboardButtonInfo> &slot);
     void connectKeyGroup(const std::string &name, Slot<> &slot);
 
 private:
 
-    void invokeKeyGroups(int32_t buttonInfo);
-    void createKeySignal(int32_t key);
+    struct KeySignals {
+        mutable Signal<keyboardButtonInfo> buttonInfoSignal;
+        mutable Signal<> buttonEmptySignal;
 
-    keyboardButtonInfo m_buttonInfo;
-    std::unordered_map<std::string, std::vector<int32_t>> m_keyGroups;
-    std::unordered_map<int32_t, std::pair<Signal<int32_t>, Signal<>>> m_keySignals;
+        void handleButtonInfo(const keyboardButtonInfo& buttonInfo, KeyboardGroupFlags flags) const {
+            switch(buttonInfo.action) {
+                case GLFW_PRESS:
+                    buttonInfoSignal.emit(buttonInfo);
+                    buttonEmptySignal.emit();
+                break;
+
+                case GLFW_REPEAT:
+                    if(Utils::enumCheckBit(flags, KeyboardGroupFlags::EMIT_ON_REPEAT)) {
+                        buttonInfoSignal.emit(buttonInfo);
+                        buttonEmptySignal.emit();
+                    }
+                break;
+
+                case GLFW_RELEASE:
+                    if(Utils::enumCheckBit(flags, KeyboardGroupFlags::EMIT_ON_RELEASE)) {
+                        buttonInfoSignal.emit(buttonInfo);
+                        buttonEmptySignal.emit();
+                    }
+                break;
+
+                default:
+                    break;
+            }
+        }
+    };
+
+    struct KeyGroup {
+        std::vector<int32_t> keys;
+        KeyboardGroupFlags flags;
+        KeySignals keySignals;
+    };
+
+    void invokeKeyGroups(const keyboardButtonInfo& buttonInfo);
+    static void createKeySignal(std::unordered_map<int32_t, KeySignals>& signals, int32_t key);
+
+    static void signalRoutine(const keyboardButtonInfo& buttonInfo, KeyboardGroupFlags flags);
+
+    std::unordered_map<std::string, KeyGroup> m_keyGroups;
+    std::unordered_map<int32_t, std::vector<KeyGroup*>> m_backwardsKeyGroup;
 };
 
 

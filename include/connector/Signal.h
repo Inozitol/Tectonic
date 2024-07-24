@@ -43,7 +43,7 @@ public:
         m_connectedSlots.clear();
     }
 
-    void emit(Args... parameters){
+    void emit(Args... parameters) {
         for(auto &slot: m_connectedSlots){
             slot->call(parameters...);
         }

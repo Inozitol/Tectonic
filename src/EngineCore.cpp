@@ -3,6 +3,10 @@
 void EngineCore::run() {
     m_vktCore.setProjMatrix(m_gameCamera->getProjectionMatrix());
 
+    double prevTime = glfwGetTime();
+    double currTime = prevTime;
+    double deltaTime = currTime-prevTime;
+
     // TODO
     //  Seems like a bad idea to use shouldClose().
     //  The m_window isn't a hamster in a wheel.
@@ -13,8 +17,12 @@ void EngineCore::run() {
         m_vktCore.cameraDirection = m_gameCamera->getDirection();
         glfwPollEvents();
         m_gameCamera->createView();
+        m_gameCamera->updatePosition(deltaTime);
         m_vktCore.setViewMatrix(m_gameCamera->getViewMatrix());
         m_vktCore.run();
+        prevTime = currTime;
+        currTime = glfwGetTime();
+        deltaTime = currTime - prevTime;
     }
 }
 
@@ -571,8 +579,9 @@ void EngineCore::initKeyGroups(){
             GLFW_KEY_A,
             GLFW_KEY_D,
             GLFW_KEY_SPACE,
-            GLFW_KEY_C
-    });
+            GLFW_KEY_C,
+            GLFW_KEY_LEFT_SHIFT
+    }, Keyboard::KeyboardGroupFlags::EMIT_ON_RELEASE);
     m_keyboard.addKeyGroup("close", {GLFW_KEY_ESCAPE});
     m_keyboard.addKeyGroup("cursorToggle", {
             GLFW_KEY_LEFT_CONTROL,
@@ -602,7 +611,7 @@ void EngineCore::initGameCamera() {
                                     CAMERA_PPROJ_NEAR,
                                     CAMERA_PPROJ_FAR});
     m_gameCamera->createProjectionMatrix();
-    m_gameCamera->setSpeed(0.5f);
+    m_gameCamera->setSpeed(2.5f);
 }
 
 void EngineCore::initKeyboard() {

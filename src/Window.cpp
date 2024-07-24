@@ -11,13 +11,16 @@ Window::Window(const char* name){
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    m_window = glfwCreateWindow(mode->width, mode->height, name, nullptr, nullptr);
-    //m_window = glfwCreateWindow(1920, 1080, name.c_str(), primary, nullptr);
+    m_window = glfwCreateWindow(mode->width, mode->height, name, primary, nullptr);
+    //m_window = glfwCreateWindow(800, 600, name, nullptr, nullptr);
     if(!m_window){
         throw windowException("Unable to create Window");
     }
 
     glfwSetWindowUserPointer(m_window, this);
+    if(glfwRawMouseMotionSupported()) {
+        glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+    }
     initSignals();
 }
 

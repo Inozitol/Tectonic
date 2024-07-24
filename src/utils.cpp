@@ -1,5 +1,4 @@
 
-#include <array>
 #include "utils/utils.h"
 
 namespace Utils{

@@ -1,22 +1,26 @@
 #include "Keyboard.h"
 
-void Keyboard::addKeyGroup(std::string&& name, std::vector<int32_t>&& group) {
+void Keyboard::addKeyGroup(std::string&& name, std::vector<int32_t>&& group, KeyboardGroupFlags flags) {
     if(m_keyGroups.contains(name)){
         throw keyboardException("Key group already exists");
     }
-    m_keyGroups.insert({name, group});
+    m_keyGroups.try_emplace(name);
+    m_keyGroups.at(name).keys = group;
+    m_keyGroups.at(name).flags = flags;
+    for(const auto& key : group) {
+        if(!m_backwardsKeyGroup.contains(key)) {
+            m_backwardsKeyGroup[key] = std::vector<KeyGroup*>();
+        }
+        m_backwardsKeyGroup.at(key).push_back(&m_keyGroups.at(name));
+    }
 }
 
-void Keyboard::connectKeyGroup(const std::string &name, Slot<int32_t> &slot) {
+void Keyboard::connectKeyGroup(const std::string &name, Slot<keyboardButtonInfo> &slot) {
     if(!m_keyGroups.contains(name)){
         throw keyboardException("Key group doesn't exists");
     }
 
-    for(auto& key : m_keyGroups.at(name)){
-        if(!m_keySignals.contains(key))
-            createKeySignal(key);
-        m_keySignals.at(key).first.connect(slot);
-    }
+    m_keyGroups.at(name).keySignals.buttonInfoSignal.connect(slot);
 }
 
 void Keyboard::connectKeyGroup(const std::string &name, Slot<> &slot) {
@@ -24,24 +28,17 @@ void Keyboard::connectKeyGroup(const std::string &name, Slot<> &slot) {
         throw keyboardException("Key group doesn't exists");
     }
 
-    for(auto& key : m_keyGroups.at(name)){
-        if(!m_keySignals.contains(key))
-            createKeySignal(key);
-        m_keySignals.at(key).second.connect(slot);
+    m_keyGroups.at(name).keySignals.buttonEmptySignal.connect(slot);
+}
+
+void Keyboard::invokeKeyGroups(const keyboardButtonInfo& buttonInfo){
+    if(m_backwardsKeyGroup.contains(buttonInfo.key)) {
+        for(auto group : m_backwardsKeyGroup.at(buttonInfo.key)) {
+            group->keySignals.handleButtonInfo(buttonInfo, group->flags);
+        }
     }
 }
 
-void Keyboard::invokeKeyGroups(int32_t key) {
-    if(!m_keySignals.contains(key)) {
-        createKeySignal(key);
-        return;
-    }
-    m_keySignals.at(key).first.emit(key);
-    m_keySignals.at(key).second.emit();
-}
-
-void Keyboard::createKeySignal(int32_t key) {
-    m_keySignals.emplace(std::piecewise_construct,
-                         std::forward_as_tuple(key),
-                         std::forward_as_tuple());
+void Keyboard::createKeySignal(std::unordered_map<int32_t, KeySignals>& signals, const int32_t key) {
+    signals.try_emplace(key);
 }

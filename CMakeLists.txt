@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 
+add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
+
 find_package(glfw3 3.3 REQUIRED)
 find_package(Vulkan REQUIRED)
 
@@ -32,7 +34,6 @@ add_executable(Tectonic
         include/utils/Serial.h)
 
 target_link_libraries(Tectonic glfw)
-target_link_libraries(Tectonic assimp)
 target_link_libraries(Tectonic Vulkan::Vulkan)
 target_link_libraries(Tectonic vkbootstrap)
 target_link_libraries(Tectonic vma)
@@ -50,8 +51,6 @@ file(GLOB_RECURSE GLSL_SOURCE
 
 foreach(GLSL ${GLSL_SOURCE})
     message(STATUS "BUILDING GLSL SHADER")
-    #get_filename_component(FILE_NAME ${GLSL} NAME)
-    #get_filename_component(FILE_ADDR ${GLSL} DIRECTORY)
 
     set(SPIRV "${GLSL}.spv")
     message(STATUS ${GLSL})

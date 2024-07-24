@@ -2,8 +2,8 @@
 #define TECTONIC_CURSOR_H
 
 #include <GLFW/glfw3.h>
-#include "meta/Slot.h"
-#include "meta/Signal.h"
+#include "connector/Slot.h"
+#include "connector/Signal.h"
 
 struct mouseButtonInfo{
     int32_t button;

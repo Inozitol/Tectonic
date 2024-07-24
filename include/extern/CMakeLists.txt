@@ -1,21 +1,27 @@
 find_package(Vulkan REQUIRED)
 
+# Link libraries
 add_library(vkbootstrap STATIC)
 add_library(vma INTERFACE)
 add_library(stb STATIC)
 add_library(imgui STATIC)
 
+# Includes submodules
 add_subdirectory(fastgltf)
 
+# VkBootstrap
 target_sources(vkbootstrap PRIVATE vkbootstrap/VkBootstrap.h vkbootstrap/VkBootstrap.cpp)
 target_include_directories(vkbootstrap PUBLIC vkbootstrap)
 target_link_libraries(vkbootstrap PUBLIC Vulkan::Vulkan $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
 
+# VMA
 target_include_directories(vma INTERFACE vma)
 
+# STB
 target_sources(stb PRIVATE stb/stb_image.cpp)
 target_include_directories(stb INTERFACE stb)
 
+# imgui
 target_sources(imgui PRIVATE
         imgui/imconfig.h
         imgui/imgui.h

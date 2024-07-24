@@ -7,7 +7,7 @@
 #include <GLFW/glfw3.h>
 #include <memory>
 
-#include "meta/meta.h"
+#include "connector/Signal.h"
 
 #define NUM_CUBE_MAP_FACES 6
 

@@ -135,11 +135,11 @@ void main() {
 
     vec3 diffuseContrib = (1.0f - F) * diffuse(pbrInputs);
     vec3 specContrib = F * G * D / (4.0f * NdotL * NdotV);
-    vec3 color = NdotL * (diffuseContrib + specContrib); // TODO multiply with light color
+    vec3 color = NdotL * (diffuseContrib); // TODO multiply with light color
 
     color += getIBLContrib(pbrInputs, reflection);
 
     color = color * MatOcclusion;
-
+        
     outFragColor = vec4(color, 1.0f);
 }

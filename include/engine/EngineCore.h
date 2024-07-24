@@ -4,7 +4,7 @@
 #include <queue>
 
 #include "camera/GameCamera.h"
-#include "meta/meta.h"
+#include "connector/Slot.h"
 #include "exceptions.h"
 #include "Window.h"
 #include "Logger.h"

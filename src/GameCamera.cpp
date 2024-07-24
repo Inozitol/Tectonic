@@ -1,29 +1,50 @@
 #include "camera/GameCamera.h"
 
-void GameCamera::handleKeyEvent(u_short key) {
-    switch(key){
-        case GLFW_KEY_W:
-            setPosition(m_position + m_speed * forward());
-            break;
-        case GLFW_KEY_S:
-            setPosition(m_position + m_speed * back());
-            sig_position.emit(m_position);
-            break;
-        case GLFW_KEY_A:
-            setPosition(m_position + m_speed * left());
-            break;
-        case GLFW_KEY_D:
-            setPosition(m_position + m_speed * right());
-            break;
-        case GLFW_KEY_SPACE:
-            setPosition(m_position + glm::vec3(0.0,1.0f,0.0f) * m_speed);
-            break;
-        case GLFW_KEY_C:
-            setPosition(m_position - glm::vec3(0.0,1.0f,0.0f) * m_speed);
-            break;
-        default:
-            break;
+void GameCamera::handleKeyboardEvent(const keyboardButtonInfo& buttonInfo) {
+    if(buttonInfo.action == GLFW_PRESS) {
+        m_holdingButtons.emplace(buttonInfo.key);
+    }else if(buttonInfo.action == GLFW_RELEASE) {
+        m_holdingButtons.erase(buttonInfo.key);
     }
+    m_destinationSumVec = {0.0f, 0.0f, 0.0f};
+    if(m_holdingButtons.empty()) {
+        m_destinationNormVec = {0.0f, 0.0f, 0.0f};
+        return;
+    }
+    for(const auto& key : m_holdingButtons) {
+        switch(key){
+            case GLFW_KEY_W:
+                m_destinationSumVec += Axis::NEG_Z;
+            break;
+            case GLFW_KEY_S:
+                m_destinationSumVec += Axis::POS_Z;
+            break;
+            case GLFW_KEY_A:
+                m_destinationSumVec += Axis::NEG_X;
+            break;
+            case GLFW_KEY_D:
+                m_destinationSumVec += Axis::POS_X;
+            break;
+            case GLFW_KEY_SPACE:
+                m_destinationSumVec += Axis::POS_Y;
+            break;
+            case GLFW_KEY_C:
+                m_destinationSumVec += Axis::NEG_Y;
+            break;
+            default:
+                break;
+        }
+    }
+    if(m_destinationSumVec == glm::vec3(0.0f, 0.0f, 0.0f)) {
+        m_destinationNormVec = {0.0f, 0.0f, 0.0f};
+    }else {
+        m_destinationNormVec = glm::normalize(m_destinationSumVec);
+    }
+}
+
+void GameCamera::updatePosition(float delta) {
+    glm::vec3 directionRotated = m_destinationNormVec * m_orientation;
+    m_position += directionRotated * delta * m_speed;
 }
 
 void GameCamera::handleMouseEvent(double x_in, double y_in) {

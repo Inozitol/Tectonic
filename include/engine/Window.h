@@ -7,10 +7,8 @@
 #include <functional>
 #include <vulkan/vulkan.h>
 
-#include "exceptions.h"
-
 #include "utils/utils.h"
-#include "meta/Signal.h"
+#include "connector/Signal.h"
 #include "Cursor.h"
 #include "Keyboard.h"
 

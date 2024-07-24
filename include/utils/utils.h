@@ -10,8 +10,8 @@
 #include <glm/ext/matrix_clip_space.hpp>
 #include <bitset>
 
-//#include "camera/Camera.h"
-#include "meta/meta.h"
+#include "connector/Signal.h"
+#include "connector/Slot.h"
 
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))
 #define INVALID_UNIFORM_LOC 0xFFFFFFFF
