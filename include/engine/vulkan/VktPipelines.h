@@ -1,17 +1,21 @@
 #ifndef TECTONIC_VKTPIPELINES_H
 #define TECTONIC_VKTPIPELINES_H
 
-#include <vector>
 #include <array>
+#include <unordered_map>
 #include <vulkan/vulkan.h>
 #include "VktUtils.h"
 
 class VktPipelineBuilder{
 public:
-    VktPipelineBuilder();
+    VktPipelineBuilder(VkDevice device);
+    ~VktPipelineBuilder();
     void clear();
-    VkPipeline buildPipeline(VkDevice device);
-    void setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader, VkShaderModule geometryShader = VK_NULL_HANDLE);
+    VkPipeline buildPipeline();
+    void setVertexShader(const char* path);
+    void setFragmentShader(const char* path);
+    void setGeometryShader(const char* path);
+    void setShader(VkShaderStageFlagBits stageBit, const char* path);
     void setInputTopology(VkPrimitiveTopology topology);
     void setPolygonMode(VkPolygonMode mode);
     void setCullMode(VkCullModeFlags cullMode, VkFrontFace frontFace);
@@ -25,17 +29,19 @@ public:
     void disableBlending();
     void disableDepthTest();
 private:
-    std::vector<VkPipelineShaderStageCreateInfo> m_shaderStages;
+    VkDevice m_device = VK_NULL_HANDLE;
 
-    VkPipelineInputAssemblyStateCreateInfo m_inputAssembly;
-    VkPipelineRasterizationStateCreateInfo m_rasterizer;
-    VkPipelineColorBlendAttachmentState m_colorBlendAttachment;
-    VkPipelineMultisampleStateCreateInfo m_multisampling;
-    VkPipelineDepthStencilStateCreateInfo m_depthStencil;
-    VkPipelineRenderingCreateInfo m_renderInfo;
-    VkFormat m_colorAttachmentFormat;
+    std::unordered_map<VkShaderStageFlagBits, VkShaderModule> m_shaderStages;
 
-    VkPipelineLayout m_layout;
+    VkPipelineInputAssemblyStateCreateInfo m_inputAssembly{};
+    VkPipelineRasterizationStateCreateInfo m_rasterizer{};
+    VkPipelineColorBlendAttachmentState m_colorBlendAttachment{};
+    VkPipelineMultisampleStateCreateInfo m_multisampling{};
+    VkPipelineDepthStencilStateCreateInfo m_depthStencil{};
+    VkPipelineRenderingCreateInfo m_renderInfo{};
+    VkFormat m_colorAttachmentFormat{};
+
+    VkPipelineLayout m_layout{};
 };
 
 #endif //TECTONIC_VKTPIPELINES_H

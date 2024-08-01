@@ -12,6 +12,10 @@ void EngineCore::run() {
     //  The m_window isn't a hamster in a wheel.
     //  Should get close bool with a signal from Window class.
     while(!m_vktCore.shouldClose()) {
+        prevTime = currTime;
+        currTime = glfwGetTime();
+        deltaTime = currTime - prevTime;
+
         //m_objects[0]->model.transformation.setRotation(0.0f,glfwGetTime()*50.0f, 0.0f);
         m_vktCore.cameraPosition = m_gameCamera->getPosition();
         m_vktCore.cameraDirection = m_gameCamera->getDirection();
@@ -20,9 +24,6 @@ void EngineCore::run() {
         m_gameCamera->updatePosition(deltaTime);
         m_vktCore.setViewMatrix(m_gameCamera->getViewMatrix());
         m_vktCore.run();
-        prevTime = currTime;
-        currTime = glfwGetTime();
-        deltaTime = currTime - prevTime;
     }
 }
 
@@ -620,8 +621,8 @@ void EngineCore::initKeyboard() {
 
 void EngineCore::initCursor() {
     //m_window->disableCursor();
-    CONNECT(m_cursor.sig_updatePos, m_gameCamera->slt_mouseMovement);
-    CONNECT(m_window->sig_cursorEnabled, m_gameCamera->slt_cursorEnabled);
+    m_cursor.sig_updatePos.connect(m_gameCamera->slt_mouseMovement);
+    m_window->sig_cursorEnabled.connect(m_gameCamera->slt_cursorEnabled);
     m_window->disableCursor();
     m_window->enableCursor();
 }

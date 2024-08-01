@@ -159,6 +159,11 @@ namespace VktTypes{
         float time = 0.0f;
     };
 
+    /** @brief Data passed to IBL baking geometry shader */
+    struct GPUGeometryIBLData{
+        int32_t data;
+    };
+
     /** @brief Holds index, size and material index to buffers inside GPU */
     struct MeshSurface{
         uint32_t startIndex;

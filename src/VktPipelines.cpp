@@ -1,12 +1,19 @@
 #include "engine/vulkan/VktPipelines.h"
 
-VktPipelineBuilder::VktPipelineBuilder() {
+VktPipelineBuilder::VktPipelineBuilder(VkDevice device)
+: m_device(device){
     clear();
+}
+
+VktPipelineBuilder::~VktPipelineBuilder() {
+    for(const auto& [stage, module] : m_shaderStages){
+        vkDestroyShaderModule(m_device, module, nullptr);
+    }
 }
 
 void VktPipelineBuilder::clear() {
     m_inputAssembly = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, .pNext = nullptr};
-    m_rasterizer    = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, .pNext = nullptr};
+    m_rasterizer = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, .pNext = nullptr};
     m_colorBlendAttachment = {};
     m_multisampling = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO, .pNext = nullptr};
     m_layout = {};
@@ -15,7 +22,7 @@ void VktPipelineBuilder::clear() {
     m_shaderStages.clear();
 }
 
-VkPipeline VktPipelineBuilder::buildPipeline(VkDevice device) {
+VkPipeline VktPipelineBuilder::buildPipeline() {
     VkPipelineViewportStateCreateInfo viewportState{.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, .pNext = nullptr};
     viewportState.viewportCount = 1;
     viewportState.scissorCount = 1;
@@ -28,10 +35,16 @@ VkPipeline VktPipelineBuilder::buildPipeline(VkDevice device) {
 
     VkPipelineVertexInputStateCreateInfo m_vertexInputInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO, .pNext = nullptr};
 
+    std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+    shaderStages.reserve(m_shaderStages.size());
+    for(const auto& [stage, module] : m_shaderStages){
+        shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(stage, module));
+    }
+
     VkGraphicsPipelineCreateInfo pipelineInfo{.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     pipelineInfo.pNext = &m_renderInfo;
-    pipelineInfo.pStages = m_shaderStages.data();
-    pipelineInfo.stageCount = static_cast<uint32_t>(m_shaderStages.size());
+    pipelineInfo.pStages = shaderStages.data();
+    pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pVertexInputState = &m_vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &m_inputAssembly;
     pipelineInfo.pViewportState = &viewportState;
@@ -50,17 +63,28 @@ VkPipeline VktPipelineBuilder::buildPipeline(VkDevice device) {
     pipelineInfo.pDynamicState = &dynamicInfo;
 
     VkPipeline graphicsPipeline;
-    VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
+    VK_CHECK(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
     return graphicsPipeline;
 }
 
-void VktPipelineBuilder::setShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader, VkShaderModule geometryShader) {
-    m_shaderStages.clear();
-    m_shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
-    m_shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
-    if(geometryShader != VK_NULL_HANDLE){
-        m_shaderStages.push_back(VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_GEOMETRY_BIT, geometryShader));
+void VktPipelineBuilder::setVertexShader(const char* path) {
+    setShader(VK_SHADER_STAGE_VERTEX_BIT, path);
+}
+
+void VktPipelineBuilder::setFragmentShader(const char* path) {
+    setShader(VK_SHADER_STAGE_FRAGMENT_BIT, path);
+}
+
+void VktPipelineBuilder::setGeometryShader(const char* path) {
+    setShader(VK_SHADER_STAGE_GEOMETRY_BIT, path);
+}
+
+void VktPipelineBuilder::setShader(VkShaderStageFlagBits stageBit, const char* path){
+    // Delete old shader in case its still cached
+    if(m_shaderStages.contains(stageBit)){
+        vkDestroyShaderModule(m_device, m_shaderStages.at(stageBit), nullptr);
     }
+    m_shaderStages[stageBit] = VktUtils::loadShaderModule(path, m_device);
 }
 
 void VktPipelineBuilder::setInputTopology(VkPrimitiveTopology topology) {
@@ -158,5 +182,4 @@ void VktPipelineBuilder::enableBlendingAlpha() {
     m_colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
     m_colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
     m_colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
-
 }

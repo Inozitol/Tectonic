@@ -1,5 +1,4 @@
-#ifndef TECTONIC_KEYBOARD_H
-#define TECTONIC_KEYBOARD_H
+#pragma once
 
 #include <GLFW/glfw3.h>
 #include <string>
@@ -87,6 +86,3 @@ private:
     std::unordered_map<std::string, KeyGroup> m_keyGroups;
     std::unordered_map<int32_t, std::vector<KeyGroup*>> m_backwardsKeyGroup;
 };
-
-
-#endif //TECTONIC_KEYBOARD_H

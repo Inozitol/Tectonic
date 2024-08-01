@@ -17,7 +17,7 @@ namespace VktStructs{
     VkImageViewCreateInfo           imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
     VkRenderingAttachmentInfo       attachmentInfo(VkImageView view, VkClearValue* clear, VkImageLayout layout);
     VkRenderingAttachmentInfo       depthAttachmentInfo(VkImageView view, VkImageLayout layout);
-    VkRenderingInfo                 renderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment, VkRenderingAttachmentInfo* depthAttachment);
+    VkRenderingInfo                 renderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment, VkRenderingAttachmentInfo* depthAttachment, uint32_t layerCount = 1);
     VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo(VkShaderStageFlagBits stage, VkShaderModule shaderModule, const char* entry = "main");
     VkPipelineLayoutCreateInfo      pipelineLayoutCreateInfo();
 }

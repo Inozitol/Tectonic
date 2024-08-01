@@ -12,7 +12,6 @@ Window::Window(const char* name){
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
     m_window = glfwCreateWindow(mode->width, mode->height, name, primary, nullptr);
-    //m_window = glfwCreateWindow(800, 600, name, nullptr, nullptr);
     if(!m_window){
         throw windowException("Unable to create Window");
     }
@@ -113,12 +112,12 @@ void Window::close() {
 }
 
 void Window::connectCursor(Cursor &cursor) {
-    CONNECT(sig_updateMouseButtonInfo, cursor.slt_updateButtonInfo);
-    CONNECT(sig_updateMousePos, cursor.slt_updatePos);
+    sig_updateMouseButtonInfo.connect(cursor.slt_updateButtonInfo);
+    sig_updateMousePos.connect(cursor.slt_updatePos);
 }
 
 void Window::connectKeyboard(Keyboard &keyboard) {
-    CONNECT(sig_updateKeyboardButtonInfo, keyboard.slt_updateButtonInfo);
+    sig_updateKeyboardButtonInfo.connect(keyboard.slt_updateButtonInfo);
 }
 
 VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {

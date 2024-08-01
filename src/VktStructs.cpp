@@ -71,7 +71,7 @@ VkSubmitInfo2 VktStructs::submitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphore
     return info;
 }
 
-VkImageCreateInfo  VktStructs::imageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extent){
+VkImageCreateInfo VktStructs::imageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extent){
     VkImageCreateInfo info{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .pNext = nullptr};
     info.imageType = VK_IMAGE_TYPE_2D;
     info.format = format;
@@ -119,10 +119,10 @@ VkRenderingAttachmentInfo VktStructs::depthAttachmentInfo(VkImageView view, VkIm
     return info;
 }
 
-VkRenderingInfo VktStructs::renderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment, VkRenderingAttachmentInfo* depthAttachment){
+VkRenderingInfo VktStructs::renderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment, VkRenderingAttachmentInfo* depthAttachment, uint32_t layerCount){
     VkRenderingInfo info{.sType = VK_STRUCTURE_TYPE_RENDERING_INFO, .pNext = nullptr};
     info.renderArea = VkRect2D{VkOffset2D{0,0}, renderExtent};
-    info.layerCount = 1;
+    info.layerCount = layerCount;
     info.colorAttachmentCount = 1;
     info.pColorAttachments = colorAttachment;
     info.pDepthAttachment = depthAttachment;

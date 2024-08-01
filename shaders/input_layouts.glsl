@@ -11,6 +11,7 @@ layout(set = 0, binding = 0) uniform SceneData{
     float time;
 } sceneData;
 
+// TODO put IBL cube to set 0
 
 layout(set = 1, binding = 0) uniform GLTFMaterialData{
     vec4 colorFactors;

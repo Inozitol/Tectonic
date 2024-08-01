@@ -82,6 +82,7 @@ public:
      */
     static VkDevice device();
 
+    /** Number of in-flight frames being generated in parallel */
     static constexpr uint8_t FRAMES_OVERLAP = 2;
 
     static VktTypes::AllocatedBuffer    createBuffer(size_t allocSize,
@@ -96,12 +97,10 @@ public:
                                                     VkFormat format,
                                                     VkImageUsageFlags usage,
                                                     bool mipMapped = false);
-
     static VktTypes::AllocatedCubeMap   createCubeMap(VkExtent3D allocSize,
                                                       VkFormat format,
                                                       VkImageUsageFlags usage,
                                                       bool mipMapped = false);
-
     static VktTypes::AllocatedCubeMap   createCubeMap(std::array<void*,6> data,
                                                       VkExtent3D allocSize,
                                                       VkFormat format,
@@ -157,7 +156,7 @@ public:
     VktTypes::AllocatedImage m_blackImage{};
     VktTypes::AllocatedImage m_greyImage{};
     VktTypes::AllocatedCubeMap m_skybox{};
-    VktTypes::AllocatedCubeMap m_skyboxIBL{};   // TODO implement IBL renderer
+    VktTypes::AllocatedCubeMap m_skyboxIBL{};
     Model m_cube;
     VkSampler m_defaultSamplerNearest{};
     VkSampler m_defaultSamplerLinear{};
@@ -208,8 +207,8 @@ private:
                                   void* pUserData);
 
     void resizeSwapchain();
-
     void updateScene();
+    VktTypes::AllocatedCubeMap generateIBLCubeMap(VktTypes::AllocatedCubeMap cubeMap);
 
     bool m_isInitialized = false;
     uint32_t m_frameNumber = 0;

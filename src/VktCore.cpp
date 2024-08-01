@@ -2,8 +2,8 @@
 #include "engine/vulkan/VktCore.h"
 #define VMA_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
-#include "extern/vma/vk_mem_alloc.h"
 #include "extern/stb/stb_image.h"
+#include "extern/vma/vk_mem_alloc.h"
 
 VktCore &VktCore::getInstance() {
     static VktCore instance;
@@ -28,10 +28,10 @@ void VktCore::init() {
 }
 
 void VktCore::clean() {
-    if(m_isInitialized){
+    if(m_isInitialized) {
         vkDeviceWaitIdle(m_device);
 
-        for(auto& [k,object] : loadedObjects){
+        for(auto &[k, object]: loadedObjects) {
             object.model.clear();
         }
 
@@ -44,7 +44,7 @@ void VktCore::clean() {
         m_coreDeletionQueue.flush();
         m_globDescriptorAllocator.destroyPool(m_device);
 
-        for(uint8_t i = 0; i < FRAMES_OVERLAP; i++){
+        for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
             vkDestroyCommandPool(m_device, m_frames[i].commandPool, nullptr);
             vkDestroyFence(m_device, m_frames[i].renderFence, nullptr);
             vkDestroySemaphore(m_device, m_frames[i].renderSemaphore, nullptr);
@@ -62,17 +62,17 @@ void VktCore::clean() {
     }
 }
 
-VktCore::~VktCore(){
+VktCore::~VktCore() {
     clean();
 }
 
 void VktCore::initVulkan() {
     vkb::InstanceBuilder vkBuilder;
     auto instance = vkBuilder.set_app_name("Tectonic")
-            .request_validation_layers(true)
-            .set_debug_callback(VktCore::debugCallback)
-            .require_api_version(1,3,0)
-            .build();
+                            .request_validation_layers(true)
+                            .set_debug_callback(VktCore::debugCallback)
+                            .require_api_version(1, 3, 0)
+                            .build();
 
     m_logger(Logger::INFO) << "Finished building vkbInstance\n";
 
@@ -96,7 +96,7 @@ void VktCore::initVulkan() {
     features13.synchronization2 = true;
 
     m_logger(Logger::DEBUG) << "Enabling maintenance4 feature\n";
-    features13.maintenance4 = true;     // TODO remove this, used to keep performance warning quiet
+    features13.maintenance4 = true;// TODO remove this, used to keep performance warning quiet
 
     VkPhysicalDeviceVulkan12Features features12{};
 
@@ -108,13 +108,13 @@ void VktCore::initVulkan() {
 
     vkb::PhysicalDeviceSelector vkbSelector{vkbInstance};
     vkb::PhysicalDevice vkbPhysicalDevice = vkbSelector
-            .set_minimum_version(1,3)
-            .set_required_features_13(features13)
-            .set_required_features_12(features12)
-            .set_required_features(features)
-            .set_surface(m_surface)
-            .select()
-            .value();
+                                                    .set_minimum_version(1, 3)
+                                                    .set_required_features_13(features13)
+                                                    .set_required_features_12(features12)
+                                                    .set_required_features(features)
+                                                    .set_surface(m_surface)
+                                                    .select()
+                                                    .value();
 
     vkb::DeviceBuilder vkbDeviceBuilder{vkbPhysicalDevice};
     vkb::Device vkbDevice = vkbDeviceBuilder.build().value();
@@ -158,8 +158,7 @@ void VktCore::initSwapchain() {
     VkExtent3D drawImageExtent = {
             m_windowExtent.width,
             m_windowExtent.height,
-            1
-    };
+            1};
 
     m_drawImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
     m_drawImage.extent = drawImageExtent;
@@ -184,9 +183,9 @@ void VktCore::initSwapchain() {
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, m_drawImage.view);
 
     m_logger(Logger::INFO) << "Finished creating draw image with format: "
-                                << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
-                                << " and extent dimensions: "
-                                << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
+                           << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
+                           << " and extent dimensions: "
+                           << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
 
     m_depthImage.format = VK_FORMAT_D32_SFLOAT;
     m_depthImage.extent = drawImageExtent;
@@ -205,13 +204,12 @@ void VktCore::initSwapchain() {
                            << string_VkFormat(VK_FORMAT_D32_SFLOAT)
                            << " and extent dimensions: "
                            << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
-
 }
 
 void VktCore::initCommands() {
     VkCommandPoolCreateInfo commandPoolCreateInfo = VktStructs::commandPoolCreateInfo(m_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
-    for(uint8_t i = 0; i < FRAMES_OVERLAP; i++){
+    for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
         VK_CHECK(vkCreateCommandPool(m_device,
                                      &commandPoolCreateInfo,
                                      nullptr,
@@ -235,7 +233,7 @@ void VktCore::initSyncStructs() {
     VkFenceCreateInfo fenceCreateInfo = VktStructs::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
     VkSemaphoreCreateInfo semaphoreCreateInfo = VktStructs::semaphoreCreateInfo();
 
-    for(uint8_t i = 0; i < FRAMES_OVERLAP; i++){
+    for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
         VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_frames[i].renderFence))
         VK_CHECK(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_frames[i].swapchainSemaphore))
         VK_CHECK(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_frames[i].renderSemaphore))
@@ -253,28 +251,27 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
     m_swapchainImageFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
     vkb::Swapchain vkbSwapchain = vkbSwapchainBuilder
-            .set_desired_format(VkSurfaceFormatKHR{
-                .format = m_swapchainImageFormat,
-                .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-            .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-            .set_desired_extent(width, height)
-            .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-            .build()
-            .value();
+                                          .set_desired_format(VkSurfaceFormatKHR{
+                                                  .format = m_swapchainImageFormat,
+                                                  .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+                                          .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                                          .set_desired_extent(width, height)
+                                          .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                          .build()
+                                          .value();
 
     m_swapchainExtent = vkbSwapchain.extent;
     m_swapchain = vkbSwapchain.swapchain;
     m_swapchainImages = vkbSwapchain.get_images().value();
     m_swapchainImageViews = vkbSwapchain.get_image_views().value();
-    m_swapchainImageFormat = vkbSwapchain.image_format;     // Builder might choose different format
+    m_swapchainImageFormat = vkbSwapchain.image_format;// Builder might choose different format
     m_logger(Logger::INFO) << "Finished building swapchain with format: " << string_VkFormat(vkbSwapchain.image_format) << '\n';
-
 }
 
 void VktCore::destroySwapchain() {
     vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 
-    for(auto& imageView : m_swapchainImageViews){
+    for(auto &imageView: m_swapchainImageViews) {
         vkDestroyImageView(m_device, imageView, nullptr);
     }
 }
@@ -299,10 +296,10 @@ void VktCore::draw() {
                                            getCurrentFrame().swapchainSemaphore,
                                            nullptr,
                                            &swapchainIndex);
-    if(error == VK_ERROR_OUT_OF_DATE_KHR){
+    if(error == VK_ERROR_OUT_OF_DATE_KHR) {
         m_resizeSwapchain = true;
         return;
-    }else if(error){
+    } else if(error) {
         throw vulkanException("Failed to acquire next image from swapchain, error code ", string_VkResult(error));
     }
 
@@ -312,21 +309,21 @@ void VktCore::draw() {
     VkCommandBufferBeginInfo cmdBeginInfo = VktStructs::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo))
 
-    m_drawExtent.width  = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.width, m_swapchainExtent.width)) * m_renderScale);
+    m_drawExtent.width = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.width, m_swapchainExtent.width)) * m_renderScale);
     m_drawExtent.height = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.height, m_swapchainExtent.height)) * m_renderScale);
 
     // Transition main image into general layout
     VktUtils::transitionImage(cmd, m_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
     // Draw compute background
-    drawBackground(cmd);
+    //drawBackground(cmd);
 
     // Transition depth image into optimal layout
     VktUtils::transitionImage(cmd, m_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    VkRenderingAttachmentInfo colorAttachment   = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
-    VkRenderingAttachmentInfo depthAttachment   = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo renderingInfo               = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
+    VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+    VkRenderingAttachmentInfo depthAttachment = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+    VkRenderingInfo renderingInfo = VktStructs::renderingInfo(m_drawExtent, &colorAttachment, &depthAttachment);
 
     m_stats.drawCallCount = 0;
     m_stats.trigDrawCount = 0;
@@ -336,7 +333,7 @@ void VktCore::draw() {
 
     drawSkybox(cmd);
     drawGeometry(cmd);
-    if(m_debugConf.enableDebugPipeline){
+    if(m_debugConf.enableDebugPipeline) {
         drawDebug(cmd);
     }
 
@@ -383,9 +380,9 @@ void VktCore::draw() {
     presentInfo.pImageIndices = &swapchainIndex;
 
     error = vkQueuePresentKHR(m_graphicsQueue, &presentInfo);
-    if(error == VK_ERROR_OUT_OF_DATE_KHR){
+    if(error == VK_ERROR_OUT_OF_DATE_KHR) {
         m_resizeSwapchain = true;
-    }else if(error){
+    } else if(error) {
         throw vulkanException("Failed to queue swapchain image for present, error code ", string_VkResult(error));
     }
 
@@ -393,25 +390,25 @@ void VktCore::draw() {
 }
 
 void VktCore::drawBackground(VkCommandBuffer cmd) {
-    VktTypes::ComputeEffect& effect = m_backgroundEffect.at(m_currentBackgroundEffect);
+    VktTypes::ComputeEffect &effect = m_backgroundEffect.at(m_currentBackgroundEffect);
 
     // Draw gradient with compute shader
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_gradientPipelineLayout, 0, 1, &m_drawImageDescriptors, 0,nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_gradientPipelineLayout, 0, 1, &m_drawImageDescriptors, 0, nullptr);
 
     // Push constants
     vkCmdPushConstants(cmd, m_gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VktTypes::ComputePushConstants), &effect.data);
 
-    vkCmdDispatch(cmd, std::ceil(m_drawExtent.width/16.0), std::ceil(m_drawExtent.height/16.0),1);
+    vkCmdDispatch(cmd, std::ceil(m_drawExtent.width / 16.0), std::ceil(m_drawExtent.height / 16.0), 1);
 }
 
 void VktCore::drawGeometry(VkCommandBuffer cmd) {
 
     // Fetch scene uniform buffer allocated memory
-    VktTypes::AllocatedBuffer& gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
+    VktTypes::AllocatedBuffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
     // Copy scene data to buffer
-    memcpy(reinterpret_cast<VktTypes::GPUSceneData*>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
+    memcpy(reinterpret_cast<VktTypes::GPUSceneData *>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
 
     VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_gpuSceneDataDescriptorLayout);
 
@@ -425,7 +422,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
         writer.updateSet(m_device, globalDescriptor);
     }
 
-    auto draw = [&](const VktTypes::RenderObject& renderObject){
+    auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
         m_stats.trigDrawCount += renderObject.indexCount / 3;
 
@@ -469,7 +466,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
             pushConstants.worldMatrix = renderObject.transform;
             vkCmdPushConstants(cmd, renderObject.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                                sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Skinned>), &pushConstants);
-        }else{
+        } else {
             VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
             pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
             pushConstants.worldMatrix = renderObject.transform;
@@ -480,21 +477,21 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
     };
 
-    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.opaqueSurfaces){
+    for(const VktTypes::RenderObject &renderObject: m_mainDrawContext.opaqueSurfaces) {
         draw(renderObject);
     }
 
-    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.transparentSurfaces){
+    for(const VktTypes::RenderObject &renderObject: m_mainDrawContext.transparentSurfaces) {
         draw(renderObject);
     }
 }
 
-void VktCore::drawDebug(VkCommandBuffer cmd){
+void VktCore::drawDebug(VkCommandBuffer cmd) {
     // Fetch scene uniform buffer allocated memory
-    VktTypes::AllocatedBuffer& gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
+    VktTypes::AllocatedBuffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
     // Copy scene data to buffer
-    memcpy(reinterpret_cast<VktTypes::GPUSceneData*>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
+    memcpy(reinterpret_cast<VktTypes::GPUSceneData *>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
 
     VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_debugSceneDataDescriptorLayout);
 
@@ -508,18 +505,18 @@ void VktCore::drawDebug(VkCommandBuffer cmd){
         writer.updateSet(m_device, globalDescriptor);
     }
 
-    auto draw = [&](const VktTypes::RenderObject& renderObject){
+    auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
         m_stats.trigDrawCount += renderObject.indexCount / 3;
 
-        if(renderObject.isSkinned){
+        if(renderObject.isSkinned) {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_normalsDebugSkinnedPipeline.pipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     m_normalsDebugSkinnedPipeline.layout,
                                     0, 1,
                                     &globalDescriptor, 0,
                                     nullptr);
-        }else{
+        } else {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_normalsDebugStaticPipeline.pipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     m_normalsDebugStaticPipeline.layout,
@@ -555,7 +552,7 @@ void VktCore::drawDebug(VkCommandBuffer cmd){
             pushConstants.worldMatrix = renderObject.transform;
             vkCmdPushConstants(cmd, m_normalsDebugSkinnedPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
                                sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Skinned>), &pushConstants);
-        }else{
+        } else {
             VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
             pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
             pushConstants.worldMatrix = renderObject.transform;
@@ -566,11 +563,11 @@ void VktCore::drawDebug(VkCommandBuffer cmd){
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
     };
 
-    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.opaqueSurfaces){
+    for(const VktTypes::RenderObject &renderObject: m_mainDrawContext.opaqueSurfaces) {
         draw(renderObject);
     }
 
-    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.transparentSurfaces){
+    for(const VktTypes::RenderObject &renderObject: m_mainDrawContext.transparentSurfaces) {
         draw(renderObject);
     }
 }
@@ -578,12 +575,13 @@ void VktCore::drawDebug(VkCommandBuffer cmd){
 void VktCore::drawSkybox(VkCommandBuffer cmd) {
     VktTypes::DrawContext drawContext;
     m_cube.gatherDrawContext(drawContext);
+    VktTypes::RenderObject &cubeRenderObject = drawContext.opaqueSurfaces.at(0);
 
     // Fetch scene uniform buffer allocated memory
-    VktTypes::AllocatedBuffer& gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
+    VktTypes::AllocatedBuffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
     // Copy scene data to buffer
-    memcpy(reinterpret_cast<VktTypes::GPUSceneData*>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
+    memcpy(reinterpret_cast<VktTypes::GPUSceneData *>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
 
     VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_gpuSceneDataDescriptorLayout);
 
@@ -597,7 +595,7 @@ void VktCore::drawSkybox(VkCommandBuffer cmd) {
         writer.updateSet(m_device, globalDescriptor);
     }
 
-    auto draw = [&](const VktTypes::RenderObject& renderObject){
+    auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
         m_stats.trigDrawCount += renderObject.indexCount / 3;
 
@@ -643,21 +641,14 @@ void VktCore::drawSkybox(VkCommandBuffer cmd) {
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
     };
 
-    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.opaqueSurfaces){
-        draw(renderObject);
-    }
-
-    for(const VktTypes::RenderObject& renderObject : m_mainDrawContext.transparentSurfaces){
-        draw(renderObject);
-    }
+    draw(cubeRenderObject);
 }
 
 void VktCore::initDescriptors() {
     std::vector<DescriptorAllocatorDynamic::PoolSizeRatio> sizes = {
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3}
-    };
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3}};
 
     m_globDescriptorAllocator.initPool(m_device, 10, sizes);
 
@@ -694,19 +685,18 @@ void VktCore::initDescriptors() {
     }
 
 
-    for(uint8_t i = 0; i < FRAMES_OVERLAP; i++){
+    for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
         std::vector<DescriptorAllocatorDynamic::PoolSizeRatio> frameSizes = {
                 {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
                 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
                 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4}
-        };
+                {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4}};
 
         m_frames[i].descriptors = DescriptorAllocatorDynamic{};
         m_frames[i].descriptors.initPool(m_device, 1000, frameSizes);
 
         m_frames[i].sceneUniformBuffer = createBuffer(sizeof(VktTypes::GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        VktTypes::GPUSceneData* sceneUniformData = reinterpret_cast<VktTypes::GPUSceneData*>(m_frames[i].sceneUniformBuffer.info.pMappedData);
+        VktTypes::GPUSceneData *sceneUniformData = reinterpret_cast<VktTypes::GPUSceneData *>(m_frames[i].sceneUniformBuffer.info.pMappedData);
         *sceneUniformData = m_sceneData;
 
         m_coreDeletionQueue.pushDeletable(DeletableType::VMA_BUFFER, m_frames[i].sceneUniformBuffer.buffer, {m_frames[i].sceneUniformBuffer.allocation});
@@ -729,7 +719,7 @@ void VktCore::initPipelines() {
 }
 
 void VktCore::initBackgroundPipelines() {
-    VkPipelineLayoutCreateInfo computeLayout{ .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr };
+    VkPipelineLayoutCreateInfo computeLayout{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr};
     computeLayout.pSetLayouts = &m_drawImageDescriptorLayout;
     computeLayout.setLayoutCount = 1;
 
@@ -749,7 +739,7 @@ void VktCore::initBackgroundPipelines() {
 
     VkPipelineShaderStageCreateInfo stageInfo = VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, skyShader);
 
-    VkComputePipelineCreateInfo computePipelineCreateInfo{ .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr };
+    VkComputePipelineCreateInfo computePipelineCreateInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr};
     computePipelineCreateInfo.layout = m_gradientPipelineLayout;
     computePipelineCreateInfo.stage = stageInfo;
 
@@ -758,7 +748,7 @@ void VktCore::initBackgroundPipelines() {
     sky.name = "sky";
     sky.data = {};
 
-    sky.data.data1 = glm::vec4(0.1,0.2,0.4,0.97);
+    sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
     VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline))
 
@@ -786,11 +776,6 @@ void VktCore::initBackgroundPipelines() {
 }
 
 void VktCore::initMaterialPipelines() {
-    // Load shaders
-    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/mesh.vert.spv", m_device);
-    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/mesh.frag.spv", m_device);
-    VkShaderModule vertSkinShader = VktUtils::loadShaderModule("shaders/mesh_skin.vert.spv", m_device);
-
     // Create vertex shader push constants range
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
@@ -846,8 +831,9 @@ void VktCore::initMaterialPipelines() {
     metalRoughMaterial.skinnedTransparentPipeline.layout = skinnedLayout;
 
     // Build four pipelines fo opaque/transparent and static/skinned material rendering
-    VktPipelineBuilder pipelineBuilder;
-    pipelineBuilder.setShaders(vertShader, fragShader);
+    VktPipelineBuilder pipelineBuilder(m_device);
+    pipelineBuilder.setVertexShader("shaders/mesh.vert.spv");
+    pipelineBuilder.setFragmentShader("shaders/mesh.frag.spv");
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
@@ -858,46 +844,35 @@ void VktCore::initMaterialPipelines() {
     pipelineBuilder.setDepthFormat(m_depthImage.format);
     pipelineBuilder.setPipelineLayout(staticLayout);
 
-    metalRoughMaterial.opaquePipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    metalRoughMaterial.opaquePipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.opaquePipeline.pipeline);
 
     // Switch from opaque to transparent
     pipelineBuilder.enableBlendingAdditive();
     pipelineBuilder.enableDepthTest(false, VK_COMPARE_OP_LESS);
 
-    metalRoughMaterial.transparentPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    metalRoughMaterial.transparentPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.transparentPipeline.pipeline);
 
     // Switch from static vertex shaders to skinned with joint matrices
-    pipelineBuilder.setShaders(vertSkinShader, fragShader);
+    pipelineBuilder.setVertexShader("shaders/mesh_skin.vert.spv");
     pipelineBuilder.setPipelineLayout(skinnedLayout);
 
     // Maintain the pipeline order
     pipelineBuilder.disableBlending();
     pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS);
 
-    metalRoughMaterial.skinnedOpaquePipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    metalRoughMaterial.skinnedOpaquePipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.skinnedOpaquePipeline.pipeline);
 
     pipelineBuilder.enableBlendingAdditive();
     pipelineBuilder.enableDepthTest(false, VK_COMPARE_OP_LESS);
 
-    metalRoughMaterial.skinnedTransparentPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    metalRoughMaterial.skinnedTransparentPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.skinnedTransparentPipeline.pipeline);
-
-    // Destroy unnecessary shader modules
-    vkDestroyShaderModule(m_device, fragShader, nullptr);
-    vkDestroyShaderModule(m_device, vertShader, nullptr);
-    vkDestroyShaderModule(m_device, vertSkinShader, nullptr);
 }
 
 void VktCore::initGeometryPipeline() {
-    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/debug/normal.vert.spv", m_device);
-    VkShaderModule vertSkinShader = VktUtils::loadShaderModule("shaders/debug/normal_skin.vert.spv", m_device);
-    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/debug/normal.frag.spv", m_device);
-    VkShaderModule geomShader = VktUtils::loadShaderModule("shaders/debug/normal.geom.spv", m_device);
-    VkShaderModule geomSkinShader = VktUtils::loadShaderModule("shaders/debug/normal_skin.geom.spv", m_device);
-
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
     matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
@@ -943,8 +918,10 @@ void VktCore::initGeometryPipeline() {
     m_normalsDebugStaticPipeline.layout = staticLayout;
     m_normalsDebugSkinnedPipeline.layout = skinnedLayout;
 
-    VktPipelineBuilder pipelineBuilder;
-    pipelineBuilder.setShaders(vertShader, fragShader, geomShader);
+    VktPipelineBuilder pipelineBuilder(m_device);
+    pipelineBuilder.setVertexShader("shaders/debug/normal.vert.spv");
+    pipelineBuilder.setFragmentShader("shaders/debug/normal.frag.spv");
+    pipelineBuilder.setGeometryShader("shaders/debug/normal.geom.spv");
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -955,26 +932,18 @@ void VktCore::initGeometryPipeline() {
     pipelineBuilder.setDepthFormat(m_depthImage.format);
     pipelineBuilder.setPipelineLayout(staticLayout);
 
-    m_normalsDebugStaticPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    m_normalsDebugStaticPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugStaticPipeline.pipeline);
 
-    pipelineBuilder.setShaders(vertSkinShader, fragShader, geomSkinShader);
+    pipelineBuilder.setVertexShader("shaders/debug/normal_skin.vert.spv");
+    pipelineBuilder.setGeometryShader("shaders/debug/normal_skin.geom.spv");
     pipelineBuilder.setPipelineLayout(skinnedLayout);
 
-    m_normalsDebugSkinnedPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    m_normalsDebugSkinnedPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugSkinnedPipeline.pipeline);
-
-    vkDestroyShaderModule(m_device, vertShader, nullptr);
-    vkDestroyShaderModule(m_device, vertSkinShader, nullptr);
-    vkDestroyShaderModule(m_device, fragShader, nullptr);
-    vkDestroyShaderModule(m_device, geomShader, nullptr);
-    vkDestroyShaderModule(m_device, geomSkinShader, nullptr);
 }
 
-void VktCore::initSkyboxPipeline(){
-    VkShaderModule vertShader = VktUtils::loadShaderModule("shaders/skybox.vert.spv", m_device);
-    VkShaderModule fragShader = VktUtils::loadShaderModule("shaders/skybox.frag.spv", m_device);
-
+void VktCore::initSkyboxPipeline() {
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
     matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
@@ -1005,8 +974,9 @@ void VktCore::initSkyboxPipeline(){
 
     m_skyboxPipeline.layout = layout;
 
-    VktPipelineBuilder pipelineBuilder;
-    pipelineBuilder.setShaders(vertShader, fragShader);
+    VktPipelineBuilder pipelineBuilder(m_device);
+    pipelineBuilder.setVertexShader("shaders/skybox.vert.spv");
+    pipelineBuilder.setFragmentShader("shaders/skybox.frag.spv");
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -1017,11 +987,8 @@ void VktCore::initSkyboxPipeline(){
     pipelineBuilder.setDepthFormat(m_depthImage.format);
     pipelineBuilder.setPipelineLayout(layout);
 
-    m_skyboxPipeline.pipeline = pipelineBuilder.buildPipeline(m_device);
+    m_skyboxPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_skyboxPipeline.pipeline);
-
-    vkDestroyShaderModule(m_device, vertShader, nullptr);
-    vkDestroyShaderModule(m_device, fragShader, nullptr);
 }
 
 void VktCore::immediateSubmit(std::function<void(VkCommandBuffer)> &&func) {
@@ -1045,18 +1012,18 @@ void VktCore::immediateSubmit(std::function<void(VkCommandBuffer)> &&func) {
 void VktCore::initImGui() {
 
     // Overkill pool resources but only for dev so whatever
-    VkDescriptorPoolSize poolSizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-                                         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-                                         { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } };
-    VkDescriptorPoolCreateInfo poolInfo{ .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .pNext = nullptr };
+    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+                                        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+                                        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
+    VkDescriptorPoolCreateInfo poolInfo{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .pNext = nullptr};
     poolInfo.maxSets = 1000;
     poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
     poolInfo.pPoolSizes = poolSizes;
@@ -1069,7 +1036,7 @@ void VktCore::initImGui() {
     m_window->initImGuiVulkan();
 
     // Enable keyboard controls
-    ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     ImGui_ImplVulkan_InitInfo initInfo{};
@@ -1108,7 +1075,7 @@ void VktCore::run() {
 
     auto startTime = std::chrono::system_clock::now();
 
-    if(m_resizeSwapchain){
+    if(m_resizeSwapchain) {
         resizeSwapchain();
     }
 
@@ -1118,7 +1085,7 @@ void VktCore::run() {
     m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[0] = static_cast<float>(m_drawExtent.width);
     m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[1] = static_cast<float>(m_drawExtent.height);
 
-    if(m_currentBackgroundEffect == 1){
+    if(m_currentBackgroundEffect == 1) {
         m_backgroundEffect.at(m_currentBackgroundEffect).data.data1[0] = static_cast<float>(currentTime);
     }
 
@@ -1129,39 +1096,39 @@ void VktCore::run() {
     m_stats.frametime = static_cast<float>(drawDuration.count()) / 1000.0f;
 }
 
-void VktCore::runImGui(){
+void VktCore::runImGui() {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    if(ImGui::Begin("Background")){
-        VktTypes::ComputeEffect& selected = m_backgroundEffect.at(m_currentBackgroundEffect);
+    if(ImGui::Begin("Background")) {
+        VktTypes::ComputeEffect &selected = m_backgroundEffect.at(m_currentBackgroundEffect);
 
         ImGui::SliderFloat("Render scale", &m_renderScale, 0.3f, 1.0f);
 
         ImGui::Text("Selected effect: ", selected.name);
 
-        ImGui::SliderInt("Effect index: ", &m_currentBackgroundEffect, 0, m_backgroundEffect.size()-1);
+        ImGui::SliderInt("Effect index: ", &m_currentBackgroundEffect, 0, m_backgroundEffect.size() - 1);
 
-        ImGui::InputFloat4("data1", (float*)& selected.data.data1);
-        ImGui::InputFloat4("data2", (float*)& selected.data.data2);
-        ImGui::InputFloat4("data3", (float*)& selected.data.data3);
-        ImGui::InputFloat4("data4", (float*)& selected.data.data4);
+        ImGui::InputFloat4("data1", (float *) &selected.data.data1);
+        ImGui::InputFloat4("data2", (float *) &selected.data.data2);
+        ImGui::InputFloat4("data3", (float *) &selected.data.data3);
+        ImGui::InputFloat4("data4", (float *) &selected.data.data4);
 
         ImGui::End();
     }
 
-    if(ImGui::Begin("Scene")){
-        ImGui::InputFloat3("Ambient color: ", (float*)&m_sceneData.ambientColor);
-        ImGui::InputFloat3("Sunlight direction: ", (float*)&m_sceneData.sunlightDirection);
-        ImGui::InputFloat3("Sunlight color: ", (float*)&m_sceneData.sunlightColor);
-        ImGui::InputFloat3("Camera position: ", (float*)&m_sceneData.cameraPosition);
-        ImGui::InputFloat3("Camera direction: ", (float*)&m_sceneData.cameraDirection);
+    if(ImGui::Begin("Scene")) {
+        ImGui::InputFloat3("Ambient color: ", (float *) &m_sceneData.ambientColor);
+        ImGui::InputFloat3("Sunlight direction: ", (float *) &m_sceneData.sunlightDirection);
+        ImGui::InputFloat3("Sunlight color: ", (float *) &m_sceneData.sunlightColor);
+        ImGui::InputFloat3("Camera position: ", (float *) &m_sceneData.cameraPosition);
+        ImGui::InputFloat3("Camera direction: ", (float *) &m_sceneData.cameraDirection);
         ImGui::InputFloat("Time: ", &m_sceneData.time);
         ImGui::End();
     }
 
-    if(ImGui::Begin("Performance")){
+    if(ImGui::Begin("Performance")) {
         uint32_t frames = 1000 / m_stats.frametime;
         ImGui::Text("Frames %u", frames);
         ImGui::Text("Frametime %f ms", m_stats.frametime);
@@ -1172,28 +1139,28 @@ void VktCore::runImGui(){
         ImGui::End();
     }
 
-    if(ImGui::Begin("Models")){
-        for(auto& [mID,object] : loadedObjects){
-            if(ImGui::TreeNode(object.name.c_str())){
+    if(ImGui::Begin("Models")) {
+        for(auto &[mID, object]: loadedObjects) {
+            if(ImGui::TreeNode(object.name.c_str())) {
                 ImGui::Text("ID: %u", mID);
                 ImGui::Text("Name: %s", object.name.c_str());
-                if(ImGui::TreeNode("Transformation")){
+                if(ImGui::TreeNode("Transformation")) {
 
                     // Change position
                     glm::vec3 pos = object.model.transformation.getTranslation();
-                    if(ImGui::DragFloat3("Pos",(float*)& (pos))){
+                    if(ImGui::DragFloat3("Pos", (float *) &(pos))) {
                         object.model.transformation.setTranslation(pos.x, pos.y, pos.z);
                     }
 
                     // Change rotation
                     glm::vec3 rotation = object.model.transformation.getRotation();
-                    if(ImGui::DragFloat3("Rotation",(float*)& (rotation))){
+                    if(ImGui::DragFloat3("Rotation", (float *) &(rotation))) {
                         object.model.transformation.setRotation(rotation.x, rotation.y, rotation.z);
                     }
 
                     // Change scale
                     float scale = object.model.transformation.getScale();
-                    if(ImGui::DragFloat("Scale", &scale)){
+                    if(ImGui::DragFloat("Scale", &scale)) {
                         object.model.transformation.setScale(scale);
                     }
                     ImGui::TreePop();
@@ -1201,15 +1168,15 @@ void VktCore::runImGui(){
 
                 if(object.model.isSkinned() && ImGui::TreeNode("Animation")) {
                     static std::size_t currentAnimation = object.model.currentAnimation();
-                    if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN,5 * ImGui::GetTextLineHeightWithSpacing()))){
+                    if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN, 5 * ImGui::GetTextLineHeightWithSpacing()))) {
                         uint32_t animCount = object.model.animationCount();
-                        for(std::size_t animID = 0; animID < animCount; animID++){
+                        for(std::size_t animID = 0; animID < animCount; animID++) {
                             const bool isActive = (currentAnimation == animID);
                             if(ImGui::Selectable(object.model.animationName(animID).data(), isActive)) {
                                 object.model.setAnimation(animID);
                                 currentAnimation = animID;
                             }
-                            if(isActive){
+                            if(isActive) {
                                 ImGui::SetItemDefaultFocus();
                             }
                         }
@@ -1233,7 +1200,7 @@ void VktCore::runImGui(){
 }
 
 VktTypes::AllocatedBuffer VktCore::createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) {
-    VktCore& vktCore = getInstance();
+    VktCore &vktCore = getInstance();
 
     VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr};
     bufferInfo.size = allocSize;
@@ -1254,7 +1221,7 @@ VktTypes::AllocatedBuffer VktCore::createBuffer(size_t allocSize, VkBufferUsageF
 }
 
 void VktCore::destroyBuffer(const VktTypes::AllocatedBuffer &buffer) {
-    VktCore& vktCore = getInstance();
+    VktCore &vktCore = getInstance();
 
     vmaDestroyBuffer(vktCore.m_vmaAllocator, buffer.buffer, buffer.allocation);
 }
@@ -1264,7 +1231,7 @@ template VktTypes::GPUMeshBuffers VktCore::uploadMesh<VktTypes::Static>(std::spa
 
 template<bool S>
 VktTypes::GPUMeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex<S>> vertices) {
-    VktCore& vktCore = VktCore::getInstance();
+    VktCore &vktCore = VktCore::getInstance();
 
     const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::Vertex<S>);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
@@ -1284,11 +1251,11 @@ VktTypes::GPUMeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::s
 
     VktTypes::AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
-    void* data = staging.info.pMappedData;
+    void *data = staging.info.pMappedData;
     memcpy(data, vertices.data(), vertexBufferSize);
-    memcpy((char*)data+vertexBufferSize, indices.data(), indexBufferSize);
+    memcpy((char *) data + vertexBufferSize, indices.data(), indexBufferSize);
 
-    vktCore.immediateSubmit([&](VkCommandBuffer cmd){
+    vktCore.immediateSubmit([&](VkCommandBuffer cmd) {
         VkBufferCopy vertexCopy{};
         vertexCopy.srcOffset = 0;
         vertexCopy.dstOffset = 0;
@@ -1309,7 +1276,7 @@ VktTypes::GPUMeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::s
 }
 
 
-VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4>& jointMatrices) {
+VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &jointMatrices) {
 
     const size_t jointsBufferSize = jointMatrices.size() * sizeof(glm::mat4);
 
@@ -1329,19 +1296,19 @@ VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4>& joi
 
 void VktCore::initDefaultData() {
     uint32_t white = 0xFFFFFFFF;
-    m_whiteImage = createImage(reinterpret_cast<void*>(&white), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_whiteImage = createImage(reinterpret_cast<void *>(&white), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     uint32_t black = 0x000000;
-    m_blackImage = createImage(reinterpret_cast<void*>(&black), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_blackImage = createImage(reinterpret_cast<void *>(&black), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     uint32_t gray = 0xAAAAAAFF;
-    m_whiteImage = createImage(reinterpret_cast<void*>(&gray), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_whiteImage = createImage(reinterpret_cast<void *>(&gray), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     uint32_t pink = 0xFF00DC;
-    std::array<uint32_t, 16*16> pixels{};
-    for(uint32_t x = 0; x < 16; x++){
-        for(uint32_t y = 0; y < 16; y++){
-            pixels[y*16+x] = ((x%2) ^ (y%2)) ? pink : black;
+    std::array<uint32_t, 16 * 16> pixels{};
+    for(uint32_t x = 0; x < 16; x++) {
+        for(uint32_t y = 0; y < 16; y++) {
+            pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? pink : black;
         }
     }
     m_errorCheckboardImage = createImage(pixels.data(), VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -1358,9 +1325,9 @@ void VktCore::initDefaultData() {
     vkCreateSampler(m_device, &samplerInfo, nullptr, &m_defaultSamplerLinear);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_SAMPLER, m_defaultSamplerLinear);
 
-    std::array<void*,6> cubeData{};
+    std::array<void *, 6> cubeData{};
     std::fill(cubeData.begin(), cubeData.end(), nullptr);
-    std::array<const char*,6> cubeSidesFiles = {
+    std::array<const char *, 6> cubeSidesFiles = {
             "terrain/skyboxtex/xpos.png",
             "terrain/skyboxtex/xneg.png",
             "terrain/skyboxtex/ypos.png",
@@ -1369,17 +1336,17 @@ void VktCore::initDefaultData() {
             "terrain/skyboxtex/zneg.png",
     };
     int width, height, channels;
-    for(uint8_t cubeSide = 0; cubeSide < 6; cubeSide++){
-        unsigned char* data = stbi_load(cubeSidesFiles[cubeSide], &width, &height, &channels, 4);
-        if(data){
+    for(uint8_t cubeSide = 0; cubeSide < 6; cubeSide++) {
+        unsigned char *data = stbi_load(cubeSidesFiles[cubeSide], &width, &height, &channels, 4);
+        if(data) {
             cubeData[cubeSide] = data;
             m_logger(Logger::DEBUG) << "Loaded cube map side from file: [" << cubeSidesFiles[cubeSide] << "]\n";
-        }else{
+        } else {
             m_logger(Logger::ERROR) << "Failed to load cube map side from file: [" << cubeSidesFiles[cubeSide] << "]\n";
         }
     }
     VkExtent3D extent = {.width = static_cast<uint32_t>(width), .height = static_cast<uint32_t>(height), .depth = 1};
-    m_skybox = createCubeMap(cubeData, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_skybox = createCubeMap(cubeData, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     m_cube = Model("meshes/cube.tecm");
 
     m_skyboxDescriptorSet = m_globDescriptorAllocator.allocate(m_device, m_skyboxDescriptorLayout);
@@ -1388,7 +1355,20 @@ void VktCore::initDefaultData() {
         writer.clear();
 
         // Write cube map skybox texture to GPU
-        writer.writeImage(0,m_skybox.view,
+        writer.writeImage(0, m_skybox.view,
+                          m_defaultSamplerLinear,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.updateSet(m_device, m_skyboxDescriptorSet);
+    }
+
+    m_skyboxIBL = generateIBLCubeMap(m_skybox);
+    {
+        DescriptorWriter writer;
+        writer.clear();
+
+        // Write cube map skybox texture to GPU
+        writer.writeImage(0, m_skyboxIBL.view,
                           m_defaultSamplerLinear,
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -1397,10 +1377,10 @@ void VktCore::initDefaultData() {
 }
 
 VkBool32 VktCore::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
-                                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData) {
+                                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *) {
     auto severityStr = vkb::to_string_message_severity(severity);
     auto typeStr = vkb::to_string_message_type(type);
-    fprintf(stderr,"[%s: %s] %s\n", severityStr, typeStr, pCallbackData->pMessage);
+    fprintf(stderr, "[%s: %s] %s\n", severityStr, typeStr, pCallbackData->pMessage);
     return VK_FALSE;
 }
 
@@ -1417,14 +1397,14 @@ void VktCore::resizeSwapchain() {
 }
 
 VktTypes::AllocatedImage VktCore::createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped) {
-    VktCore& vktCore = getInstance();
+    VktCore &vktCore = getInstance();
 
     VktTypes::AllocatedImage newImage{};
     newImage.format = format;
     newImage.extent = allocSize;
 
     VkImageCreateInfo imgInfo = VktStructs::imageCreateInfo(format, usage, allocSize);
-    if(mipMapped){
+    if(mipMapped) {
         imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(allocSize.width, allocSize.height)))) + 1;
     }
 
@@ -1432,10 +1412,10 @@ VktTypes::AllocatedImage VktCore::createImage(VkExtent3D allocSize, VkFormat for
     allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newImage.image, &newImage.allocation,nullptr))
+    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newImage.image, &newImage.allocation, nullptr))
 
     VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(format == VK_FORMAT_D32_SFLOAT){
+    if(format == VK_FORMAT_D32_SFLOAT) {
         aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
     }
 
@@ -1452,7 +1432,7 @@ VktTypes::AllocatedImage VktCore::createImage(VkExtent3D allocSize, VkFormat for
 }
 
 VktTypes::AllocatedImage VktCore::createImage(void *data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped) {
-    VktCore& vktCore = getInstance();
+    VktCore &vktCore = getInstance();
 
     size_t dataSize = allocSize.width * allocSize.height * allocSize.depth * 4;
     VktTypes::AllocatedBuffer stagingBuffer = createBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -1463,7 +1443,7 @@ VktTypes::AllocatedImage VktCore::createImage(void *data, VkExtent3D allocSize, 
     VktTypes::AllocatedImage newImage = createImage(allocSize, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipMapped);
 
     // Transfer data to image through staging buffer
-    vktCore.immediateSubmit([&](VkCommandBuffer cmd){
+    vktCore.immediateSubmit([&](VkCommandBuffer cmd) {
         VktUtils::transitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         VkBufferImageCopy copyRegion{};
@@ -1484,8 +1464,8 @@ VktTypes::AllocatedImage VktCore::createImage(void *data, VkExtent3D allocSize, 
     return newImage;
 }
 
-void VktCore::destroyImage(const VktTypes::AllocatedImage &img){
-    VktCore& vktCore = getInstance();
+void VktCore::destroyImage(const VktTypes::AllocatedImage &img) {
+    VktCore &vktCore = getInstance();
 
     vkDestroyImageView(vktCore.m_device, img.view, nullptr);
     vmaDestroyImage(vktCore.m_vmaAllocator, img.image, img.allocation);
@@ -1494,17 +1474,18 @@ void VktCore::destroyImage(const VktTypes::AllocatedImage &img){
 VktTypes::AllocatedCubeMap VktCore::createCubeMap(VkExtent3D allocSize,
                                                   VkFormat format,
                                                   VkImageUsageFlags usage,
-                                                  bool mipMapped){
-    VktCore& vktCore = getInstance();
+                                                  bool mipMapped) {
+    VktCore &vktCore = getInstance();
 
     VktTypes::AllocatedCubeMap newCubeMap{};
     newCubeMap.format = format;
     newCubeMap.extent = allocSize;
 
     VkImageCreateInfo imgInfo = VktStructs::imageCreateInfo(format, usage, allocSize);
-    if(mipMapped){
+    if(mipMapped) {
         imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(allocSize.width, allocSize.height)))) + 1;
     }
+    imgInfo.imageType = VK_IMAGE_TYPE_2D;
     imgInfo.arrayLayers = 6;
     imgInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
@@ -1512,10 +1493,10 @@ VktTypes::AllocatedCubeMap VktCore::createCubeMap(VkExtent3D allocSize,
     allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newCubeMap.image, &newCubeMap.allocation,nullptr))
+    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newCubeMap.image, &newCubeMap.allocation, nullptr))
 
     VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(format == VK_FORMAT_D32_SFLOAT){
+    if(format == VK_FORMAT_D32_SFLOAT) {
         aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
     }
 
@@ -1533,33 +1514,32 @@ VktTypes::AllocatedCubeMap VktCore::createCubeMap(VkExtent3D allocSize,
     return newCubeMap;
 }
 
-void VktCore::destroyCubeMap(const VktTypes::AllocatedCubeMap &cubemap){
-    VktCore& vktCore = getInstance();
+void VktCore::destroyCubeMap(const VktTypes::AllocatedCubeMap &cubemap) {
+    VktCore &vktCore = getInstance();
 
     vkDestroyImageView(vktCore.m_device, cubemap.view, nullptr);
     vmaDestroyImage(vktCore.m_vmaAllocator, cubemap.image, cubemap.allocation);
 }
-
 
 VktTypes::AllocatedCubeMap VktCore::createCubeMap(std::array<void *, 6> data,
                                                   VkExtent3D allocSize,
                                                   VkFormat format,
                                                   VkImageUsageFlags usage,
                                                   bool mipMapped) {
-    VktCore& vktCore = getInstance();
-    size_t dataSize = allocSize.width * allocSize.height * allocSize.depth * 4 * 6; // 4 channels and 6 layers of cube
+    VktCore &vktCore = getInstance();
+    size_t dataSize = allocSize.width * allocSize.height * allocSize.depth * 4 * 6;// 4 channels and 6 layers of cube
 
     VktTypes::AllocatedBuffer stagingBuffer = createBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     // Copying data to staging buffer
-    for(uint8_t buffer = 0; buffer < 6; buffer++){
-        memcpy(static_cast<char*>(stagingBuffer.info.pMappedData) + (buffer * (dataSize/6)), data[buffer], (dataSize/6));
+    for(uint8_t buffer = 0; buffer < 6; buffer++) {
+        memcpy(static_cast<char *>(stagingBuffer.info.pMappedData) + (buffer * (dataSize / 6)), data[buffer], (dataSize / 6));
     }
 
     VktTypes::AllocatedCubeMap newCubeMap = createCubeMap(allocSize, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipMapped);
 
     // Transfer data to image through staging buffer
-    vktCore.immediateSubmit([&newCubeMap,&allocSize,&stagingBuffer](VkCommandBuffer cmd){
+    vktCore.immediateSubmit([&newCubeMap, &allocSize, &stagingBuffer](VkCommandBuffer cmd) {
         VktUtils::transitionCubeMap(cmd, newCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         VkBufferImageCopy copyRegion{};
@@ -1579,7 +1559,6 @@ VktTypes::AllocatedCubeMap VktCore::createCubeMap(std::array<void *, 6> data,
 
     return newCubeMap;
 }
-
 
 void VktCore::setWindow(Window *window) {
     assert(window != nullptr);
@@ -1602,7 +1581,7 @@ void VktCore::updateScene() {
     m_sceneData.viewproj = m_sceneData.proj * m_sceneData.view;
     m_sceneData.ambientColor = glm::vec3(0.1f);
     m_sceneData.sunlightColor = glm::vec3(1.0f);
-    glm::vec4 sunPos = glm::vec4(0.0f,0.0f,1.0f,1.0f) * glm::rotate(glm::identity<glm::mat4>(),static_cast<float>(glm::radians(currTime*50.f)),glm::vec3(0.0f,1.0f,0.0f));
+    glm::vec4 sunPos = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) * glm::rotate(glm::identity<glm::mat4>(), static_cast<float>(glm::radians(currTime * 50.f)), glm::vec3(0.0f, 1.0f, 0.0f));
     m_sceneData.sunlightDirection = glm::vec3(sunPos - glm::vec4(0.0f));
     m_sceneData.cameraPosition = cameraPosition;
     m_sceneData.cameraDirection = cameraDirection;
@@ -1611,8 +1590,8 @@ void VktCore::updateScene() {
     currTime = glfwGetTime();
     double delta = currTime - prevTime;
     prevTime = currTime;
-    for(auto& [oID,object] : loadedObjects){
-        if(object.model.isSkinned() && object.model.currentAnimation() != ModelTypes::NULL_ID){
+    for(auto &[oID, object]: loadedObjects) {
+        if(object.model.isSkinned() && object.model.currentAnimation() != ModelTypes::NULL_ID) {
             object.model.updateAnimationTime(static_cast<float>(delta));
             object.model.updateJoints();
         }
@@ -1624,13 +1603,13 @@ void VktCore::setViewMatrix(const glm::mat4 &viewMatrix) {
     m_viewMatrix = viewMatrix;
 }
 
-void VktCore::setProjMatrix(const glm::mat4& projMatrix){
+void VktCore::setProjMatrix(const glm::mat4 &projMatrix) {
     m_projMatrix = projMatrix;
 }
 
 VkDevice VktCore::device() {
-    VktCore& vktCore = getInstance();
-    if(vktCore.m_device){
+    VktCore &vktCore = getInstance();
+    if(vktCore.m_device) {
         return vktCore.m_device;
     }
     return nullptr;
@@ -1639,9 +1618,9 @@ VkDevice VktCore::device() {
 /**
  * Initialize first object identifiers to 0.
  */
-VktCore::objectID_t  VktCore::EngineObject::lastID = 0;
+VktCore::objectID_t VktCore::EngineObject::lastID = 0;
 
-VktCore::EngineObject* VktCore::createObject(const std::filesystem::path& filePath, const std::string& name) {
+VktCore::EngineObject *VktCore::createObject(const std::filesystem::path &filePath, const std::string &name) {
     // Find free identifier
     while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
     objectID_t freeID = EngineObject::lastID++;
@@ -1654,7 +1633,7 @@ VktCore::EngineObject* VktCore::createObject(const std::filesystem::path& filePa
     };
 
     // Upload default position
-    if(loadedObjects[freeID].model.isSkinned()){
+    if(loadedObjects[freeID].model.isSkinned()) {
         loadedObjects[freeID].model.updateJoints();
     }
 
@@ -1669,7 +1648,7 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
                                                   bool isSkinned) {
     VktTypes::MaterialInstance matData{};
     matData.passType = pass;
-    switch(pass){
+    switch(pass) {
         case VktTypes::MaterialPass::OPAQUE:
             matData.pipeline = isSkinned ? &metalRoughMaterial.skinnedOpaquePipeline : &metalRoughMaterial.opaquePipeline;
             break;
@@ -1683,7 +1662,7 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
     matData.materialSet = descriptorAllocator.allocate(device, metalRoughMaterial.materialLayout);
 
     metalRoughMaterial.writer.clear();
-    metalRoughMaterial.writer.writeBuffer(0,resources.dataBuffer,
+    metalRoughMaterial.writer.writeBuffer(0, resources.dataBuffer,
                                           sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants),
                                           resources.dataBufferOffset,
                                           VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -1695,7 +1674,7 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
                                          resources.metalRoughSampler,
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    metalRoughMaterial.writer.writeImage(3, m_skybox.view,
+    metalRoughMaterial.writer.writeImage(3, m_skyboxIBL.view,
                                          m_defaultSamplerLinear,
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -1704,3 +1683,116 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
     return matData;
 }
 
+VktTypes::AllocatedCubeMap VktCore::generateIBLCubeMap(VktTypes::AllocatedCubeMap cubeMap) {
+    VktTypes::ModelPipeline IBLPipeline;
+    // Creating pipeline for diffuse irradiance rendering into IBL cubemap
+    {
+        VkPushConstantRange matrixRange{};
+        matrixRange.offset = 0;
+        matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
+        matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        VkDescriptorSetLayout layouts[] = {m_skyboxDescriptorLayout};
+
+        // Create pipeline layout with provided descriptors and push constants
+        VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
+        meshLayoutInfo.setLayoutCount = 1;
+        meshLayoutInfo.pSetLayouts = layouts;
+        meshLayoutInfo.pushConstantRangeCount = 1;
+        meshLayoutInfo.pPushConstantRanges = &matrixRange;
+
+        VkPipelineLayout layout;
+        VK_CHECK(vkCreatePipelineLayout(m_device,
+                                        &meshLayoutInfo,
+                                        nullptr,
+                                        &layout))
+
+        IBLPipeline.layout = layout;
+
+        VktPipelineBuilder pipelineBuilder(m_device);
+        pipelineBuilder.setVertexShader("shaders/ibl_baking.vert.spv");
+        pipelineBuilder.setFragmentShader("shaders/ibl_baking.frag.spv");
+        pipelineBuilder.setGeometryShader("shaders/ibl_baking.geom.spv");
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.disableBlending();
+        pipelineBuilder.disableDepthTest();
+        pipelineBuilder.setColorAttachmentFormat(cubeMap.format);
+        pipelineBuilder.setPipelineLayout(layout);
+
+        IBLPipeline.pipeline = pipelineBuilder.buildPipeline();
+    }
+    VktTypes::AllocatedCubeMap IBLCubeMap = createCubeMap(cubeMap.extent,
+                                                          cubeMap.format,
+                                                          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+
+    immediateSubmit({[&, this](VkCommandBuffer cmd) {
+        VktUtils::transitionImage(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(IBLCubeMap.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+        // Gather cube's render context
+        VktTypes::DrawContext drawContext;
+        m_cube.gatherDrawContext(drawContext);
+        VktTypes::RenderObject &renderObject = drawContext.opaqueSurfaces[0];
+
+        VkExtent2D extent2D = {.width = cubeMap.extent.width, .height = cubeMap.extent.height};
+        VkRenderingInfo renderingInfo = VktStructs::renderingInfo(extent2D, &colorAttachment, nullptr, 6);
+
+        {
+            DescriptorWriter writer;
+
+            writer.writeImage(0, cubeMap.view,
+                              m_defaultSamplerLinear,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.updateSet(m_device, m_skyboxDescriptorSet);
+        }
+
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                IBLPipeline.layout,
+                                0, 1,
+                                &m_skyboxDescriptorSet, 0,
+                                nullptr);
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, IBLPipeline.pipeline);
+        vkCmdBeginRendering(cmd, &renderingInfo);
+
+        VkViewport viewport{};
+        viewport.x = 0;
+        viewport.y = 0;
+        viewport.width = static_cast<float>(extent2D.width);
+        viewport.height = static_cast<float>(extent2D.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        VkRect2D scissors{};
+        scissors.offset.x = 0;
+        scissors.offset.y = 0;
+        scissors.extent.width = extent2D.width;
+        scissors.extent.height = extent2D.height;
+
+        vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+        vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
+        pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
+        pushConstants.worldMatrix = renderObject.transform;
+        vkCmdPushConstants(cmd, IBLPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>), &pushConstants);
+
+        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+        vkCmdEndRendering(cmd);
+
+        VktUtils::transitionImage(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }});
+
+    vkDestroyPipelineLayout(m_device, IBLPipeline.layout, nullptr);
+    vkDestroyPipeline(m_device, IBLPipeline.pipeline, nullptr);
+
+    return IBLCubeMap;
+}

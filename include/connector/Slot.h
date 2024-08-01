@@ -1,11 +1,4 @@
-#ifndef META_HANDLES_
-#define META_HANDLES_
-#define CONNECT(signal,slot) signal.connect(slot);
-#define DISCONNECT(signal,slot) signal.disconnect(slot);
-#endif
-
-#ifndef TECTONIC_SLOT_H
-#define TECTONIC_SLOT_H
+#pragma once
 
 #include <functional>
 
@@ -38,6 +31,3 @@ private:
     bool m_init = false;
     std::function<void(Args...)> m_callback;
 };
-
-
-#endif //TECTONIC_SLOT_H
