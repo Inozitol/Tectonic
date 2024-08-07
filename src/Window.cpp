@@ -6,12 +6,14 @@ Window::Window(const char* name){
     GLFWmonitor* primary = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primary);
 
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+
     glfwWindowHint(GLFW_RED_BITS, mode->redBits);
     glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    m_window = glfwCreateWindow(mode->width, mode->height, name, primary, nullptr);
+    m_window = glfwCreateWindow(mode->width-75, mode->height-75, name, nullptr, nullptr);
     if(!m_window){
         throw windowException("Unable to create Window");
     }

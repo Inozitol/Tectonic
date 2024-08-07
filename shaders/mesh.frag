@@ -32,10 +32,12 @@ const float PI_R = 1.0/PI;
 
 vec3 N = normalize(inNormal);
 vec3 V = normalize(sceneData.cameraPosition - inWPos);
+vec3 R = reflect(-V, N);
 
 vec3 L = normalize(-sceneData.sunlightDirection).xyz;
 vec3 H = normalize(V + L);
 
+// Fresnel-Schlick Roughness
 vec3 specularReflection(PBRInfo pbrInputs)
 {
     return pbrInputs.reflectance0 + (pbrInputs.reflectance90 - pbrInputs.reflectance0) * pow(clamp(1.0 - pbrInputs.VdotH, 0.0, 1.0), 5.0);
@@ -65,11 +67,54 @@ vec3 diffuse(PBRInfo pbrInputs)
 }
 
 vec3 getIBLContrib(PBRInfo pbrInputs, vec3 reflection){
-    vec3 diffuse = texture(IBLCube, N).rgb;
-    vec3 specular = texture(IBLCube, reflection).rgb;
+    vec3 diffuse = texture(IBLDiffuseCube, N).rgb;
+    vec3 specular = texture(IBLDiffuseCube, reflection).rgb;
     diffuse *= pbrInputs.diffuseColor;
     specular *= pbrInputs.specularColor;
     return diffuse + specular;
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+
+float DistributionGGX(vec3 N, vec3 H, float roughness){
+    float a = roughness*roughness;
+    float a2 = a*a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+
+    float nom   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return nom / denom;
+}
+
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness){
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    float ggx1 = GeometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 void main() {
@@ -91,55 +136,46 @@ void main() {
         MatColor *= texture(colorTex, inUV);
     }
 
-    float alphaRoughness = MatRougness * MatRougness;
-    vec3 f0 = vec3(0.04);
+    vec3 albedo = vec3(MatColor);
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, MatMetalness);
 
-    MatColor *= vec4(inColor,1.0f);
+    vec3 Lo;
+    {
+        float NDF = DistributionGGX(N, H, MatRougness);
+        float G = GeometrySmith(N, V, L, MatRougness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
-    vec3 diffuseColor = MatColor.rgb * (vec3(1.0f) - f0);
-    diffuseColor *= 1.0f - MatMetalness;
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
 
-    vec3 specularColor = mix(f0, MatColor.rgb, MatMetalness);
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - MatMetalness;
+        float NdotL = max(dot(N,L), 0.0);
+        Lo = (kD * albedo / PI + specular) * sceneData.sunlightColor * NdotL;
+    }
 
-    float reflectance = max(max(specularColor.r, specularColor.g), specularColor.b);
+    vec3 F = fresnelSchlickRoughness(max(dot(N,V), 0.0), F0, MatRougness);
 
-    float reflectance90 = clamp(reflectance * 25.0f, 0.0f, 1.0f);
-    vec3 specularEnvironmentR0 = specularColor.rgb;
-    vec3 specularEnvironmentR90 = vec3(1.0f, 1.0f, 1.0f) * reflectance90;
+    vec3 kS = F;
+    vec3 kD = 1.0 - kS;
+    kD *= 1.0 - MatMetalness;
 
-    float NdotL = clamp(dot(N, L), 0.001, 1.0);
-    float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
-    float NdotH = clamp(dot(N, H), 0.0, 1.0);
-    float LdotH = clamp(dot(L, H), 0.0, 1.0);
-    float VdotH = clamp(dot(V, H), 0.0, 1.0);
-    vec3 reflection = normalize(reflect(-V,N));
+    vec3 irradiance = texture(IBLDiffuseCube, N).rgb;
+    vec3 diffuse = irradiance * albedo;
 
-    PBRInfo pbrInputs = PBRInfo(
-        NdotL,
-        NdotV,
-        NdotH,
-        LdotH,
-        VdotH,
-        MatRougness,
-        MatMetalness,
-        specularEnvironmentR0,
-        specularEnvironmentR90,
-        alphaRoughness,
-        diffuseColor,
-        specularColor
-    );
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefilteredColor = textureLod(IBLSpecularCube, R, MatRougness * MAX_REFLECTION_LOD).rgb;
+    vec2 envBRDF = texture(IBLBRDFTexture, vec2(max(dot(N,V),0.0), MatRougness)).rg;
+    vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
 
-    vec3 F = specularReflection(pbrInputs);
-    float G = geometricOcclusion(pbrInputs);
-    float D = microfacetDistribution(pbrInputs);
+    vec3 ambient = (kD * diffuse + specular) * MatOcclusion;
 
-    vec3 diffuseContrib = (1.0f - F) * diffuse(pbrInputs);
-    vec3 specContrib = F * G * D / (4.0f * NdotL * NdotV);
-    vec3 color = NdotL * (diffuseContrib); // TODO multiply with light color
+    vec3 color = ambient + Lo;
 
-    color += getIBLContrib(pbrInputs, reflection);
+    color = color / (color + vec3(1.0));
 
-    color = color * MatOcclusion;
-        
     outFragColor = vec4(color, 1.0f);
 }

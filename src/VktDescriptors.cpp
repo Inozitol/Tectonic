@@ -1,4 +1,4 @@
-#include "engine/vulkan/VktDescriptors.h"
+#include "engine/vulkan/VktDescriptorUtils.h"
 
 void DescriptorLayoutBuilder::addBinding(uint32_t binding, VkDescriptorType type) {
     VkDescriptorSetLayoutBinding newbind{};

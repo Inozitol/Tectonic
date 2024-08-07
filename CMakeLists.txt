@@ -31,7 +31,20 @@ add_executable(Tectonic
         src/Cursor.cpp
         src/Transformation.cpp
         src/Model.cpp
-        include/utils/Serial.h)
+        include/utils/Serial.h
+        src/VktCubemaps.cpp
+        src/VktBuffers.cpp
+        src/VktInstantCommands.cpp
+        include/engine/vulkan/VktInstantCommands.h
+        include/engine/vulkan/VktImages.h
+        src/VktImages.cpp
+        include/engine/vulkan/VktSkybox.cpp
+        include/engine/vulkan/VktSkybox.h
+        src/VktCache.cpp
+        include/engine/vulkan/VktCache.h
+        src/VktCache.cpp
+        include/engine/vulkan/VktCache.h
+)
 
 target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic Vulkan::Vulkan)

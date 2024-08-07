@@ -240,7 +240,7 @@ namespace SerialTypes{
         struct MeshAsset{
             SerialTypes::Span<uint32_t,MeshSurface,true> surfaces;
             SerialTypes::Span<uint32_t,uint32_t,true> indices;
-            SerialTypes::Span<uint32_t,VktTypes::Vertex<Skinned>,true> vertices;
+            SerialTypes::Span<uint32_t,VktTypes::GPU::Vertex<Skinned>,true> vertices;
         };
 
         /** @brief Serializable image */

@@ -2,6 +2,7 @@
 #include "engine/vulkan/VktCore.h"
 #define VMA_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
+#include "engine/vulkan/VktCache.h"
 #include "extern/stb/stb_image.h"
 #include "extern/vma/vk_mem_alloc.h"
 
@@ -22,12 +23,13 @@ void VktCore::init() {
     initDescriptors();
     initPipelines();
     initImGui();
+    VktInstantCommands::init(m_device, m_graphicsQueueFamily, m_graphicsQueue);
     initDefaultData();
 
     m_isInitialized = true;
 }
 
-void VktCore::clean() {
+void VktCore::clear() {
     if(m_isInitialized) {
         vkDeviceWaitIdle(m_device);
 
@@ -36,6 +38,17 @@ void VktCore::clean() {
         }
 
         m_cube.clear();
+
+        for(auto &[id, layout]: VktCache::getAllLayouts()) {
+            vkDestroyDescriptorSetLayout(m_device, layout, nullptr);
+        }
+
+        VktImages::destroyImage(m_device, m_vmaAllocator, m_whiteImage);
+        VktImages::destroyImage(m_device, m_vmaAllocator, m_blackImage);
+        VktImages::destroyImage(m_device, m_vmaAllocator, m_greyImage);
+        VktImages::destroyImage(m_device, m_vmaAllocator, m_errorCheckboardImage);
+
+        VktInstantCommands::clear();
 
         ImGui_ImplVulkan_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -63,7 +76,7 @@ void VktCore::clean() {
 }
 
 VktCore::~VktCore() {
-    clean();
+    clear();
 }
 
 void VktCore::initVulkan() {
@@ -155,50 +168,30 @@ void VktCore::initSwapchain() {
     // TODO better way for this. Grab size from monitor size or something larger than a m_window size.
     createSwapchain(m_windowExtent.width, m_windowExtent.height);
 
-    VkExtent3D drawImageExtent = {
+    const VkExtent3D drawImageExtent = {
             m_windowExtent.width,
             m_windowExtent.height,
             1};
 
-    m_drawImage.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-    m_drawImage.extent = drawImageExtent;
+    constexpr VkImageUsageFlags drawImageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                                 VK_IMAGE_USAGE_STORAGE_BIT |
+                                                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    VkImageUsageFlags drawImageFlags{};
-    drawImageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                      VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                      VK_IMAGE_USAGE_STORAGE_BIT |
-                      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    constexpr VkImageUsageFlags depthImageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-    VkImageCreateInfo rimgInfo = VktStructs::imageCreateInfo(m_drawImage.format, drawImageFlags, drawImageExtent);
-
-    VmaAllocationCreateInfo rImgAllocInfo{};
-    rImgAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    rImgAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vmaCreateImage(m_vmaAllocator, &rimgInfo, &rImgAllocInfo, &m_drawImage.image, &m_drawImage.allocation, nullptr);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VMA_IMAGE, m_drawImage.image, {m_drawImage.allocation});
-
-    VkImageViewCreateInfo rviewInfo = VktStructs::imageViewCreateInfo(m_drawImage.format, m_drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-    VK_CHECK(vkCreateImageView(m_device, &rviewInfo, nullptr, &m_drawImage.view))
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, m_drawImage.view);
+    // Create draw image
+    m_drawImage = VktImages::createImage(m_device, m_vmaAllocator, drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageFlags).value();
+    m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &m_drawImage);
 
     m_logger(Logger::INFO) << "Finished creating draw image with format: "
                            << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
                            << " and extent dimensions: "
                            << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
 
-    m_depthImage.format = VK_FORMAT_D32_SFLOAT;
-    m_depthImage.extent = drawImageExtent;
-    VkImageUsageFlags depthImageUsages{};
-    depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    VkImageCreateInfo dImgInfo = VktStructs::imageCreateInfo(m_depthImage.format, depthImageUsages, m_depthImage.extent);
-    vmaCreateImage(m_vmaAllocator, &dImgInfo, &rImgAllocInfo, &m_depthImage.image, &m_depthImage.allocation, nullptr);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VMA_IMAGE, m_depthImage.image, {m_depthImage.allocation});
-
-    VkImageViewCreateInfo dViewInfo = VktStructs::imageViewCreateInfo(m_depthImage.format, m_depthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-    VK_CHECK(vkCreateImageView(m_device, &dViewInfo, nullptr, &m_depthImage.view))
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, m_depthImage.view);
+    // Create depth image
+    m_depthImage = VktImages::createImage(m_device, m_vmaAllocator, drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageFlags).value();
+    m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &m_depthImage);
 
     m_logger(Logger::INFO) << "Finished creating depth image with format: "
                            << string_VkFormat(VK_FORMAT_D32_SFLOAT)
@@ -221,12 +214,6 @@ void VktCore::initCommands() {
                                           &cmdAllocInfo,
                                           &m_frames[i].mainCommandBuffer))
     }
-
-    // Create command pool and buffer for immediate commands
-    VK_CHECK(vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_immCommandPool))
-    VkCommandBufferAllocateInfo cmdAllocInfo = VktStructs::commandBufferAllocateInfo(m_immCommandPool, 1);
-    VK_CHECK(vkAllocateCommandBuffers(m_device, &cmdAllocInfo, &m_immCommandBuffer))
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_COMMAND_POOL, m_immCommandPool);
 }
 
 void VktCore::initSyncStructs() {
@@ -238,10 +225,6 @@ void VktCore::initSyncStructs() {
         VK_CHECK(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_frames[i].swapchainSemaphore))
         VK_CHECK(vkCreateSemaphore(m_device, &semaphoreCreateInfo, nullptr, &m_frames[i].renderSemaphore))
     }
-
-    VK_CHECK(vkCreateFence(m_device, &fenceCreateInfo, nullptr, &m_immFence))
-
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_FENCE, m_immFence);
 }
 
 void VktCore::createSwapchain(uint32_t width, uint32_t height) {
@@ -312,13 +295,8 @@ void VktCore::draw() {
     m_drawExtent.width = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.width, m_swapchainExtent.width)) * m_renderScale);
     m_drawExtent.height = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.height, m_swapchainExtent.height)) * m_renderScale);
 
-    // Transition main image into general layout
+    // Transition color and depth image into correct layouts
     VktUtils::transitionImage(cmd, m_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-    // Draw compute background
-    //drawBackground(cmd);
-
-    // Transition depth image into optimal layout
     VktUtils::transitionImage(cmd, m_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
@@ -331,10 +309,41 @@ void VktCore::draw() {
 
     vkCmdBeginRendering(cmd, &renderingInfo);
 
-    drawSkybox(cmd);
-    drawGeometry(cmd);
+    // Fetch scene uniform buffer allocated memory
+    VktTypes::Resources::Buffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
+
+    // Copy scene data to buffer
+    memcpy(gpuSceneDataBuffer.info.pMappedData, &m_sceneData, sizeof(VktTypes::GPU::SceneData));
+
+    VkDescriptorSet sceneDescriptorSet = getCurrentFrame().descriptors.allocate(m_device, VktCache::getLayout(VktCache::SCENE));
+
+    // Write scene data to uniforms
+    {
+        DescriptorWriter writer;
+        writer.writeBuffer(0, gpuSceneDataBuffer.buffer,
+                           sizeof(VktTypes::GPU::SceneData),
+                           0,
+                           VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        writer.writeImage(1, m_skyboxIBLDiffuse.view,
+                          m_defaultSamplerLinear,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.writeImage(2, m_skyboxIBLSpecular.view,
+                          m_defaultSamplerLinear,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        writer.writeImage(3, m_skyboxBRDF.view,
+                          m_defaultSamplerLinear,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+        writer.updateSet(m_device, sceneDescriptorSet);
+    }
+
+    drawSkybox(cmd, sceneDescriptorSet);
+    drawGeometry(cmd, sceneDescriptorSet);
     if(m_debugConf.enableDebugPipeline) {
-        drawDebug(cmd);
+        drawDebug(cmd, sceneDescriptorSet);
     }
 
     vkCmdEndRendering(cmd);
@@ -389,38 +398,7 @@ void VktCore::draw() {
     m_frameNumber++;
 }
 
-void VktCore::drawBackground(VkCommandBuffer cmd) {
-    VktTypes::ComputeEffect &effect = m_backgroundEffect.at(m_currentBackgroundEffect);
-
-    // Draw gradient with compute shader
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_gradientPipelineLayout, 0, 1, &m_drawImageDescriptors, 0, nullptr);
-
-    // Push constants
-    vkCmdPushConstants(cmd, m_gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VktTypes::ComputePushConstants), &effect.data);
-
-    vkCmdDispatch(cmd, std::ceil(m_drawExtent.width / 16.0), std::ceil(m_drawExtent.height / 16.0), 1);
-}
-
-void VktCore::drawGeometry(VkCommandBuffer cmd) {
-
-    // Fetch scene uniform buffer allocated memory
-    VktTypes::AllocatedBuffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
-
-    // Copy scene data to buffer
-    memcpy(reinterpret_cast<VktTypes::GPUSceneData *>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
-
-    VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_gpuSceneDataDescriptorLayout);
-
-    // Write scene data to uniforms
-    {
-        DescriptorWriter writer;
-        writer.writeBuffer(0, gpuSceneDataBuffer.buffer,
-                           sizeof(VktTypes::GPUSceneData),
-                           0,
-                           VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        writer.updateSet(m_device, globalDescriptor);
-    }
+void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
 
     auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
@@ -430,7 +408,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 renderObject.material->pipeline->layout,
                                 0, 1,
-                                &globalDescriptor, 0,
+                                &sceneDescriptorSet, 0,
                                 nullptr);
 
         VkViewport viewport{};
@@ -460,18 +438,18 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
         vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         if(renderObject.isSkinned) {
-            VktTypes::GPUDrawPushConstants<VktTypes::Skinned> pushConstants;
+            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
             pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
             pushConstants.jointsBuffer = renderObject.jointsBufferAddress;
             pushConstants.worldMatrix = renderObject.transform;
             vkCmdPushConstants(cmd, renderObject.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                               sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Skinned>), &pushConstants);
+                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
         } else {
-            VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
+            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
             pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
             pushConstants.worldMatrix = renderObject.transform;
             vkCmdPushConstants(cmd, renderObject.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                               sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>), &pushConstants);
+                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
         }
 
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
@@ -486,25 +464,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd) {
     }
 }
 
-void VktCore::drawDebug(VkCommandBuffer cmd) {
-    // Fetch scene uniform buffer allocated memory
-    VktTypes::AllocatedBuffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
-
-    // Copy scene data to buffer
-    memcpy(reinterpret_cast<VktTypes::GPUSceneData *>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
-
-    VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_debugSceneDataDescriptorLayout);
-
-    // Write scene data to uniforms
-    {
-        DescriptorWriter writer;
-        writer.writeBuffer(0, gpuSceneDataBuffer.buffer,
-                           sizeof(VktTypes::GPUSceneData),
-                           0,
-                           VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        writer.updateSet(m_device, globalDescriptor);
-    }
-
+void VktCore::drawDebug(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
     auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
         m_stats.trigDrawCount += renderObject.indexCount / 3;
@@ -514,14 +474,14 @@ void VktCore::drawDebug(VkCommandBuffer cmd) {
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     m_normalsDebugSkinnedPipeline.layout,
                                     0, 1,
-                                    &globalDescriptor, 0,
+                                    &sceneDescriptorSet, 0,
                                     nullptr);
         } else {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_normalsDebugStaticPipeline.pipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     m_normalsDebugStaticPipeline.layout,
                                     0, 1,
-                                    &globalDescriptor, 0,
+                                    &sceneDescriptorSet, 0,
                                     nullptr);
         }
 
@@ -546,18 +506,18 @@ void VktCore::drawDebug(VkCommandBuffer cmd) {
         vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         if(renderObject.isSkinned) {
-            VktTypes::GPUDrawPushConstants<VktTypes::Skinned> pushConstants;
+            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
             pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
             pushConstants.jointsBuffer = renderObject.jointsBufferAddress;
             pushConstants.worldMatrix = renderObject.transform;
             vkCmdPushConstants(cmd, m_normalsDebugSkinnedPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
-                               sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Skinned>), &pushConstants);
+                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
         } else {
-            VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
+            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
             pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
             pushConstants.worldMatrix = renderObject.transform;
             vkCmdPushConstants(cmd, m_normalsDebugStaticPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
-                               sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>), &pushConstants);
+                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
         }
 
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
@@ -572,28 +532,10 @@ void VktCore::drawDebug(VkCommandBuffer cmd) {
     }
 }
 
-void VktCore::drawSkybox(VkCommandBuffer cmd) {
+void VktCore::drawSkybox(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
     VktTypes::DrawContext drawContext;
     m_cube.gatherDrawContext(drawContext);
     VktTypes::RenderObject &cubeRenderObject = drawContext.opaqueSurfaces.at(0);
-
-    // Fetch scene uniform buffer allocated memory
-    VktTypes::AllocatedBuffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
-
-    // Copy scene data to buffer
-    memcpy(reinterpret_cast<VktTypes::GPUSceneData *>(gpuSceneDataBuffer.info.pMappedData), &m_sceneData, sizeof(VktTypes::GPUSceneData));
-
-    VkDescriptorSet globalDescriptor = getCurrentFrame().descriptors.allocate(m_device, m_gpuSceneDataDescriptorLayout);
-
-    // Write scene data to uniforms
-    {
-        DescriptorWriter writer;
-        writer.writeBuffer(0, gpuSceneDataBuffer.buffer,
-                           sizeof(VktTypes::GPUSceneData),
-                           0,
-                           VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        writer.updateSet(m_device, globalDescriptor);
-    }
 
     auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
@@ -603,7 +545,7 @@ void VktCore::drawSkybox(VkCommandBuffer cmd) {
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 m_skyboxPipeline.layout,
                                 0, 1,
-                                &globalDescriptor, 0,
+                                &sceneDescriptorSet, 0,
                                 nullptr);
 
         VkViewport viewport{};
@@ -632,11 +574,11 @@ void VktCore::drawSkybox(VkCommandBuffer cmd) {
 
         vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
         pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
         pushConstants.worldMatrix = renderObject.transform;
         vkCmdPushConstants(cmd, m_skyboxPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                           sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>), &pushConstants);
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
 
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
     };
@@ -647,7 +589,7 @@ void VktCore::drawSkybox(VkCommandBuffer cmd) {
 void VktCore::initDescriptors() {
     std::vector<DescriptorAllocatorDynamic::PoolSizeRatio> sizes = {
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 5},
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3}};
 
     m_globDescriptorAllocator.initPool(m_device, 10, sizes);
@@ -656,11 +598,12 @@ void VktCore::initDescriptors() {
     {
         DescriptorLayoutBuilder builder;
         builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        m_drawImageDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_COMPUTE_BIT);
+        //m_drawImageDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_COMPUTE_BIT);
+        VktCache::storeLayout(VktCache::DRAW_IMAGE, builder.build(m_device, VK_SHADER_STAGE_COMPUTE_BIT));
     }
 
     // Allocate draw image
-    m_drawImageDescriptors = m_globDescriptorAllocator.allocate(m_device, m_drawImageDescriptorLayout);
+    m_drawImageDescriptors = m_globDescriptorAllocator.allocate(m_device, VktCache::getLayout(VktCache::DRAW_IMAGE));
 
     // Write draw image
     {
@@ -674,16 +617,12 @@ void VktCore::initDescriptors() {
 
     {
         DescriptorLayoutBuilder builder;
-        builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        m_gpuSceneDataDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);        // SceneData
+        builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// IBLCube
+        builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// Specular cube
+        builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// BRDF texture
+        VktCache::storeLayout(VktCache::SCENE, builder.build(m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT));
     }
-
-    {
-        DescriptorLayoutBuilder builder;
-        builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        m_singleImageDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT);
-    }
-
 
     for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
         std::vector<DescriptorAllocatorDynamic::PoolSizeRatio> frameSizes = {
@@ -695,118 +634,46 @@ void VktCore::initDescriptors() {
         m_frames[i].descriptors = DescriptorAllocatorDynamic{};
         m_frames[i].descriptors.initPool(m_device, 1000, frameSizes);
 
-        m_frames[i].sceneUniformBuffer = createBuffer(sizeof(VktTypes::GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        VktTypes::GPUSceneData *sceneUniformData = reinterpret_cast<VktTypes::GPUSceneData *>(m_frames[i].sceneUniformBuffer.info.pMappedData);
-        *sceneUniformData = m_sceneData;
+        m_frames[i].sceneUniformBuffer = VktBuffers::createBuffer(m_vmaAllocator, sizeof(VktTypes::GPU::SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-        m_coreDeletionQueue.pushDeletable(DeletableType::VMA_BUFFER, m_frames[i].sceneUniformBuffer.buffer, {m_frames[i].sceneUniformBuffer.allocation});
+        m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_BUFFER, &m_frames[i].sceneUniformBuffer);
         m_coreDeletionQueue.pushDeletable(DeletableType::TEC_DESCRIPTOR_ALLOCATOR_DYNAMIC, &m_frames[i].descriptors);
     }
-
-    //m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_POOL, m_globDescriptorAllocator.pool);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, m_singleImageDescriptorLayout);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, m_gpuSceneDataDescriptorLayout);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, m_drawImageDescriptorLayout);
 }
 
 void VktCore::initPipelines() {
-    initBackgroundPipelines();
-    //initMeshPipeline();
     initMaterialPipelines();
     initGeometryPipeline();
     initSkyboxPipeline();
     m_logger(Logger::INFO) << "Finished initializing graphics pipelines\n";
 }
 
-void VktCore::initBackgroundPipelines() {
-    VkPipelineLayoutCreateInfo computeLayout{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr};
-    computeLayout.pSetLayouts = &m_drawImageDescriptorLayout;
-    computeLayout.setLayoutCount = 1;
-
-    VkPushConstantRange pushConstant{};
-    pushConstant.offset = 0;
-    pushConstant.size = sizeof(VktTypes::ComputePushConstants);
-    pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-    computeLayout.pPushConstantRanges = &pushConstant;
-    computeLayout.pushConstantRangeCount = 1;
-
-    VK_CHECK(vkCreatePipelineLayout(m_device, &computeLayout, nullptr, &m_gradientPipelineLayout))
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, m_gradientPipelineLayout);
-
-    VkShaderModule skyShader = VktUtils::loadShaderModule("shaders/sky.comp.spv", m_device);
-    VkShaderModule starNestShader = VktUtils::loadShaderModule("shaders/star_next.comp.spv", m_device);
-
-    VkPipelineShaderStageCreateInfo stageInfo = VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, skyShader);
-
-    VkComputePipelineCreateInfo computePipelineCreateInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr};
-    computePipelineCreateInfo.layout = m_gradientPipelineLayout;
-    computePipelineCreateInfo.stage = stageInfo;
-
-    VktTypes::ComputeEffect sky{};
-    sky.layout = m_gradientPipelineLayout;
-    sky.name = "sky";
-    sky.data = {};
-
-    sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-
-    VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline))
-
-    computePipelineCreateInfo.stage.module = starNestShader;
-
-    VktTypes::ComputeEffect star{};
-    star.layout = m_gradientPipelineLayout;
-    star.name = "star";
-    star.data = {};
-
-    star.data.data1[0] = 0.0;
-
-    VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &star.pipeline))
-
-    m_backgroundEffect.push_back(sky);
-    m_backgroundEffect.push_back(star);
-
-    vkDestroyShaderModule(m_device, skyShader, nullptr);
-    vkDestroyShaderModule(m_device, starNestShader, nullptr);
-
-    m_currentBackgroundEffect = 0;
-
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, star.pipeline);
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, sky.pipeline);
-}
-
 void VktCore::initMaterialPipelines() {
     // Create vertex shader push constants range
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
-    matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
+    matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
     matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     VkPushConstantRange skinnedMatrixRange{};
     skinnedMatrixRange.offset = 0;
-    skinnedMatrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Skinned>);
+    skinnedMatrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>);
     skinnedMatrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     {
         DescriptorLayoutBuilder layoutBuilder;
         // TODO Create enums/defs/constexpr for binding numbers
-        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        layoutBuilder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);         // MaterialData
+        layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // ColorTexture
+        layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // MetalRoughnessTexture
 
-        metalRoughMaterial.materialLayout = layoutBuilder.build(m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, metalRoughMaterial.materialLayout);
+        VktCache::storeLayout(VktCache::MAT_METAL_ROUGHNESS, layoutBuilder.build(m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT));
     }
 
-    VkDescriptorSetLayout layouts[] = {m_gpuSceneDataDescriptorLayout, metalRoughMaterial.materialLayout};
+    auto layouts = VktCache::getLayouts(VktCache::SCENE, VktCache::MAT_METAL_ROUGHNESS);
 
     // Create pipeline layout with provided descriptors and push constants
-    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
-    meshLayoutInfo.setLayoutCount = 2;
-    meshLayoutInfo.pSetLayouts = layouts;
-    meshLayoutInfo.pushConstantRangeCount = 1;
-    meshLayoutInfo.pPushConstantRanges = &matrixRange;
+    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
 
     VkPipelineLayout staticLayout;
     VK_CHECK(vkCreatePipelineLayout(m_device,
@@ -832,8 +699,7 @@ void VktCore::initMaterialPipelines() {
 
     // Build four pipelines fo opaque/transparent and static/skinned material rendering
     VktPipelineBuilder pipelineBuilder(m_device);
-    pipelineBuilder.setVertexShader("shaders/mesh.vert.spv");
-    pipelineBuilder.setFragmentShader("shaders/mesh.frag.spv");
+    pipelineBuilder.setShaders("shaders/mesh.vert.spv", "shaders/mesh.frag.spv");
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
@@ -875,29 +741,18 @@ void VktCore::initMaterialPipelines() {
 void VktCore::initGeometryPipeline() {
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
-    matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
+    matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
     matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
 
     VkPushConstantRange skinnedMatrixRange{};
     skinnedMatrixRange.offset = 0;
-    skinnedMatrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Skinned>);
+    skinnedMatrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>);
     skinnedMatrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
 
-    {
-        DescriptorLayoutBuilder builder;
-        builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        m_debugSceneDataDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
-        m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, m_debugSceneDataDescriptorLayout);
-    }
-
-    VkDescriptorSetLayout layouts[] = {m_debugSceneDataDescriptorLayout};
+    const auto layouts = VktCache::getLayouts(VktCache::SCENE);
 
     // Create pipeline layout with provided descriptors and push constants
-    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
-    meshLayoutInfo.setLayoutCount = 1;
-    meshLayoutInfo.pSetLayouts = layouts;
-    meshLayoutInfo.pushConstantRangeCount = 1;
-    meshLayoutInfo.pPushConstantRanges = &matrixRange;
+    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
 
     VkPipelineLayout staticLayout;
     VK_CHECK(vkCreatePipelineLayout(m_device,
@@ -946,24 +801,19 @@ void VktCore::initGeometryPipeline() {
 void VktCore::initSkyboxPipeline() {
     VkPushConstantRange matrixRange{};
     matrixRange.offset = 0;
-    matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
+    matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
     matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     {
         DescriptorLayoutBuilder builder;
-        builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        m_skyboxDescriptorLayout = builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT);
-        m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_SET_LAYOUT, m_skyboxDescriptorLayout);
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// Skybox cubemap
+        VktCache::storeLayout(VktCache::SKYBOX, builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT));
     }
 
-    VkDescriptorSetLayout layouts[] = {m_gpuSceneDataDescriptorLayout, m_skyboxDescriptorLayout};
+    const auto layouts = VktCache::getLayouts(VktCache::SCENE, VktCache::SKYBOX);
 
     // Create pipeline layout with provided descriptors and push constants
-    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
-    meshLayoutInfo.setLayoutCount = 2;
-    meshLayoutInfo.pSetLayouts = layouts;
-    meshLayoutInfo.pushConstantRangeCount = 1;
-    meshLayoutInfo.pPushConstantRanges = &matrixRange;
+    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
 
     VkPipelineLayout layout;
     VK_CHECK(vkCreatePipelineLayout(m_device,
@@ -975,8 +825,7 @@ void VktCore::initSkyboxPipeline() {
     m_skyboxPipeline.layout = layout;
 
     VktPipelineBuilder pipelineBuilder(m_device);
-    pipelineBuilder.setVertexShader("shaders/skybox.vert.spv");
-    pipelineBuilder.setFragmentShader("shaders/skybox.frag.spv");
+    pipelineBuilder.setShaders("shaders/skybox.vert.spv", "shaders/skybox.frag.spv");
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -989,24 +838,6 @@ void VktCore::initSkyboxPipeline() {
 
     m_skyboxPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_skyboxPipeline.pipeline);
-}
-
-void VktCore::immediateSubmit(std::function<void(VkCommandBuffer)> &&func) {
-    VK_CHECK(vkResetFences(m_device, 1, &m_immFence))
-    VK_CHECK(vkResetCommandBuffer(m_immCommandBuffer, 0))
-
-    VkCommandBuffer cmd = m_immCommandBuffer;
-    VkCommandBufferBeginInfo cmdBeginInfo = VktStructs::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo))
-    func(cmd);
-    VK_CHECK(vkEndCommandBuffer(cmd))
-
-    VkCommandBufferSubmitInfo cmdInfo = VktStructs::commandBufferSubmitInfo(cmd);
-    VkSubmitInfo2 submitInfo = VktStructs::submitInfo(&cmdInfo, nullptr, nullptr);
-
-    VK_CHECK(vkQueueSubmit2(m_graphicsQueue, 1, &submitInfo, m_immFence))
-    VK_CHECK(vkWaitForFences(m_device, 1, &m_immFence, true, 9999999999))
 }
 
 void VktCore::initImGui() {
@@ -1081,14 +912,6 @@ void VktCore::run() {
 
     runImGui();
 
-    double currentTime = glfwGetTime();
-    m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[0] = static_cast<float>(m_drawExtent.width);
-    m_backgroundEffect.at(m_currentBackgroundEffect).data.data2[1] = static_cast<float>(m_drawExtent.height);
-
-    if(m_currentBackgroundEffect == 1) {
-        m_backgroundEffect.at(m_currentBackgroundEffect).data.data1[0] = static_cast<float>(currentTime);
-    }
-
     draw();
 
     auto endTime = std::chrono::system_clock::now();
@@ -1100,23 +923,6 @@ void VktCore::runImGui() {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-
-    if(ImGui::Begin("Background")) {
-        VktTypes::ComputeEffect &selected = m_backgroundEffect.at(m_currentBackgroundEffect);
-
-        ImGui::SliderFloat("Render scale", &m_renderScale, 0.3f, 1.0f);
-
-        ImGui::Text("Selected effect: ", selected.name);
-
-        ImGui::SliderInt("Effect index: ", &m_currentBackgroundEffect, 0, m_backgroundEffect.size() - 1);
-
-        ImGui::InputFloat4("data1", (float *) &selected.data.data1);
-        ImGui::InputFloat4("data2", (float *) &selected.data.data2);
-        ImGui::InputFloat4("data3", (float *) &selected.data.data3);
-        ImGui::InputFloat4("data4", (float *) &selected.data.data4);
-
-        ImGui::End();
-    }
 
     if(ImGui::Begin("Scene")) {
         ImGui::InputFloat3("Ambient color: ", (float *) &m_sceneData.ambientColor);
@@ -1199,63 +1005,36 @@ void VktCore::runImGui() {
     ImGui::Render();
 }
 
-VktTypes::AllocatedBuffer VktCore::createBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) {
-    VktCore &vktCore = getInstance();
-
-    VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr};
-    bufferInfo.size = allocSize;
-    bufferInfo.usage = usage;
-
-    VmaAllocationCreateInfo vmaAllocInfo{};
-    vmaAllocInfo.usage = memoryUsage;
-    vmaAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-    VktTypes::AllocatedBuffer newBuffer{};
-    VK_CHECK(vmaCreateBuffer(vktCore.m_vmaAllocator,
-                             &bufferInfo,
-                             &vmaAllocInfo,
-                             &newBuffer.buffer,
-                             &newBuffer.allocation,
-                             &newBuffer.info))
-    return newBuffer;
-}
-
-void VktCore::destroyBuffer(const VktTypes::AllocatedBuffer &buffer) {
-    VktCore &vktCore = getInstance();
-
-    vmaDestroyBuffer(vktCore.m_vmaAllocator, buffer.buffer, buffer.allocation);
-}
-
-template VktTypes::GPUMeshBuffers VktCore::uploadMesh<VktTypes::Skinned>(std::span<uint32_t> indices, std::span<VktTypes::Vertex<VktTypes::Skinned>> vertices);
-template VktTypes::GPUMeshBuffers VktCore::uploadMesh<VktTypes::Static>(std::span<uint32_t> indices, std::span<VktTypes::Vertex<VktTypes::Static>> vertices);
+template VktTypes::GPU::MeshBuffers VktCore::uploadMesh<VktTypes::GPU::Skinned>(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Skinned>> vertices);
+template VktTypes::GPU::MeshBuffers VktCore::uploadMesh<VktTypes::GPU::Static>(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Static>> vertices);
 
 template<bool S>
-VktTypes::GPUMeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex<S>> vertices) {
+VktTypes::GPU::MeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<S>> vertices) {
     VktCore &vktCore = VktCore::getInstance();
 
-    const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::Vertex<S>);
+    const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::GPU::Vertex<S>);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
-    VktTypes::GPUMeshBuffers newSurface{};
-    newSurface.vertexBuffer = createBuffer(vertexBufferSize,
-                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                           VMA_MEMORY_USAGE_GPU_ONLY);
+    VktTypes::GPU::MeshBuffers newSurface{};
+    newSurface.vertexBuffer = VktBuffers::createBuffer(vktCore.m_vmaAllocator, vertexBufferSize,
+                                                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                                       VMA_MEMORY_USAGE_GPU_ONLY);
 
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
     deviceAddressInfo.buffer = newSurface.vertexBuffer.buffer;
     newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(VktCore::device(), &deviceAddressInfo);
 
-    newSurface.indexBuffer = createBuffer(indexBufferSize,
-                                          VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                          VMA_MEMORY_USAGE_GPU_ONLY);
+    newSurface.indexBuffer = VktBuffers::createBuffer(vktCore.m_vmaAllocator, indexBufferSize,
+                                                      VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                      VMA_MEMORY_USAGE_GPU_ONLY);
 
-    VktTypes::AllocatedBuffer staging = createBuffer(vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    VktTypes::Resources::Buffer staging = VktBuffers::createBuffer(vktCore.m_vmaAllocator, vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
     void *data = staging.info.pMappedData;
     memcpy(data, vertices.data(), vertexBufferSize);
     memcpy((char *) data + vertexBufferSize, indices.data(), indexBufferSize);
 
-    vktCore.immediateSubmit([&](VkCommandBuffer cmd) {
+    VktInstantCommands::submitCommands([&](VkCommandBuffer cmd) {
         VkBufferCopy vertexCopy{};
         vertexCopy.srcOffset = 0;
         vertexCopy.dstOffset = 0;
@@ -1270,20 +1049,21 @@ VktTypes::GPUMeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::s
 
         vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
     });
-    destroyBuffer(staging);
+    VktBuffers::destroyBuffer(vktCore.m_vmaAllocator, staging);
 
     return newSurface;
 }
 
 
-VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &jointMatrices) {
+VktTypes::GPU::JointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &jointMatrices) {
+    VktCore &vktCore = VktCore::getInstance();
 
     const size_t jointsBufferSize = jointMatrices.size() * sizeof(glm::mat4);
 
-    VktTypes::GPUJointsBuffers newJoints{};
-    newJoints.jointsBuffer = createBuffer(jointsBufferSize,
-                                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
+    VktTypes::GPU::JointsBuffers newJoints{};
+    newJoints.jointsBuffer = VktBuffers::createBuffer(vktCore.m_vmaAllocator, jointsBufferSize,
+                                                      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                                      VMA_MEMORY_USAGE_CPU_TO_GPU);
 
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
     deviceAddressInfo.buffer = newJoints.jointsBuffer.buffer;
@@ -1296,13 +1076,12 @@ VktTypes::GPUJointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &joi
 
 void VktCore::initDefaultData() {
     uint32_t white = 0xFFFFFFFF;
-    m_whiteImage = createImage(reinterpret_cast<void *>(&white), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
-
     uint32_t black = 0x000000;
-    m_blackImage = createImage(reinterpret_cast<void *>(&black), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
-
     uint32_t gray = 0xAAAAAAFF;
-    m_whiteImage = createImage(reinterpret_cast<void *>(&gray), VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+    m_whiteImage = VktImages::createFilledImage(m_device, m_vmaAllocator, &white, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT).value();
+    m_blackImage = VktImages::createFilledImage(m_device, m_vmaAllocator, &black, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT).value();
+    m_greyImage = VktImages::createFilledImage(m_device, m_vmaAllocator, &gray, VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT).value();
 
     uint32_t pink = 0xFF00DC;
     std::array<uint32_t, 16 * 16> pixels{};
@@ -1311,7 +1090,7 @@ void VktCore::initDefaultData() {
             pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? pink : black;
         }
     }
-    m_errorCheckboardImage = createImage(pixels.data(), VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_errorCheckboardImage = VktImages::createFilledImage(m_device, m_vmaAllocator, &pink, VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT).value();
 
     VkSamplerCreateInfo samplerInfo{.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr};
 
@@ -1325,31 +1104,20 @@ void VktCore::initDefaultData() {
     vkCreateSampler(m_device, &samplerInfo, nullptr, &m_defaultSamplerLinear);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_SAMPLER, m_defaultSamplerLinear);
 
-    std::array<void *, 6> cubeData{};
-    std::fill(cubeData.begin(), cubeData.end(), nullptr);
-    std::array<const char *, 6> cubeSidesFiles = {
-            "terrain/skyboxtex/xpos.png",
-            "terrain/skyboxtex/xneg.png",
-            "terrain/skyboxtex/ypos.png",
-            "terrain/skyboxtex/yneg.png",
-            "terrain/skyboxtex/zpos.png",
-            "terrain/skyboxtex/zneg.png",
-    };
-    int width, height, channels;
-    for(uint8_t cubeSide = 0; cubeSide < 6; cubeSide++) {
-        unsigned char *data = stbi_load(cubeSidesFiles[cubeSide], &width, &height, &channels, 4);
-        if(data) {
-            cubeData[cubeSide] = data;
-            m_logger(Logger::DEBUG) << "Loaded cube map side from file: [" << cubeSidesFiles[cubeSide] << "]\n";
-        } else {
-            m_logger(Logger::ERROR) << "Failed to load cube map side from file: [" << cubeSidesFiles[cubeSide] << "]\n";
-        }
+    std::string tmp_cubemapDir = "terrain/skyboxtex/sea-panorama";
+    auto cubemap = VktCubemaps::createCubemapFromDir(m_device, m_vmaAllocator, tmp_cubemapDir.c_str());
+    if(!cubemap.has_value()) {
+        m_logger(Logger::ERROR) << "Failed to load cubemap from directory [" << tmp_cubemapDir << "]\n";
+    } else {
+        m_logger(Logger::INFO) << "Loaded cubemap from directory [" << tmp_cubemapDir << "]\n";
     }
-    VkExtent3D extent = {.width = static_cast<uint32_t>(width), .height = static_cast<uint32_t>(height), .depth = 1};
-    m_skybox = createCubeMap(cubeData, extent, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    m_skybox = cubemap.value();
+    m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_CUBEMAP, &m_skybox);
+
+    // Load cube mesh for skybox rendering
     m_cube = Model("meshes/cube.tecm");
 
-    m_skyboxDescriptorSet = m_globDescriptorAllocator.allocate(m_device, m_skyboxDescriptorLayout);
+    m_skyboxDescriptorSet = m_globDescriptorAllocator.allocate(m_device, VktCache::getLayout(VktCache::SKYBOX));
     {
         DescriptorWriter writer;
         writer.clear();
@@ -1362,17 +1130,52 @@ void VktCore::initDefaultData() {
         writer.updateSet(m_device, m_skyboxDescriptorSet);
     }
 
-    m_skyboxIBL = generateIBLCubeMap(m_skybox);
+    m_skyboxIBLSpecular = generateIBLSpecularCubemap(m_skybox);
+    m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_CUBEMAP, &m_skyboxIBLSpecular);
+
+    m_skyboxIBLDiffuse = generateIBLDiffuseCubemap(m_skybox);
+    m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_CUBEMAP, &m_skyboxIBLDiffuse);
+
+    m_skyboxBRDF = generateIBLBRDFImage();
+    m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &m_skyboxBRDF);
+
     {
         DescriptorWriter writer;
         writer.clear();
 
         // Write cube map skybox texture to GPU
-        writer.writeImage(0, m_skyboxIBL.view,
+        writer.writeImage(0, m_skyboxIBLSpecular.view,
                           m_defaultSamplerLinear,
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.updateSet(m_device, m_skyboxDescriptorSet);
+    }
+
+    for(uint8_t frame = 0; frame < FRAMES_OVERLAP; frame++) {
+        VkDescriptorSet sceneDescriptorSet = m_frames[frame].descriptors.allocate(m_device, VktCache::getLayout(VktCache::SCENE));
+        {
+            DescriptorWriter writer;
+            writer.clear();
+
+            // Write IBLCube to GPU
+            writer.writeImage(1, m_skyboxIBLDiffuse.view,
+                              m_defaultSamplerLinear,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+            // Write specular cube to GPU
+            writer.writeImage(2, m_skyboxIBLSpecular.view,
+                              m_defaultSamplerLinear,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+            // Write BRDF texture to GPU
+            writer.writeImage(3, m_skyboxBRDF.view,
+                              m_defaultSamplerLinear,
+                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                              VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.updateSet(m_device, sceneDescriptorSet);
+        }
     }
 }
 
@@ -1394,170 +1197,6 @@ void VktCore::resizeSwapchain() {
 
     createSwapchain(m_windowExtent.width, m_windowExtent.height);
     m_resizeSwapchain = false;
-}
-
-VktTypes::AllocatedImage VktCore::createImage(VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped) {
-    VktCore &vktCore = getInstance();
-
-    VktTypes::AllocatedImage newImage{};
-    newImage.format = format;
-    newImage.extent = allocSize;
-
-    VkImageCreateInfo imgInfo = VktStructs::imageCreateInfo(format, usage, allocSize);
-    if(mipMapped) {
-        imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(allocSize.width, allocSize.height)))) + 1;
-    }
-
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newImage.image, &newImage.allocation, nullptr))
-
-    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(format == VK_FORMAT_D32_SFLOAT) {
-        aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-    }
-
-    VkImageViewCreateInfo viewInfo = VktStructs::imageViewCreateInfo(format, newImage.image, aspectFlags);
-    viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
-
-    VK_CHECK(vkCreateImageView(vktCore.m_device, &viewInfo, nullptr, &newImage.view))
-
-    // Delete created resources on end of program
-    // TODO Maybe not best place for this
-    vktCore.m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, newImage.view);
-    vktCore.m_coreDeletionQueue.pushDeletable(DeletableType::VMA_IMAGE, newImage.image, {newImage.allocation});
-    return newImage;
-}
-
-VktTypes::AllocatedImage VktCore::createImage(void *data, VkExtent3D allocSize, VkFormat format, VkImageUsageFlags usage, bool mipMapped) {
-    VktCore &vktCore = getInstance();
-
-    size_t dataSize = allocSize.width * allocSize.height * allocSize.depth * 4;
-    VktTypes::AllocatedBuffer stagingBuffer = createBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    // Copying data to staging buffer
-    memcpy(stagingBuffer.info.pMappedData, data, dataSize);
-
-    VktTypes::AllocatedImage newImage = createImage(allocSize, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipMapped);
-
-    // Transfer data to image through staging buffer
-    vktCore.immediateSubmit([&](VkCommandBuffer cmd) {
-        VktUtils::transitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        VkBufferImageCopy copyRegion{};
-        copyRegion.bufferOffset = 0;
-        copyRegion.bufferRowLength = 0;
-        copyRegion.bufferImageHeight = 0;
-        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copyRegion.imageSubresource.mipLevel = 0;
-        copyRegion.imageSubresource.baseArrayLayer = 0;
-        copyRegion.imageSubresource.layerCount = 1;
-        copyRegion.imageExtent = allocSize;
-
-        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-        VktUtils::transitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    });
-    destroyBuffer(stagingBuffer);
-
-    return newImage;
-}
-
-void VktCore::destroyImage(const VktTypes::AllocatedImage &img) {
-    VktCore &vktCore = getInstance();
-
-    vkDestroyImageView(vktCore.m_device, img.view, nullptr);
-    vmaDestroyImage(vktCore.m_vmaAllocator, img.image, img.allocation);
-}
-
-VktTypes::AllocatedCubeMap VktCore::createCubeMap(VkExtent3D allocSize,
-                                                  VkFormat format,
-                                                  VkImageUsageFlags usage,
-                                                  bool mipMapped) {
-    VktCore &vktCore = getInstance();
-
-    VktTypes::AllocatedCubeMap newCubeMap{};
-    newCubeMap.format = format;
-    newCubeMap.extent = allocSize;
-
-    VkImageCreateInfo imgInfo = VktStructs::imageCreateInfo(format, usage, allocSize);
-    if(mipMapped) {
-        imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(allocSize.width, allocSize.height)))) + 1;
-    }
-    imgInfo.imageType = VK_IMAGE_TYPE_2D;
-    imgInfo.arrayLayers = 6;
-    imgInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VK_CHECK(vmaCreateImage(vktCore.m_vmaAllocator, &imgInfo, &allocInfo, &newCubeMap.image, &newCubeMap.allocation, nullptr))
-
-    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-    if(format == VK_FORMAT_D32_SFLOAT) {
-        aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-    }
-
-    VkImageViewCreateInfo viewInfo = VktStructs::imageViewCreateInfo(format, newCubeMap.image, aspectFlags);
-    viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
-    viewInfo.subresourceRange.layerCount = 6;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-
-    VK_CHECK(vkCreateImageView(vktCore.m_device, &viewInfo, nullptr, &newCubeMap.view))
-
-    // Delete created resources on end of program
-    // TODO Maybe not best place for this
-    vktCore.m_coreDeletionQueue.pushDeletable(DeletableType::VK_IMAGE_VIEW, newCubeMap.view);
-    vktCore.m_coreDeletionQueue.pushDeletable(DeletableType::VMA_IMAGE, newCubeMap.image, {newCubeMap.allocation});
-    return newCubeMap;
-}
-
-void VktCore::destroyCubeMap(const VktTypes::AllocatedCubeMap &cubemap) {
-    VktCore &vktCore = getInstance();
-
-    vkDestroyImageView(vktCore.m_device, cubemap.view, nullptr);
-    vmaDestroyImage(vktCore.m_vmaAllocator, cubemap.image, cubemap.allocation);
-}
-
-VktTypes::AllocatedCubeMap VktCore::createCubeMap(std::array<void *, 6> data,
-                                                  VkExtent3D allocSize,
-                                                  VkFormat format,
-                                                  VkImageUsageFlags usage,
-                                                  bool mipMapped) {
-    VktCore &vktCore = getInstance();
-    size_t dataSize = allocSize.width * allocSize.height * allocSize.depth * 4 * 6;// 4 channels and 6 layers of cube
-
-    VktTypes::AllocatedBuffer stagingBuffer = createBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    // Copying data to staging buffer
-    for(uint8_t buffer = 0; buffer < 6; buffer++) {
-        memcpy(static_cast<char *>(stagingBuffer.info.pMappedData) + (buffer * (dataSize / 6)), data[buffer], (dataSize / 6));
-    }
-
-    VktTypes::AllocatedCubeMap newCubeMap = createCubeMap(allocSize, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipMapped);
-
-    // Transfer data to image through staging buffer
-    vktCore.immediateSubmit([&newCubeMap, &allocSize, &stagingBuffer](VkCommandBuffer cmd) {
-        VktUtils::transitionCubeMap(cmd, newCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-        VkBufferImageCopy copyRegion{};
-        copyRegion.bufferOffset = 0;
-        copyRegion.bufferRowLength = 0;
-        copyRegion.bufferImageHeight = 0;
-        copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copyRegion.imageSubresource.mipLevel = 0;
-        copyRegion.imageSubresource.baseArrayLayer = 0;
-        copyRegion.imageSubresource.layerCount = 6;
-        copyRegion.imageExtent = allocSize;
-
-        vkCmdCopyBufferToImage(cmd, stagingBuffer.buffer, newCubeMap.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-        VktUtils::transitionImage(cmd, newCubeMap.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    });
-    destroyBuffer(stagingBuffer);
-
-    return newCubeMap;
 }
 
 void VktCore::setWindow(Window *window) {
@@ -1612,7 +1251,15 @@ VkDevice VktCore::device() {
     if(vktCore.m_device) {
         return vktCore.m_device;
     }
-    return nullptr;
+    return VK_NULL_HANDLE;
+}
+
+VmaAllocator VktCore::allocator() {
+    VktCore &vktCore = getInstance();
+    if(vktCore.m_vmaAllocator) {
+        return vktCore.m_vmaAllocator;
+    }
+    return VK_NULL_HANDLE;
 }
 
 /**
@@ -1659,7 +1306,7 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
             break;
     }
 
-    matData.materialSet = descriptorAllocator.allocate(device, metalRoughMaterial.materialLayout);
+    matData.materialSet = descriptorAllocator.allocate(device, VktCache::getLayout(VktCache::MAT_METAL_ROUGHNESS));
 
     metalRoughMaterial.writer.clear();
     metalRoughMaterial.writer.writeBuffer(0, resources.dataBuffer,
@@ -1674,32 +1321,24 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VkDevice device, VktTypes::Mat
                                          resources.metalRoughSampler,
                                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-    metalRoughMaterial.writer.writeImage(3, m_skyboxIBL.view,
-                                         m_defaultSamplerLinear,
-                                         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     metalRoughMaterial.writer.updateSet(device, matData.materialSet);
 
     return matData;
 }
 
-VktTypes::AllocatedCubeMap VktCore::generateIBLCubeMap(VktTypes::AllocatedCubeMap cubeMap) {
+VktTypes::Resources::Cubemap VktCore::generateIBLDiffuseCubemap(VktTypes::Resources::Cubemap cubeMap) {
     VktTypes::ModelPipeline IBLPipeline;
     // Creating pipeline for diffuse irradiance rendering into IBL cubemap
     {
         VkPushConstantRange matrixRange{};
         matrixRange.offset = 0;
-        matrixRange.size = sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>);
+        matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
         matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-        VkDescriptorSetLayout layouts[] = {m_skyboxDescriptorLayout};
+        auto layouts = VktCache::getLayouts(VktCache::SKYBOX);
 
         // Create pipeline layout with provided descriptors and push constants
-        VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo();
-        meshLayoutInfo.setLayoutCount = 1;
-        meshLayoutInfo.pSetLayouts = layouts;
-        meshLayoutInfo.pushConstantRangeCount = 1;
-        meshLayoutInfo.pPushConstantRanges = &matrixRange;
+        VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
 
         VkPipelineLayout layout;
         VK_CHECK(vkCreatePipelineLayout(m_device,
@@ -1710,26 +1349,26 @@ VktTypes::AllocatedCubeMap VktCore::generateIBLCubeMap(VktTypes::AllocatedCubeMa
         IBLPipeline.layout = layout;
 
         VktPipelineBuilder pipelineBuilder(m_device);
-        pipelineBuilder.setVertexShader("shaders/ibl_baking.vert.spv");
-        pipelineBuilder.setFragmentShader("shaders/ibl_baking.frag.spv");
-        pipelineBuilder.setGeometryShader("shaders/ibl_baking.geom.spv");
+        pipelineBuilder.setShaders("shaders/ibl/ibl.vert.spv", "shaders/ibl/ibl_diffuse.frag.spv", "shaders/ibl/ibl.geom.spv");
         pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
         pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
         pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
         pipelineBuilder.setMultisamplingNone();
         pipelineBuilder.disableBlending();
         pipelineBuilder.disableDepthTest();
-        pipelineBuilder.setColorAttachmentFormat(cubeMap.format);
+        pipelineBuilder.setColorAttachmentFormat(VK_FORMAT_R16G16B16A16_SFLOAT);
         pipelineBuilder.setPipelineLayout(layout);
 
         IBLPipeline.pipeline = pipelineBuilder.buildPipeline();
     }
-    VktTypes::AllocatedCubeMap IBLCubeMap = createCubeMap(cubeMap.extent,
-                                                          cubeMap.format,
-                                                          VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 
-    immediateSubmit({[&, this](VkCommandBuffer cmd) {
-        VktUtils::transitionImage(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    VktTypes::Resources::Cubemap IBLCubeMap = VktCubemaps::createCubemap(m_device, m_vmaAllocator, cubeMap.extent,
+                                                                         VK_FORMAT_R16G16B16A16_SFLOAT,
+                                                                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+                                                      .value();
+
+    VktInstantCommands::submitCommands({[&, this](VkCommandBuffer cmd) {
+        VktUtils::transitionCubeMap(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(IBLCubeMap.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         // Gather cube's render context
@@ -1779,20 +1418,266 @@ VktTypes::AllocatedCubeMap VktCore::generateIBLCubeMap(VktTypes::AllocatedCubeMa
 
         vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        VktTypes::GPUDrawPushConstants<VktTypes::Static> pushConstants;
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
         pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
         pushConstants.worldMatrix = renderObject.transform;
         vkCmdPushConstants(cmd, IBLPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                           sizeof(VktTypes::GPUDrawPushConstants<VktTypes::Static>), &pushConstants);
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
 
         vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
         vkCmdEndRendering(cmd);
 
-        VktUtils::transitionImage(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        VktUtils::transitionCubeMap(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }});
 
     vkDestroyPipelineLayout(m_device, IBLPipeline.layout, nullptr);
     vkDestroyPipeline(m_device, IBLPipeline.pipeline, nullptr);
 
     return IBLCubeMap;
+}
+
+VktTypes::Resources::Cubemap VktCore::generateIBLSpecularCubemap(VktTypes::Resources::Cubemap cubeMap) {
+    VktTypes::ModelPipeline IBLPipeline;
+    // Creating pipeline for specular BRDF rendering into IBL cubemap
+    {
+        {
+            DescriptorLayoutBuilder builder;
+            builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+            VktCache::storeLayout(VktCache::IBL_ROUGHNESS,builder.build(m_device, VK_SHADER_STAGE_FRAGMENT_BIT));
+        }
+
+        VkPushConstantRange matrixRange{};
+        matrixRange.offset = 0;
+        matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
+        matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        auto layouts = VktCache::getLayouts(VktCache::SKYBOX, VktCache::IBL_ROUGHNESS);
+
+        // Create pipeline layout with provided descriptors and push constants
+        VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
+
+        VkPipelineLayout layout;
+        VK_CHECK(vkCreatePipelineLayout(m_device,
+                                        &meshLayoutInfo,
+                                        nullptr,
+                                        &layout))
+
+        IBLPipeline.layout = layout;
+
+        VktPipelineBuilder pipelineBuilder(m_device);
+        pipelineBuilder.setShaders("shaders/ibl/ibl.vert.spv", "shaders/ibl/ibl_specular.frag.spv", "shaders/ibl/ibl.geom.spv");
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.disableBlending();
+        pipelineBuilder.disableDepthTest();
+        pipelineBuilder.setColorAttachmentFormat(cubeMap.format);
+        pipelineBuilder.setPipelineLayout(layout);
+
+        IBLPipeline.pipeline = pipelineBuilder.buildPipeline();
+    }
+
+
+    VktTypes::Resources::Cubemap IBLCubeMap = VktCubemaps::createCubemap(m_device, m_vmaAllocator, cubeMap.extent,
+                                                                         cubeMap.format,
+                                                                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                                                                         5)
+                                                      .value();
+
+    std::vector<VkImageView> cubeViews = VktUtils::createCubemapMipViews(m_device, IBLCubeMap.image, IBLCubeMap.format, 5);
+    VkDescriptorSet roughnessBufferSet = m_globDescriptorAllocator.allocate(m_device, VktCache::getLayout(VktCache::IBL_ROUGHNESS));
+    VktTypes::Resources::Buffer roughnessBuffer = VktBuffers::createBuffer(m_vmaAllocator, sizeof(VktTypes::GPU::RoughnessBuffer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    VktInstantCommands::submitCommands({[&, this](VkCommandBuffer cmd) {
+        VktUtils::transitionCubeMap(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 5);
+    }});
+    for(uint32_t mipLevel = 0; mipLevel < cubeViews.size(); mipLevel++) {
+        VktInstantCommands::submitCommands({[&, this](VkCommandBuffer cmd) {
+            VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(cubeViews[mipLevel], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+            // Gather cube's render context
+            VktTypes::DrawContext drawContext;
+            m_cube.gatherDrawContext(drawContext);
+            VktTypes::RenderObject &renderObject = drawContext.opaqueSurfaces[0];
+
+            VkExtent2D extent2D = {
+                    .width = static_cast<uint32_t>(cubeMap.extent.width * std::pow(0.5, mipLevel)),
+                    .height = static_cast<uint32_t>(cubeMap.extent.height * std::pow(0.5, mipLevel))};
+            VkRenderingInfo renderingInfo = VktStructs::renderingInfo(extent2D, &colorAttachment, nullptr, 6);
+
+            {
+                DescriptorWriter writer;
+
+                writer.writeImage(0, cubeMap.view,
+                                  m_defaultSamplerLinear,
+                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                  VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+                writer.updateSet(m_device, m_skyboxDescriptorSet);
+            }
+
+            VktTypes::GPU::RoughnessBuffer roughnessBufferData{.roughness = ((float) mipLevel / (float) (cubeViews.size() - 1))};
+            memcpy(roughnessBuffer.info.pMappedData, &roughnessBufferData, sizeof(VktTypes::GPU::RoughnessBuffer));
+
+            {
+                DescriptorWriter writer;
+                writer.writeBuffer(0,
+                                   roughnessBuffer.buffer,
+                                   sizeof(VktTypes::GPU::RoughnessBuffer),
+                                   0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+                writer.updateSet(m_device, roughnessBufferSet);
+            }
+
+
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, IBLPipeline.pipeline);
+
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    IBLPipeline.layout,
+                                    0, 1,
+                                    &m_skyboxDescriptorSet, 0,
+                                    nullptr);
+
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    IBLPipeline.layout,
+                                    1, 1,
+                                    &roughnessBufferSet, 0,
+                                    nullptr);
+
+            vkCmdBeginRendering(cmd, &renderingInfo);
+
+            VkViewport viewport{};
+            viewport.x = 0;
+            viewport.y = 0;
+            viewport.width = static_cast<float>(extent2D.width);
+            viewport.height = static_cast<float>(extent2D.height);
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+            VkRect2D scissors{};
+            scissors.offset.x = 0;
+            scissors.offset.y = 0;
+            scissors.extent.width = extent2D.width;
+            scissors.extent.height = extent2D.height;
+
+            vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+            vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+            pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
+            pushConstants.worldMatrix = renderObject.transform;
+            vkCmdPushConstants(cmd, IBLPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+
+            vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+            vkCmdEndRendering(cmd);
+        }});
+    }
+
+    VktInstantCommands::submitCommands({[&, this](VkCommandBuffer cmd) {
+        VktUtils::transitionCubeMap(cmd, IBLCubeMap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 5);
+    }});
+
+
+    for(auto &view: cubeViews) {
+        vkDestroyImageView(m_device, view, nullptr);
+    }
+    VktBuffers::destroyBuffer(m_vmaAllocator, roughnessBuffer);
+    vkDestroyDescriptorSetLayout(m_device, VktCache::getLayout(VktCache::IBL_ROUGHNESS), nullptr);
+    vkDestroyPipelineLayout(m_device, IBLPipeline.layout, nullptr);
+    vkDestroyPipeline(m_device, IBLPipeline.pipeline, nullptr);
+    VktCache::deleteLayout(VktCache::IBL_ROUGHNESS);
+
+    return IBLCubeMap;
+}
+
+VktTypes::Resources::Image VktCore::generateIBLBRDFImage() {
+
+    VkPipeline computePipeline;
+    VkPipelineLayout computePipelineLayout;
+    VkDescriptorSetLayout imageLayout;
+    VkDescriptorSet imageSet;
+
+    VkExtent3D extent{
+            .width = 512,
+            .height = 512,
+            .depth = 1};
+
+    VktTypes::Resources::Image BRDFImage = VktImages::createImage(m_device, m_vmaAllocator, extent, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT).value();
+
+    {
+        // Build draw image descriptor layout
+        {
+            DescriptorLayoutBuilder builder;
+            builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            imageLayout = builder.build(m_device, VK_SHADER_STAGE_COMPUTE_BIT);
+        }
+
+        // Allocate draw image
+        imageSet = m_globDescriptorAllocator.allocate(m_device, imageLayout);
+
+        // Write draw image
+        {
+            DescriptorWriter writer;
+            writer.writeImage(0, BRDFImage.view,
+                              VK_NULL_HANDLE,
+                              VK_IMAGE_LAYOUT_GENERAL,
+                              VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+            writer.updateSet(m_device, imageSet);
+        }
+
+        VkPipelineLayoutCreateInfo computeLayout{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr};
+        computeLayout.pSetLayouts = &imageLayout;
+        computeLayout.setLayoutCount = 1;
+
+        VkPushConstantRange pushConstant{};
+        pushConstant.offset = 0;
+        pushConstant.size = sizeof(VktTypes::GPU::ResolutionBuffer);
+        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        computeLayout.pPushConstantRanges = &pushConstant;
+        computeLayout.pushConstantRangeCount = 1;
+
+        VK_CHECK(vkCreatePipelineLayout(m_device, &computeLayout, nullptr, &computePipelineLayout))
+
+        VkShaderModule brdfShader = VktUtils::loadShaderModule("shaders/ibl/ibl_brdf.comp.spv", m_device);
+
+        VkPipelineShaderStageCreateInfo stageInfo = VktStructs::pipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, brdfShader);
+
+        VkComputePipelineCreateInfo computePipelineCreateInfo{.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO, .pNext = nullptr};
+        computePipelineCreateInfo.layout = computePipelineLayout;
+        computePipelineCreateInfo.stage = stageInfo;
+
+        VK_CHECK(vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &computePipeline))
+
+        vkDestroyShaderModule(m_device, brdfShader, nullptr);
+    }
+
+    VktTypes::GPU::ResolutionBuffer resolutionBuffer{.data = {extent.width, extent.height}};
+
+    // Render image
+    {
+        VktInstantCommands::submitCommands([&, this](VkCommandBuffer cmd) {
+            VktUtils::transitionImage(cmd, BRDFImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
+            // Draw gradient with compute shader
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipelineLayout, 0, 1, &imageSet, 0, nullptr);
+
+            // Push constants
+            vkCmdPushConstants(cmd, computePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VktTypes::GPU::ResolutionBuffer), &resolutionBuffer);
+
+            vkCmdDispatch(cmd, std::ceil(extent.width / 16.0), std::ceil(extent.height / 16.0), 1);
+
+            VktUtils::transitionImage(cmd, BRDFImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        });
+    }
+
+    vkDestroyDescriptorSetLayout(m_device, imageLayout, nullptr);
+    vkDestroyPipeline(m_device, computePipeline, nullptr);
+    vkDestroyPipelineLayout(m_device, computePipelineLayout, nullptr);
+
+    return BRDFImage;
 }

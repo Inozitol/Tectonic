@@ -2,7 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-#include "primitives.glsl"
+#include "../primitives.glsl"
 
 layout (location = 0) out vec3 outUVW;
 

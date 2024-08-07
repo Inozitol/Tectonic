@@ -79,6 +79,19 @@ void VktPipelineBuilder::setGeometryShader(const char* path) {
     setShader(VK_SHADER_STAGE_GEOMETRY_BIT, path);
 }
 
+void VktPipelineBuilder::setShaders(const char* vertexShaderPath, const char* fragmentShaderPath, const char* geometryShaderPath) {
+    if(vertexShaderPath) {
+        setShader(VK_SHADER_STAGE_VERTEX_BIT, vertexShaderPath);
+    }
+    if(fragmentShaderPath) {
+        setShader(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShaderPath);
+    }
+    if(geometryShaderPath) {
+        setShader(VK_SHADER_STAGE_GEOMETRY_BIT, geometryShaderPath);
+    }
+}
+
+
 void VktPipelineBuilder::setShader(VkShaderStageFlagBits stageBit, const char* path){
     // Delete old shader in case its still cached
     if(m_shaderStages.contains(stageBit)){

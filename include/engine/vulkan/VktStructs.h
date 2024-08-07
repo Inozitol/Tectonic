@@ -1,8 +1,12 @@
 #ifndef TECTONIC_VKTSTRUCTS_H
 #define TECTONIC_VKTSTRUCTS_H
 
+#include <array>
 #include <vulkan/vulkan.h>
 
+/**
+ * Various functions that return pre-made Vulkan structures.
+ */
 namespace VktStructs{
     VkCommandPoolCreateInfo         commandPoolCreateInfo(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags = 0);
     VkCommandBufferAllocateInfo     commandBufferAllocateInfo(VkCommandPool pool, uint32_t count = 1);
@@ -13,13 +17,23 @@ namespace VktStructs{
     VkSemaphoreSubmitInfo           semaphoreSubmitInfo(VkPipelineStageFlags2 stageMask, VkSemaphore semaphore);
     VkCommandBufferSubmitInfo       commandBufferSubmitInfo(VkCommandBuffer cmd);
     VkSubmitInfo2                   submitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signalSemaphoreInfo, VkSemaphoreSubmitInfo* waitSemaphoreInfo);
-    VkImageCreateInfo               imageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extent);
-    VkImageViewCreateInfo           imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags);
+    VkImageCreateInfo               imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, uint32_t mipLevels = 1);
+    VkImageViewCreateInfo           imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, uint32_t mipLevels = 1);
     VkRenderingAttachmentInfo       attachmentInfo(VkImageView view, VkClearValue* clear, VkImageLayout layout);
     VkRenderingAttachmentInfo       depthAttachmentInfo(VkImageView view, VkImageLayout layout);
     VkRenderingInfo                 renderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment, VkRenderingAttachmentInfo* depthAttachment, uint32_t layerCount = 1);
     VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo(VkShaderStageFlagBits stage, VkShaderModule shaderModule, const char* entry = "main");
-    VkPipelineLayoutCreateInfo      pipelineLayoutCreateInfo();
+
+    template<size_t N>
+    VkPipelineLayoutCreateInfo      pipelineLayoutCreateInfo(const std::array<VkDescriptorSetLayout, N>& layouts, const VkPushConstantRange& pushConstantRange) {
+      VkPipelineLayoutCreateInfo info{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr};
+      info.flags = 0;
+      info.setLayoutCount = layouts.size();
+      info.pSetLayouts = layouts.data();
+      info.pushConstantRangeCount = 1;
+      info.pPushConstantRanges = &pushConstantRange;
+      return info;
+    };
 }
 
 #endif //TECTONIC_VKTSTRUCTS_H

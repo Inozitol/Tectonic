@@ -1,6 +1,6 @@
 #include "engine/vulkan/VktUtils.h"
 
-void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout){
+void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, uint32_t mipLevels){
     VkImageMemoryBarrier2 imageBarrier {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
 
     imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -16,6 +16,7 @@ void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout
             ? VK_IMAGE_ASPECT_DEPTH_BIT
             : VK_IMAGE_ASPECT_COLOR_BIT;
     imageBarrier.subresourceRange = VktStructs::imageSubresourceRange(aspectMask);
+    imageBarrier.subresourceRange.levelCount = mipLevels;
     imageBarrier.image = image;
 
     VkDependencyInfo depInfo{};
@@ -28,7 +29,7 @@ void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout
     vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-void VktUtils::transitionCubeMap(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout){
+void VktUtils::transitionCubeMap(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, uint32_t mipLevels){
     VkImageMemoryBarrier2 imageBarrier {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
 
     imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -45,6 +46,7 @@ void VktUtils::transitionCubeMap(VkCommandBuffer cmd, VkImage image, VkImageLayo
             : VK_IMAGE_ASPECT_COLOR_BIT;
     imageBarrier.subresourceRange = VktStructs::imageSubresourceRange(aspectMask);
     imageBarrier.subresourceRange.layerCount = 6;
+    imageBarrier.subresourceRange.levelCount = mipLevels;
     imageBarrier.image = image;
 
     VkDependencyInfo depInfo{};
@@ -123,4 +125,43 @@ void VktUtils::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMe
     if(func != nullptr){
         func(instance, debugMessenger, pAllocator);
     }
+}
+
+std::vector<VkImageView> VktUtils::createImageMipViews(VkDevice device, VkImage image, VkFormat format, uint32_t mipLevels) {
+    std::vector<VkImageView> views(mipLevels);
+    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(format == VK_FORMAT_D32_SFLOAT) {
+        aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+    VkImageViewCreateInfo viewInfo = VktStructs::imageViewCreateInfo(format, image, aspectFlags);
+
+    for(uint32_t level = 0; level < mipLevels; level++) {
+        viewInfo.subresourceRange.baseMipLevel = level;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+        viewInfo.subresourceRange.layerCount = 1;
+
+        VK_CHECK(vkCreateImageView(device, &viewInfo, nullptr, &views[level]))
+    }
+    return views;
+}
+
+std::vector<VkImageView> VktUtils::createCubemapMipViews(VkDevice device, VkImage image, VkFormat format, uint32_t mipLevels) {
+    std::vector<VkImageView> views(mipLevels);
+    VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+    if(format == VK_FORMAT_D32_SFLOAT) {
+        aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+    VkImageViewCreateInfo viewInfo = VktStructs::imageViewCreateInfo(format, image, aspectFlags);
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+
+    for(uint32_t level = 0; level < mipLevels; level++) {
+        viewInfo.subresourceRange.baseMipLevel = level;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 6;
+        viewInfo.subresourceRange.baseArrayLayer = 0;
+
+        VK_CHECK(vkCreateImageView(device, &viewInfo, nullptr, &views[level]))
+    }
+    return views;
 }

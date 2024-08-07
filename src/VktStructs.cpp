@@ -71,26 +71,26 @@ VkSubmitInfo2 VktStructs::submitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphore
     return info;
 }
 
-VkImageCreateInfo VktStructs::imageCreateInfo(VkFormat format, VkImageUsageFlags flags, VkExtent3D extent){
+VkImageCreateInfo VktStructs::imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, uint32_t mipLevels){
     VkImageCreateInfo info{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .pNext = nullptr};
     info.imageType = VK_IMAGE_TYPE_2D;
     info.format = format;
     info.extent = extent;
-    info.mipLevels = 1;
+    info.mipLevels = mipLevels;
     info.arrayLayers = 1;
     info.samples = VK_SAMPLE_COUNT_1_BIT;
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.usage = flags;
+    info.usage = usageFlags;
     return info;
 }
 
-VkImageViewCreateInfo VktStructs::imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags){
+VkImageViewCreateInfo VktStructs::imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, uint32_t mipLevels){
     VkImageViewCreateInfo info{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .pNext = nullptr};
     info.image = image;
     info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     info.format = format;
     info.subresourceRange.baseMipLevel = 0;
-    info.subresourceRange.levelCount = 1;
+    info.subresourceRange.levelCount = mipLevels;
     info.subresourceRange.baseArrayLayer = 0;
     info.subresourceRange.layerCount = 1;
     info.subresourceRange.aspectMask = aspectFlags;
@@ -135,15 +135,5 @@ VkPipelineShaderStageCreateInfo VktStructs::pipelineShaderStageCreateInfo(VkShad
     info.stage = stage;
     info.module = shaderModule;
     info.pName = entry;
-    return info;
-}
-
-VkPipelineLayoutCreateInfo VktStructs::pipelineLayoutCreateInfo() {
-    VkPipelineLayoutCreateInfo info{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .pNext = nullptr};
-    info.flags = 0;
-    info.setLayoutCount = 0;
-    info.pSetLayouts = nullptr;
-    info.pushConstantRangeCount = 0;
-    info.pPushConstantRanges = nullptr;
     return info;
 }

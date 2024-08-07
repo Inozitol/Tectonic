@@ -28,9 +28,12 @@
 #include "VktStructs.h"
 #include "VktTypes.h"
 #include "VktUtils.h"
-#include "VktDescriptors.h"
+#include "VktDescriptorUtils.h"
 #include "VktPipelines.h"
 #include "VktDeletableQueue.h"
+#include "VktImages.h"
+#include "VktCubemaps.h"
+#include "VktInstantCommands.h"
 
 class VktCore {
 public:
@@ -47,17 +50,17 @@ public:
     /**
      * @brief De-initializes Vulkan.
      */
-    void clean();
+    void clear();
 
     /** @brief Inserts initialized Window. */
     void setWindow(Window* window);
 
     /** @brief Uploads a mesh into the created Vulkan device memory. */
     template <bool S>
-    static VktTypes::GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::Vertex<S>> vertices);
+    static VktTypes::GPU::MeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<S>> vertices);
 
     /** @brief Uploads joint matrices */
-    static VktTypes::GPUJointsBuffers uploadJoints(const std::span<glm::mat4>& jointMatrices);
+    static VktTypes::GPU::JointsBuffers uploadJoints(const std::span<glm::mat4>& jointMatrices);
 
     /**
      * @brief Checks if the Window inside should close.
@@ -82,33 +85,14 @@ public:
      */
     static VkDevice device();
 
+    /**
+     * @brief Returns current VMA allocator (if initialized).
+     * @return Current VMA allocator.
+     */
+    static VmaAllocator allocator();
+
     /** Number of in-flight frames being generated in parallel */
     static constexpr uint8_t FRAMES_OVERLAP = 2;
-
-    static VktTypes::AllocatedBuffer    createBuffer(size_t allocSize,
-                                                     VkBufferUsageFlags usage,
-                                                     VmaMemoryUsage memoryUsage);
-    static VktTypes::AllocatedImage     createImage(VkExtent3D allocSize,
-                                                    VkFormat format,
-                                                    VkImageUsageFlags usage,
-                                                    bool mipMapped = false);
-    static VktTypes::AllocatedImage     createImage(void* data,
-                                                    VkExtent3D allocSize,
-                                                    VkFormat format,
-                                                    VkImageUsageFlags usage,
-                                                    bool mipMapped = false);
-    static VktTypes::AllocatedCubeMap   createCubeMap(VkExtent3D allocSize,
-                                                      VkFormat format,
-                                                      VkImageUsageFlags usage,
-                                                      bool mipMapped = false);
-    static VktTypes::AllocatedCubeMap   createCubeMap(std::array<void*,6> data,
-                                                      VkExtent3D allocSize,
-                                                      VkFormat format,
-                                                      VkImageUsageFlags usage,
-                                                      bool mipMapped = false);
-    static void destroyBuffer(const VktTypes::AllocatedBuffer& buffer);
-    static void destroyImage(const VktTypes::AllocatedImage& img);
-    static void destroyCubeMap(const VktTypes::AllocatedCubeMap &cubemap);
 
     VktTypes::MaterialInstance writeMaterial(VkDevice device,
                                              VktTypes::MaterialPass pass,
@@ -151,12 +135,14 @@ public:
     };
 
     // TODO REMOVE LATER
-    VktTypes::AllocatedImage m_errorCheckboardImage{};
-    VktTypes::AllocatedImage m_whiteImage{};
-    VktTypes::AllocatedImage m_blackImage{};
-    VktTypes::AllocatedImage m_greyImage{};
-    VktTypes::AllocatedCubeMap m_skybox{};
-    VktTypes::AllocatedCubeMap m_skyboxIBL{};
+    VktTypes::Resources::Image m_errorCheckboardImage{};
+    VktTypes::Resources::Image m_whiteImage{};
+    VktTypes::Resources::Image m_blackImage{};
+    VktTypes::Resources::Image m_greyImage{};
+    VktTypes::Resources::Cubemap m_skybox{};
+    VktTypes::Resources::Cubemap m_skyboxIBLDiffuse{};
+    VktTypes::Resources::Cubemap m_skyboxIBLSpecular{};
+    VktTypes::Resources::Image m_skyboxBRDF{};
     Model m_cube;
     VkSampler m_defaultSamplerNearest{};
     VkSampler m_defaultSamplerLinear{};
@@ -179,7 +165,6 @@ private:
     void initPipelines();
     void initGeometryPipeline();
     void initMaterialPipelines();
-    void initBackgroundPipelines();
     void initSkyboxPipeline();
     void initImGui();
     void initDefaultData();
@@ -193,13 +178,10 @@ private:
 
     void draw();
 
-    void drawBackground(VkCommandBuffer cmd);
     void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
-    void drawGeometry(VkCommandBuffer cmd);
-    void drawDebug(VkCommandBuffer cmd);
-    void drawSkybox(VkCommandBuffer cmd);
-
-    void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& func);
+    void drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
+    void drawDebug(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
+    void drawSkybox(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
 
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                   VkDebugUtilsMessageTypeFlagsEXT type,
@@ -208,7 +190,9 @@ private:
 
     void resizeSwapchain();
     void updateScene();
-    VktTypes::AllocatedCubeMap generateIBLCubeMap(VktTypes::AllocatedCubeMap cubeMap);
+    VktTypes::Resources::Cubemap generateIBLDiffuseCubemap(VktTypes::Resources::Cubemap cubemap);
+    VktTypes::Resources::Cubemap generateIBLSpecularCubemap(VktTypes::Resources::Cubemap cubemap);
+    VktTypes::Resources::Image generateIBLBRDFImage();
 
     bool m_isInitialized = false;
     uint32_t m_frameNumber = 0;
@@ -228,8 +212,8 @@ private:
     VkExtent2D m_swapchainExtent = {.width = 0, .height = 0};
     bool m_resizeSwapchain = false;
 
-    VktTypes::AllocatedImage m_drawImage;
-    VktTypes::AllocatedImage m_depthImage;
+    VktTypes::Resources::Image m_drawImage;
+    VktTypes::Resources::Image m_depthImage;
     VkExtent2D m_drawExtent = {.width = 0, .height = 0};
     float m_renderScale = 1.0f;
 
@@ -243,33 +227,14 @@ private:
 
     DescriptorAllocatorDynamic m_globDescriptorAllocator;
     VkDescriptorSet m_drawImageDescriptors = VK_NULL_HANDLE;
-    VkDescriptorSetLayout m_drawImageDescriptorLayout = VK_NULL_HANDLE;
 
-    VkPipeline m_gradientPipeline = VK_NULL_HANDLE;
-    VkPipelineLayout m_gradientPipelineLayout = VK_NULL_HANDLE;
-
-    VkFence m_immFence = VK_NULL_HANDLE;
-    VkCommandBuffer m_immCommandBuffer = VK_NULL_HANDLE;
-    VkCommandPool m_immCommandPool = VK_NULL_HANDLE;
-
-    std::vector<VktTypes::ComputeEffect> m_backgroundEffect;
-    int m_currentBackgroundEffect = 0;
-
-    VkPipelineLayout m_meshPipelineLayout = VK_NULL_HANDLE;
-    VkPipeline m_meshPipeline = VK_NULL_HANDLE;
-
-    VktTypes::GPUSceneData m_sceneData;
-    VkDescriptorSetLayout m_gpuSceneDataDescriptorLayout{};
-
-    VkDescriptorSetLayout m_singleImageDescriptorLayout{};
+    VktTypes::GPU::SceneData m_sceneData;
 
     VktTypes::DrawContext m_mainDrawContext;
 
-    VkDescriptorSetLayout   m_skyboxDescriptorLayout = VK_NULL_HANDLE;
     VkDescriptorSet         m_skyboxDescriptorSet = VK_NULL_HANDLE;
     VktTypes::ModelPipeline m_skyboxPipeline;
 
-    VkDescriptorSetLayout   m_debugSceneDataDescriptorLayout = VK_NULL_HANDLE;
     VktTypes::ModelPipeline m_normalsDebugStaticPipeline;
     VktTypes::ModelPipeline m_normalsDebugSkinnedPipeline;
 
@@ -279,7 +244,7 @@ private:
     PerfStats m_stats;
     DebugConfig m_debugConf;
 
-    Logger m_logger = Logger("VulkanCore");
+    Logger m_logger = Logger("VktCore");
 };
 
 #endif //TECTONIC_VKTCORE_H

@@ -1,5 +1,6 @@
 #include "engine/vulkan/VktDeletableQueue.h"
-#include "engine/vulkan/VktDescriptors.h"
+#include "engine/vulkan/VktDescriptorUtils.h"
+#include "engine/vulkan/VktTypes.h"
 
 void VktDeletableQueue::setInstance(VkInstance instance) {
     m_instance = instance;
@@ -49,7 +50,6 @@ void VktDeletableQueue::flush() {
             case DeletableType::VK_SAMPLER:
                 vkDestroySampler(m_device, reinterpret_cast<VkSampler>(it->data), nullptr);
                 break;
-
             case DeletableType::VMA_ALLOCATOR:
                 vmaDestroyAllocator(reinterpret_cast<VmaAllocator>(it->data));
                 break;
@@ -63,11 +63,28 @@ void VktDeletableQueue::flush() {
                                  reinterpret_cast<VkBuffer>(it->data),
                                  reinterpret_cast<VmaAllocation>(it->cont.at(0)));
                 break;
-
-            case DeletableType::TEC_DESCRIPTOR_ALLOCATOR_DYNAMIC:
-                DescriptorAllocatorDynamic* allocator = reinterpret_cast<DescriptorAllocatorDynamic*>(it->data);
+            case DeletableType::TEC_DESCRIPTOR_ALLOCATOR_DYNAMIC: {
+                auto* allocator = reinterpret_cast<DescriptorAllocatorDynamic*>(it->data);
                 allocator->destroyPool(m_device);
                 break;
+            }
+            case DeletableType::TEC_RESOURCE_BUFFER: {
+                auto* buffer = reinterpret_cast<VktTypes::Resources::Buffer*>(it->data);
+                vmaDestroyBuffer(m_vmaAllocator, buffer->buffer, buffer->allocation);
+                break;
+            }
+            case DeletableType::TEC_RESOURCE_IMAGE: {
+                auto* image = reinterpret_cast<VktTypes::Resources::Image*>(it->data);
+                vmaDestroyImage(m_vmaAllocator, image->image, image->allocation);
+                vkDestroyImageView(m_device, image->view, nullptr);
+                break;
+            }
+            case DeletableType::TEC_RESOURCE_CUBEMAP: {
+                auto* cubemap = reinterpret_cast<VktTypes::Resources::Cubemap*>(it->data);
+                vmaDestroyImage(m_vmaAllocator, cubemap->image, cubemap->allocation);
+                vkDestroyImageView(m_device, cubemap->view, nullptr);
+                break;
+            }
         }
     }
 }

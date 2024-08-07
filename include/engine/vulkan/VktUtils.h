@@ -20,11 +20,14 @@
     }while(0);
 
 namespace VktUtils{
-    void transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout);
-    void transitionCubeMap(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout);
+    void transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, uint32_t mipLevels = VK_REMAINING_MIP_LEVELS);
+    void transitionCubeMap(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, uint32_t mipLevels = VK_REMAINING_MIP_LEVELS);
     void copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExtent2D srcExtent, VkExtent2D dstExtent);
     VkShaderModule loadShaderModule(const char* path, VkDevice device);
     void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator);
+    std::vector<VkImageView> createImageMipViews(VkDevice device, VkImage image, VkFormat format, uint32_t mipLevels);
+    std::vector<VkImageView> createCubemapMipViews(VkDevice device, VkImage cubemapImage, VkFormat format, uint32_t mipLevels);
+
 }
 
 #endif //TECTONIC_VKTUTILS_H

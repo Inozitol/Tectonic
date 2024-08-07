@@ -1,9 +1,5 @@
 #version 460
 
-layout(set = 2, binding = 0) uniform GeometryIBLData{
-    int data;
-} geometryIBLData;
-
 layout (location = 0) in vec3 inUVW[];
 
 layout (location = 0) out vec3 outUVW;
@@ -54,7 +50,6 @@ mat4 captureViews[6] = mat4[6](
 );
 
 void main() {
-
     for(int i = 0; i < 6; i++) {
         for (int j = 0; j < gl_in.length(); j++) {
             gl_Layer = i;

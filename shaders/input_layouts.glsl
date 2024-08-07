@@ -10,8 +10,9 @@ layout(set = 0, binding = 0) uniform SceneData{
     vec3 cameraDirection;
     float time;
 } sceneData;
-
-// TODO put IBL cube to set 0
+layout(set = 0, binding = 1) uniform samplerCube IBLDiffuseCube;
+layout(set = 0, binding = 2) uniform samplerCube IBLSpecularCube;
+layout(set = 0, binding = 3) uniform sampler2D IBLBRDFTexture;
 
 layout(set = 1, binding = 0) uniform GLTFMaterialData{
     vec4 colorFactors;
@@ -36,5 +37,3 @@ layout(set = 1, binding = 1) uniform sampler2D colorTex;
 
 // Occlusion -> x | Roughness -> y | Metalness -> z
 layout(set = 1, binding = 2) uniform sampler2D metalRoughTex;
-
-layout(set = 1, binding = 3) uniform samplerCube IBLCube;

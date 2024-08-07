@@ -1,71 +1,71 @@
 #include "engine/model/Model.h"
 
-#include <iostream>
-#include <set>
-#include <queue>
 #include <glm/gtx/quaternion.hpp>
+#include <iostream>
+#include <queue>
+#include <set>
 
-#include "engine/vulkan/VktTypes.h"
 #include "engine/vulkan/VktCore.h"
+#include "engine/vulkan/VktTypes.h"
 #include "utils/Serial.h"
 #include "utils/SerialTypes.h"
 
 Logger Model::m_logger = Logger("Model");
 std::unordered_map<std::string, Model::Resources> Model::m_loadedModels = std::unordered_map<std::string, Model::Resources>{};
 
-void Model::readMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
-    SerialTypes::Span<uint32_t,VktTypes::MeshSurface> surfaces = SerialTypes::Span<uint32_t,VktTypes::MeshSurface>(src, offset);
+void Model::readMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+    SerialTypes::Span<uint32_t, VktTypes::MeshSurface> surfaces = SerialTypes::Span<uint32_t, VktTypes::MeshSurface>(src, offset);
     dst.surfaces.resize(surfaces.size());
-    std::memcpy(dst.surfaces.data(),surfaces.data(),surfaces.size()*sizeof(VktTypes::MeshSurface));
-    SerialTypes::Span<uint32_t,uint32_t,false> indices(src,offset);
-    SerialTypes::Span<uint32_t,VktTypes::Vertex<VktTypes::Static>,false> vertices(src,offset);
+    std::memcpy(dst.surfaces.data(), surfaces.data(), surfaces.size() * sizeof(VktTypes::MeshSurface));
+    SerialTypes::Span<uint32_t, uint32_t, false> indices(src, offset);
+    SerialTypes::Span<uint32_t, VktTypes::GPU::Vertex<VktTypes::GPU::Static>, false> vertices(src, offset);
 
-    dst.meshBuffers = VktCore::uploadMesh<VktTypes::Static>(std::span<uint32_t>(indices.data(), indices.size()),
-                                          std::span<VktTypes::Vertex<VktTypes::Static>>(vertices.data(),vertices.size()));
+    dst.meshBuffers = VktCore::uploadMesh<VktTypes::GPU::Static>(std::span<uint32_t>(indices.data(), indices.size()),
+                                                            std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Static>>(vertices.data(), vertices.size()));
 }
 
-void Model::readSkinnedMesh(VktTypes::MeshAsset& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
-    SerialTypes::Span<uint32_t,VktTypes::MeshSurface> surfaces = SerialTypes::Span<uint32_t,VktTypes::MeshSurface>(src, offset);
+void Model::readSkinnedMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+    SerialTypes::Span<uint32_t, VktTypes::MeshSurface> surfaces = SerialTypes::Span<uint32_t, VktTypes::MeshSurface>(src, offset);
     dst.surfaces.resize(surfaces.size());
-    std::memcpy(dst.surfaces.data(),surfaces.data(),surfaces.size()*sizeof(VktTypes::MeshSurface));
-    SerialTypes::Span<uint32_t,uint32_t,false> indices(src,offset);
-    SerialTypes::Span<uint32_t,VktTypes::Vertex<VktTypes::Skinned>,false> vertices(src,offset);
+    std::memcpy(dst.surfaces.data(), surfaces.data(), surfaces.size() * sizeof(VktTypes::MeshSurface));
+    SerialTypes::Span<uint32_t, uint32_t, false> indices(src, offset);
+    SerialTypes::Span<uint32_t, VktTypes::GPU::Vertex<VktTypes::GPU::Skinned>, false> vertices(src, offset);
 
-    dst.meshBuffers = VktCore::uploadMesh<VktTypes::Skinned>(std::span<uint32_t>(indices.data(), indices.size()),
-                                          std::span<VktTypes::Vertex<VktTypes::Skinned>>(vertices.data(),vertices.size()));
+    dst.meshBuffers = VktCore::uploadMesh<VktTypes::GPU::Skinned>(std::span<uint32_t>(indices.data(), indices.size()),
+                                                             std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Skinned>>(vertices.data(), vertices.size()));
 }
-void Model::readImage(VktTypes::AllocatedImage& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
-    SerialTypes::Span<uint32_t,char,false> name = SerialTypes::Span<uint32_t,char,false>(src, offset);
-    VkExtent3D extent   = Serial::readDataAtInc<VkExtent3D>(src, offset);
-    VkFormat   format   = Serial::readDataAtInc<VkFormat>(src, offset);
-    SerialTypes::Span<uint32_t,std::byte,false> imgData = SerialTypes::Span<uint32_t,std::byte,false>(src,offset);
-    dst = VktCore::createImage(imgData.data(), extent, format, VK_IMAGE_USAGE_SAMPLED_BIT, false);
+void Model::readImage(VktTypes::Resources::Image &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+    SerialTypes::Span<uint32_t, char, false> name = SerialTypes::Span<uint32_t, char, false>(src, offset);
+    VkExtent3D extent = Serial::readDataAtInc<VkExtent3D>(src, offset);
+    VkFormat format = Serial::readDataAtInc<VkFormat>(src, offset);
+    SerialTypes::Span<uint32_t, std::byte, false> imgData = SerialTypes::Span<uint32_t, std::byte, false>(src, offset);
+    dst = VktImages::createFilledImage(VktCore::device(), VktCore::allocator(), imgData.data(), extent, format, VK_IMAGE_USAGE_SAMPLED_BIT).value();
 }
 
-void Model::readSampler(VkSampler& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
+void Model::readSampler(VkSampler &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     VkSamplerCreateInfo info = Serial::readDataAtInc<VkSamplerCreateInfo>(src, offset);
     vkCreateSampler(VktCore::device(), &info, nullptr, &dst);
 }
 
-void Model::readNode(ModelTypes::Node& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset) {
-    dst.name                = SerialTypes::Span<uint32_t,char,false>(src, offset);
-    dst.parent              = Serial::readDataAtInc<ModelTypes::NodeID_t>(src, offset);
-    dst.children            = SerialTypes::Span<uint32_t,ModelTypes::NodeID_t,false>(src, offset);
-    dst.mesh                = Serial::readDataAtInc<ModelTypes::MeshID_t>(src, offset);
-    dst.localTransform      = Serial::readDataAtInc<glm::mat4>(src, offset);
-    dst.worldTransform      = Serial::readDataAtInc<glm::mat4>(src, offset);
-    dst.animationTransform  = Serial::readDataAtInc<glm::mat4>(src, offset);
-    dst.translation         = Serial::readDataAtInc<glm::vec3>(src, offset);
-    dst.scale               = Serial::readDataAtInc<glm::vec3>(src, offset);
-    dst.rotation            = Serial::readDataAtInc<glm::quat>(src, offset);
-    dst.skin                = Serial::readDataAtInc<ModelTypes::SkinID_t>(src, offset);
+void Model::readNode(ModelTypes::Node &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+    dst.name = SerialTypes::Span<uint32_t, char, false>(src, offset);
+    dst.parent = Serial::readDataAtInc<ModelTypes::NodeID_t>(src, offset);
+    dst.children = SerialTypes::Span<uint32_t, ModelTypes::NodeID_t, false>(src, offset);
+    dst.mesh = Serial::readDataAtInc<ModelTypes::MeshID_t>(src, offset);
+    dst.localTransform = Serial::readDataAtInc<glm::mat4>(src, offset);
+    dst.worldTransform = Serial::readDataAtInc<glm::mat4>(src, offset);
+    dst.animationTransform = Serial::readDataAtInc<glm::mat4>(src, offset);
+    dst.translation = Serial::readDataAtInc<glm::vec3>(src, offset);
+    dst.scale = Serial::readDataAtInc<glm::vec3>(src, offset);
+    dst.rotation = Serial::readDataAtInc<glm::quat>(src, offset);
+    dst.skin = Serial::readDataAtInc<ModelTypes::SkinID_t>(src, offset);
 }
 
-void Model::readMaterial(ModelTypes::GLTFMaterial& dst,
-                         SerialTypes::BinDataVec_t& src,
-                         std::size_t& offset,
+void Model::readMaterial(ModelTypes::GLTFMaterial &dst,
+                         SerialTypes::BinDataVec_t &src,
+                         std::size_t &offset,
                          uint32_t mIndex,
-                         Resources& resources) {
+                         Resources &resources) {
 
     // Read material data
     ModelTypes::MaterialResources loadedResources = Serial::readDataAtInc<ModelTypes::MaterialResources>(src, offset);
@@ -74,21 +74,21 @@ void Model::readMaterial(ModelTypes::GLTFMaterial& dst,
 
     // Default error textures for missing textures
     VktTypes::GLTFMetallicRoughness::MaterialResources gpuResources;
-    gpuResources.colorImage        = VktCore::getInstance().m_errorCheckboardImage;
-    gpuResources.colorSampler      = VktCore::getInstance().m_defaultSamplerLinear;
-    gpuResources.metalRoughImage   = VktCore::getInstance().m_errorCheckboardImage;
+    gpuResources.colorImage = VktCore::getInstance().m_errorCheckboardImage;
+    gpuResources.colorSampler = VktCore::getInstance().m_defaultSamplerLinear;
+    gpuResources.metalRoughImage = VktCore::getInstance().m_errorCheckboardImage;
     gpuResources.metalRoughSampler = VktCore::getInstance().m_defaultSamplerLinear;
 
     // Upload constants to GPU buffer
-    static_cast<VktTypes::GLTFMetallicRoughness::MaterialConstants*>(resources.materialBuffer.info.pMappedData)[mIndex] = loadedConstants;
+    static_cast<VktTypes::GLTFMetallicRoughness::MaterialConstants *>(resources.materialBuffer.info.pMappedData)[mIndex] = loadedConstants;
 
-    if(loadedResources.colorImage != ModelTypes::NULL_ID){
+    if(loadedResources.colorImage != ModelTypes::NULL_ID) {
         gpuResources.colorImage = resources.images[loadedResources.colorImage];
     }
     if(loadedResources.colorSampler != ModelTypes::NULL_ID) {
         gpuResources.colorSampler = resources.samplers[loadedResources.colorSampler];
     }
-    if(loadedResources.metalRoughImage != ModelTypes::NULL_ID){
+    if(loadedResources.metalRoughImage != ModelTypes::NULL_ID) {
         gpuResources.metalRoughImage = resources.images[loadedResources.metalRoughImage];
     }
     if(loadedResources.metalRoughSampler != ModelTypes::NULL_ID) {
@@ -96,45 +96,45 @@ void Model::readMaterial(ModelTypes::GLTFMaterial& dst,
     }
 
     gpuResources.dataBuffer = resources.materialBuffer.buffer;
-    gpuResources.dataBufferOffset = mIndex*sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants);
+    gpuResources.dataBufferOffset = mIndex * sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants);
 
     // Create material in GPU
     dst.data = VktCore::getInstance().writeMaterial(VktCore::device(), loadedPass, gpuResources, resources.descriptorPool, resources.isSkinned);
 }
 
-void Model::readSkin(ModelTypes::Skin& dst, SerialTypes::BinDataVec_t& src, std::size_t& offset){
-    dst.name                = SerialTypes::Span<uint32_t,char,false>(src, offset);
-    dst.skeletonRoot        = Serial::readDataAtInc<uint32_t>(src, offset);
-    dst.skinNodes           = SerialTypes::Span<uint32_t,ModelTypes::NodeID_t,false>(src, offset);
-    dst.inverseBindMatrices = SerialTypes::Span<uint32_t,glm::mat4,false>(src, offset);
-    dst.joints              = SerialTypes::Span<uint32_t,ModelTypes::NodeID_t,false>(src, offset);
+void Model::readSkin(ModelTypes::Skin &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+    dst.name = SerialTypes::Span<uint32_t, char, false>(src, offset);
+    dst.skeletonRoot = Serial::readDataAtInc<uint32_t>(src, offset);
+    dst.skinNodes = SerialTypes::Span<uint32_t, ModelTypes::NodeID_t, false>(src, offset);
+    dst.inverseBindMatrices = SerialTypes::Span<uint32_t, glm::mat4, false>(src, offset);
+    dst.joints = SerialTypes::Span<uint32_t, ModelTypes::NodeID_t, false>(src, offset);
 }
 
-void Model::readAnimationSampler(ModelTypes::AnimationSampler& dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+void Model::readAnimationSampler(ModelTypes::AnimationSampler &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     dst.interpolation = Serial::readDataAtInc<ModelTypes::AnimationSampler::Interpolation>(src, offset);
-    dst.inputs        = SerialTypes::Span<uint32_t,float,false>(src, offset);
-    dst.outputsVec4   = SerialTypes::Span<uint32_t,glm::vec4,false>(src, offset);
+    dst.inputs = SerialTypes::Span<uint32_t, float, false>(src, offset);
+    dst.outputsVec4 = SerialTypes::Span<uint32_t, glm::vec4, false>(src, offset);
 }
 
 void Model::readAnimation(ModelTypes::Animation &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
-    dst.name = SerialTypes::Span<uint32_t,char,false>(src, offset);
+    dst.name = SerialTypes::Span<uint32_t, char, false>(src, offset);
     dst.start = Serial::readDataAtInc<float>(src, offset);
     dst.end = Serial::readDataAtInc<float>(src, offset);
     uint32_t samplerCount = Serial::readDataAtInc<uint32_t>(src, offset);
     dst.samplers.resize(samplerCount);
-    for(uint32_t i = 0; i < samplerCount; i++){
+    for(uint32_t i = 0; i < samplerCount; i++) {
         readAnimationSampler(dst.samplers[i], src, offset);
     }
-    dst.channels = SerialTypes::Span<uint32_t,ModelTypes::AnimationChannel,false>(src, offset);
-    dst.animatedNodes = SerialTypes::Span<uint32_t,std::pair<uint32_t,uint32_t>,false>(src, offset);
+    dst.channels = SerialTypes::Span<uint32_t, ModelTypes::AnimationChannel, false>(src, offset);
+    dst.animatedNodes = SerialTypes::Span<uint32_t, std::pair<uint32_t, uint32_t>, false>(src, offset);
     dst.currentTime = dst.start;
 }
 
-Model::Model(const std::filesystem::path& path) {
-    if(!m_loadedModels.contains(path)){
+Model::Model(const std::filesystem::path &path) {
+    if(!m_loadedModels.contains(path)) {
         loadModelData(path);
     }
-    Resources& resources = m_loadedModels[path];
+    Resources &resources = m_loadedModels[path];
     m_meshes = &resources.meshes;
     m_images = &resources.images;
     m_samplers = &resources.samplers;
@@ -152,44 +152,44 @@ Model::Model(const std::filesystem::path& path) {
     m_modelPath = path;
 }
 
-void Model::loadModelData(const std::filesystem::path& path){
-    if(!exists(path)){
+void Model::loadModelData(const std::filesystem::path &path) {
+    if(!exists(path)) {
         m_logger(Logger::ERROR) << path << " Unable to find model file\n";
         throw modelException("Missing model file");
     }
-    
+
     std::ifstream file(path, std::ios::binary);
     file.unsetf(std::ios::skipws);
     std::size_t fileSize = std::filesystem::file_size(path);
 
     m_loadedModels[path] = Resources{.data = SerialTypes::BinDataVec_t(fileSize)};
-    Resources& resources = m_loadedModels[path];
-    SerialTypes::BinDataVec_t& data = resources.data;
-    file.read(reinterpret_cast<char*>(data.data()), static_cast<long>(fileSize));
+    Resources &resources = m_loadedModels[path];
+    SerialTypes::BinDataVec_t &data = resources.data;
+    file.read(reinterpret_cast<char *>(data.data()), static_cast<long>(fileSize));
 
-    const uint8_t version          = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::VERSION_OFFSET);
-    const uint8_t metabyte         = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::META_OFFSET);
-    const uint32_t meshIndex       = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::MESHES_INDEX);
-    const uint32_t imageIndex      = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::IMAGES_INDEX);
-    const uint32_t samplerIndex    = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SAMPLERS_INDEX);
-    const uint32_t nodeIndex       = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::NODES_INDEX);
-    const uint32_t materialIndex   = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::MATERIALS_INDEX);
-    const uint32_t skinIndex       = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SKIN_INDEX);
-    const uint32_t animationIndex  = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::ANIMATION_INDEX);
+    const uint8_t version = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::VERSION_OFFSET);
+    const uint8_t metabyte = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::META_OFFSET);
+    const uint32_t meshIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::MESHES_INDEX);
+    const uint32_t imageIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::IMAGES_INDEX);
+    const uint32_t samplerIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SAMPLERS_INDEX);
+    const uint32_t nodeIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::NODES_INDEX);
+    const uint32_t materialIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::MATERIALS_INDEX);
+    const uint32_t skinIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::SKIN_INDEX);
+    const uint32_t animationIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::ANIMATION_INDEX);
 
     resources.isSkinned = Utils::enumCheckBit(metabyte, SerialTypes::Model::MetaBits::SKINNED);
     std::size_t meshCount = Serial::readDataAt<uint32_t>(data, meshIndex);
     resources.meshes.resize(meshCount);
     std::size_t index = meshIndex + sizeof(uint32_t);
     if(resources.isSkinned) {
-        for (std::size_t i = 0; i < meshCount; i++) {
+        for(std::size_t i = 0; i < meshCount; i++) {
             readSkinnedMesh(resources.meshes[i], data, index);
             m_logger(Logger::DEBUG) << path << " Loaded skinned mesh with " << resources.meshes[i].surfaces.size()
                                     << " surfaces\n";
         }
         m_logger(Logger::DEBUG) << path << " Finished loading " << meshCount << " skinned meshes\n";
-    }else{
-        for (std::size_t i = 0; i < meshCount; i++) {
+    } else {
+        for(std::size_t i = 0; i < meshCount; i++) {
             readMesh(resources.meshes[i], data, index);
             m_logger(Logger::DEBUG) << path << " Loaded mesh with " << resources.meshes[i].surfaces.size()
                                     << " surfaces\n";
@@ -200,7 +200,7 @@ void Model::loadModelData(const std::filesystem::path& path){
     std::size_t imageCount = Serial::readDataAt<uint32_t>(data, imageIndex);
     resources.images.resize(imageCount);
     index = imageIndex + sizeof(uint32_t);
-    for(std::size_t i = 0; i < imageCount; i++){
+    for(std::size_t i = 0; i < imageCount; i++) {
         readImage(resources.images[i], data, index);
         m_logger(Logger::DEBUG) << path
                                 << " Loaded image with height "
@@ -213,7 +213,7 @@ void Model::loadModelData(const std::filesystem::path& path){
     std::size_t samplerCount = Serial::readDataAt<uint32_t>(data, samplerIndex);
     resources.samplers.resize(samplerCount);
     index = samplerIndex + sizeof(uint32_t);
-    for(std::size_t i = 0; i < samplerCount; i++){
+    for(std::size_t i = 0; i < samplerCount; i++) {
         readSampler(resources.samplers[i], data, index);
     }
     m_logger(Logger::DEBUG) << path << " Finished loading " << samplerCount << " samplers\n";
@@ -222,24 +222,23 @@ void Model::loadModelData(const std::filesystem::path& path){
     std::size_t nodeCount = Serial::readDataAt<uint32_t>(data, nodeIndex + sizeof(uint32_t));
     resources.nodes.resize(nodeCount);
     index = nodeIndex + sizeof(uint32_t) * 2;
-    for(std::size_t i = 0; i < nodeCount; i++){
+    for(std::size_t i = 0; i < nodeCount; i++) {
         readNode(resources.nodes[i], data, index);
         m_logger(Logger::DEBUG) << path << " Loaded node named [" << resources.nodes[i].name.data() << "] with " << resources.nodes[i].children.size() << " child nodes\n";
     }
     m_logger(Logger::DEBUG) << path << " Finished loading " << nodeCount << " nodes\n";
 
-    std::size_t materialCount = Serial::readDataAt<uint32_t>(data,materialIndex);
+    std::size_t materialCount = Serial::readDataAt<uint32_t>(data, materialIndex);
     resources.materials.resize(materialCount);
     std::vector<DescriptorAllocatorDynamic::PoolSizeRatio> sizes = {
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}
-    };
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
     resources.descriptorPool.initPool(VktCore::device(), materialCount, sizes);
-    resources.materialBuffer = VktCore::createBuffer(sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants)*materialCount,
-                                                                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    resources.materialBuffer = VktBuffers::createBuffer(VktCore::allocator(), sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants) * materialCount,
+                                                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     index = materialIndex + sizeof(uint32_t);
-    for(std::size_t i = 0; i < materialCount; i++){
+    for(std::size_t i = 0; i < materialCount; i++) {
         readMaterial(resources.materials[i], data, index, i, resources);
     }
     m_logger(Logger::DEBUG) << path << " Finished loading " << materialCount << " materials\n";
@@ -252,7 +251,7 @@ void Model::loadModelData(const std::filesystem::path& path){
         std::size_t animationCount = Serial::readDataAt<uint32_t>(data, animationIndex);
         resources.animations.resize(animationCount);
         index = animationIndex + sizeof(uint32_t);
-        for (std::size_t i = 0; i < animationCount; i++) {
+        for(std::size_t i = 0; i < animationCount; i++) {
             readAnimation(resources.animations[i], data, index);
             m_logger(Logger::DEBUG) << path
                                     << " Loaded animation named ["
@@ -265,7 +264,7 @@ void Model::loadModelData(const std::filesystem::path& path){
     }
 }
 
-void Model::gatherDrawContext(VktTypes::DrawContext &ctx){
+void Model::gatherDrawContext(VktTypes::DrawContext &ctx) {
     std::queue<uint32_t> q;
     q.push(m_rootNode);
 
@@ -276,9 +275,9 @@ void Model::gatherDrawContext(VktTypes::DrawContext &ctx){
 
         // TODO Pre-calc a vector with mesh nodes to not traverse the whole tree every frame
         // If there's a mesh in this node, update DrawContext with surfaces
-        if (n->mesh != ModelTypes::NULL_ID) {
+        if(n->mesh != ModelTypes::NULL_ID) {
             const VktTypes::MeshAsset *mesh = &(*m_meshes)[n->mesh];
-            for (const auto &s: mesh->surfaces) {
+            for(const auto &s: mesh->surfaces) {
                 VktTypes::RenderObject def;
                 def.indexCount = s.count;
                 def.firstIndex = s.startIndex;
@@ -288,11 +287,11 @@ void Model::gatherDrawContext(VktTypes::DrawContext &ctx){
 
                 def.transform = worldM;
                 def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
-                if (n->skin != ModelTypes::NULL_ID) {
+                if(n->skin != ModelTypes::NULL_ID) {
                     def.jointsBufferAddress = m_jointsBuffer.jointsBufferAddress;
                 }
 
-                switch ((*m_materials)[s.materialIndex].data.passType) {
+                switch((*m_materials)[s.materialIndex].data.passType) {
                     case VktTypes::MaterialPass::OPAQUE:
                         ctx.opaqueSurfaces.push_back(def);
                         break;
@@ -306,16 +305,16 @@ void Model::gatherDrawContext(VktTypes::DrawContext &ctx){
         }
 
         // Continue adding context from the tree
-        for (unsigned int nodeID : n->children) {
+        for(unsigned int nodeID: n->children) {
             q.push(nodeID);
         }
     }
 }
 
 void Model::updateAnimationTime(float delta) {
-    ModelTypes::Animation* a = &m_animations[m_activeAnimation];
+    ModelTypes::Animation *a = &m_animations[m_activeAnimation];
     a->currentTime += delta;
-    if(a->currentTime > a->end){
+    if(a->currentTime > a->end) {
         a->currentTime -= a->end;
     }
 }
@@ -326,11 +325,11 @@ void Model::updateJoints() {
         const glm::mat4 *parentTransform = &identity;
         const ModelTypes::Animation *animation = &m_animations[m_activeAnimation];
 
-        for (std::size_t nodeID = 0; nodeID < animation->animatedNodes.size(); nodeID++) {
+        for(std::size_t nodeID = 0; nodeID < animation->animatedNodes.size(); nodeID++) {
             auto [nID, chID] = animation->animatedNodes[nodeID];
             ModelTypes::Node *node = &m_nodes[nID];
             ModelTypes::AnimationChannel *channel = &animation->channels[chID];
-            if (node->parent != ModelTypes::NULL_ID) {
+            if(node->parent != ModelTypes::NULL_ID) {
                 parentTransform = &m_nodes[node->parent].animationTransform;
             }
 
@@ -338,12 +337,12 @@ void Model::updateJoints() {
             glm::mat4 rm = glm::toMat4(node->rotation);
             glm::mat4 tm = glm::translate(glm::identity<glm::mat4>(), node->translation);
 
-            if (channel->scaleSampler != ModelTypes::NULL_ID) {
+            if(channel->scaleSampler != ModelTypes::NULL_ID) {
                 const ModelTypes::AnimationSampler *sampler = &animation->samplers[channel->scaleSampler];
                 std::size_t i = sampler->lastInput;
                 do {
-                    if ((animation->currentTime >= sampler->inputs[i]) &&
-                        (animation->currentTime <= sampler->inputs[i + 1])) {
+                    if((animation->currentTime >= sampler->inputs[i]) &&
+                       (animation->currentTime <= sampler->inputs[i + 1])) {
                         float a = (animation->currentTime - sampler->inputs[i]) /
                                   (sampler->inputs[i + 1] - sampler->inputs[i]);
                         glm::vec3 scale = glm::mix(sampler->outputsVec4[i], sampler->outputsVec4[i + 1], a);
@@ -353,16 +352,16 @@ void Model::updateJoints() {
                         break;
                     }
                     i++;
-                    if (i >= sampler->inputs.size()) i = 0;
-                } while (i != sampler->lastInput);
+                    if(i >= sampler->inputs.size()) i = 0;
+                } while(i != sampler->lastInput);
             }
 
-            if (channel->rotationSampler != ModelTypes::NULL_ID) {
+            if(channel->rotationSampler != ModelTypes::NULL_ID) {
                 const ModelTypes::AnimationSampler *sampler = &animation->samplers[channel->rotationSampler];
                 std::size_t i = sampler->lastInput;
                 do {
-                    if ((animation->currentTime >= sampler->inputs[i]) &&
-                        (animation->currentTime <= sampler->inputs[i + 1])) {
+                    if((animation->currentTime >= sampler->inputs[i]) &&
+                       (animation->currentTime <= sampler->inputs[i + 1])) {
                         float a = (animation->currentTime - sampler->inputs[i]) /
                                   (sampler->inputs[i + 1] - sampler->inputs[i]);
                         glm::quat q1;
@@ -384,16 +383,16 @@ void Model::updateJoints() {
                         break;
                     }
                     i++;
-                    if (i >= sampler->inputs.size()) i = 0;
-                } while (i != sampler->lastInput);
+                    if(i >= sampler->inputs.size()) i = 0;
+                } while(i != sampler->lastInput);
             }
 
-            if (channel->translationSampler != ModelTypes::NULL_ID) {
+            if(channel->translationSampler != ModelTypes::NULL_ID) {
                 const ModelTypes::AnimationSampler *sampler = &animation->samplers[channel->translationSampler];
                 std::size_t i = sampler->lastInput;
                 do {
-                    if ((animation->currentTime >= sampler->inputs[i]) &&
-                        (animation->currentTime <= sampler->inputs[i + 1])) {
+                    if((animation->currentTime >= sampler->inputs[i]) &&
+                       (animation->currentTime <= sampler->inputs[i + 1])) {
                         float a = (animation->currentTime - sampler->inputs[i]) /
                                   (sampler->inputs[i + 1] - sampler->inputs[i]);
                         glm::vec3 translation = glm::mix(sampler->outputsVec4[i], sampler->outputsVec4[i + 1], a);
@@ -403,8 +402,8 @@ void Model::updateJoints() {
                         break;
                     }
                     i++;
-                    if (i >= sampler->inputs.size()) i = 0;
-                } while (i != sampler->lastInput);
+                    if(i >= sampler->inputs.size()) i = 0;
+                } while(i != sampler->lastInput);
             }
 
             glm::mat4 animTransform = tm * rm * sm * node->localTransform;
@@ -427,30 +426,30 @@ void Model::updateJoints() {
     std::size_t numJoints = m_skin.joints.size();
     std::vector<glm::mat4> jointMatrices(numJoints);
 
-    ModelTypes::Node* node = &m_nodes[m_skin.skinNodes[0]]; // For some reason this works too?
+    ModelTypes::Node *node = &m_nodes[m_skin.skinNodes[0]];// For some reason this works too?
     glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
 
-    for (std::size_t i = 0; i < numJoints; i++) {
+    for(std::size_t i = 0; i < numJoints; i++) {
         jointMatrices[i] = inverseTransform * m_nodes[m_skin.joints[i]].animationTransform * m_skin.inverseBindMatrices[i];
     }
     memcpy(m_jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
 }
 
 void Model::setAnimation(uint32_t aID) {
-    if(aID < m_animations.size()){
+    if(aID < m_animations.size()) {
         m_activeAnimation = aID;
         m_animations[m_activeAnimation].currentTime = m_animations[m_activeAnimation].start;
     }
 }
 
-std::string_view Model::animationName(uint32_t aID) const{
-    if(aID < m_animations.size()){
+std::string_view Model::animationName(uint32_t aID) const {
+    if(aID < m_animations.size()) {
         return m_animations[aID].name.data();
     }
     return "";
 }
 
-uint32_t Model::animationCount() const{
+uint32_t Model::animationCount() const {
     return m_animations.size();
 }
 
@@ -461,22 +460,23 @@ uint32_t Model::currentAnimation() const {
 void Model::clear() {
     m_loadedModels.at(m_modelPath).activeModels--;
     if(m_loadedModels.at(m_modelPath).activeModels == 0) {
-        Resources& resources =  m_loadedModels.at(m_modelPath);
-        for (const auto &mesh: resources.meshes) {
-            VktCore::destroyBuffer(mesh.meshBuffers.indexBuffer);
-            VktCore::destroyBuffer(mesh.meshBuffers.vertexBuffer);
+        Resources &resources = m_loadedModels.at(m_modelPath);
+        for(const auto &mesh: resources.meshes) {
+            VktBuffers::destroyBuffer(VktCore::allocator(), mesh.meshBuffers.indexBuffer);
+            VktBuffers::destroyBuffer(VktCore::allocator(), mesh.meshBuffers.vertexBuffer);
         }
-        for (const auto &sampler: resources.samplers) {
+        for(const auto &sampler: resources.samplers) {
             vkDestroySampler(VktCore::device(), sampler, nullptr);
         }
-        VktCore::destroyBuffer(resources.materialBuffer);
+        for(const auto &image : resources.images) {
+            VktImages::destroyImage(VktCore::device(), VktCore::allocator(), image);
+        }
+        VktBuffers::destroyBuffer(VktCore::allocator(), resources.materialBuffer);
         resources.descriptorPool.destroyPool(VktCore::device());
     }
-    VktCore::destroyBuffer(m_jointsBuffer.jointsBuffer);
-
+    VktBuffers::destroyBuffer(VktCore::allocator(), m_jointsBuffer.jointsBuffer);
 }
 
 bool Model::isSkinned() const {
     return m_isSkinned;
 }
-

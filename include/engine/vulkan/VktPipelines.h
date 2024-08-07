@@ -8,13 +8,14 @@
 
 class VktPipelineBuilder{
 public:
-    VktPipelineBuilder(VkDevice device);
+    explicit VktPipelineBuilder(VkDevice device);
     ~VktPipelineBuilder();
     void clear();
     VkPipeline buildPipeline();
     void setVertexShader(const char* path);
     void setFragmentShader(const char* path);
     void setGeometryShader(const char* path);
+    void setShaders(const char* vertexShaderPath, const char* fragmentShaderPath = nullptr, const char* geometryShaderPath = nullptr);
     void setShader(VkShaderStageFlagBits stageBit, const char* path);
     void setInputTopology(VkPrimitiveTopology topology);
     void setPolygonMode(VkPolygonMode mode);

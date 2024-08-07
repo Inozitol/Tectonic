@@ -3,13 +3,13 @@
 
 #include <deque>
 #include <functional>
-#include <span>
 #include <optional>
+#include <span>
 #include <vulkan/vulkan.h>
 
+#include "VktUtils.h"
 #include "exceptions.h"
 #include "extern/vma/vk_mem_alloc.h"
-#include "VktUtils.h"
 
 enum class DeletableType {
     /**
@@ -101,24 +101,45 @@ enum class DeletableType {
      * data: DescriptorAllocatorDynamic* \n
      * cont: {}
      */
-    TEC_DESCRIPTOR_ALLOCATOR_DYNAMIC
+    TEC_DESCRIPTOR_ALLOCATOR_DYNAMIC,
+
+    /**
+     * Destroys VktTypes::Resources::Buffer \n
+     * data: VktTypes::Resources::Buffer \n
+     * cont: {}
+     */
+    TEC_RESOURCE_BUFFER,
+
+    /**
+     * Destroys VktTypes::Resources::Image \n
+     * data: VktTypes::Resources::Image \n
+     * cont: {}
+     */
+    TEC_RESOURCE_IMAGE,
+
+    /**
+     * Destroys VktTypes::Resources::Cubemap \n
+     * data: VktTypes::Resources::Cubemap \n
+     * cont: {}
+     */
+    TEC_RESOURCE_CUBEMAP
 };
 
-class VktDeletableQueue{
+class VktDeletableQueue {
 public:
     VktDeletableQueue() = default;
 
     void setInstance(VkInstance instance);
     void setDevice(VkDevice device);
     void setVmaAllocator(VmaAllocator allocator);
-    void pushDeletable(DeletableType type, void* data, std::vector<void*> &&cont = {});
+    void pushDeletable(DeletableType type, void *data, std::vector<void *> &&cont = {});
     void flush();
 
 private:
-    struct VktDeletable{
+    struct VktDeletable {
         DeletableType type{};
-        void* data{};
-        std::vector<void*> cont;
+        void *data{};
+        std::vector<void *> cont;
     };
 
     VkInstance m_instance = nullptr;
@@ -128,4 +149,4 @@ private:
 };
 
 
-#endif //TECTONIC_VKTDELETABLEQUEUE_H
+#endif//TECTONIC_VKTDELETABLEQUEUE_H

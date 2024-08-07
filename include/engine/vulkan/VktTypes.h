@@ -7,10 +7,132 @@
 #include <glm/detail/type_quat.hpp>
 #include "extern/imgui/imgui_impl_glfw.h"
 #include "VktDeletableQueue.h"
-#include "VktDescriptors.h"
+#include "VktDescriptorUtils.h"
 #include "Logger.h"
 
 namespace VktTypes{
+    namespace Resources {
+        /** @brief Abstraction over Vma buffer allocation. */
+        struct Buffer{
+            VkBuffer buffer = VK_NULL_HANDLE;
+            VmaAllocation allocation = VK_NULL_HANDLE;
+            VmaAllocationInfo info{};
+        };
+
+        /** @brief Abstraction over Vma image allocation. */
+        struct Image{
+            VkImage image = VK_NULL_HANDLE;
+            VkImageView view = VK_NULL_HANDLE;
+            VmaAllocation allocation = VK_NULL_HANDLE;
+            VkExtent3D extent {.width = 0, .height = 0, .depth = 0};
+            VkFormat format = VK_FORMAT_UNDEFINED;
+        };
+
+        /** @brief Abstraction over Vma allocated cube map. */
+        struct Cubemap{
+            VkImage image = VK_NULL_HANDLE;
+            VkImageView view = VK_NULL_HANDLE;
+            VmaAllocation allocation = VK_NULL_HANDLE;
+            VkExtent3D extent {.width = 0, .height = 0, .depth = 0}; // Defined for all 6 sides
+            VkFormat format = VK_FORMAT_UNDEFINED;
+        };
+    }
+
+    namespace GPU {
+        /** @brief Buffers on GPU holding mesh data */
+        struct MeshBuffers{
+            Resources::Buffer indexBuffer{};
+            Resources::Buffer vertexBuffer{};
+            VkDeviceAddress vertexBufferAddress = 0;
+        };
+
+        /** Helper constants to make templated structs more verbose. */
+        inline constexpr bool Static = false;
+        inline constexpr bool Skinned = true;
+
+        /**
+         * @brief Push constants pushed to GPU every frame.
+         * @tparam S True if it should contain an address to joint matrices.
+         *
+         * This contains the world matrix and GPU pointers to vertices and joints matrices (if available).
+         */
+        template<bool S>
+        struct DrawPushConstants;
+
+        template<>
+        struct DrawPushConstants<Static>{
+            alignas(16) glm::mat4 worldMatrix = glm::identity<glm::mat4>();
+            VkDeviceAddress vertexBuffer = 0;
+        };
+
+        template<>
+        struct DrawPushConstants<Skinned>{
+            alignas(16) glm::mat4 worldMatrix = glm::identity<glm::mat4>();
+            VkDeviceAddress vertexBuffer = 0;
+            VkDeviceAddress jointsBuffer = 0;
+        };
+
+        /**
+         * @brief GPU format of vertex data.
+         * @tparam S True if the vertex contains joints data.
+         */
+        template<bool S = Skinned>
+        struct Vertex;
+
+        /** @brief Graphics pipeline vertex */
+        template<>
+        struct Vertex<Static>{
+            glm::vec3 position = {0.0f, 0.0f, 0.0f};
+            float uvX = 0.0f;
+            glm::vec3 normal = {1.0f, 0.0f, 0.0f};
+            float uvY = 0.0f;
+            glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        };
+
+        /** @brief Graphics pipeline vertex with joints data. */
+        template<>
+        struct Vertex<Skinned>{
+            glm::vec3 position = {0.0f, 0.0f, 0.0f};
+            float uvX = 0.0f;
+            glm::vec3 normal = {1.0f, 0.0f, 0.0f};
+            float uvY = 0.0f;
+            glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+
+            glm::uvec4 jointIndices = {0, 0, 0, 0};
+            glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
+        };
+
+
+        /** @brief Buffer on GPU holding joints data */
+        struct JointsBuffers{
+            Resources::Buffer jointsBuffer{};
+            VkDeviceAddress jointsBufferAddress = 0;
+        };
+
+        /** @brief Environmental scene data. */
+        struct SceneData {
+            alignas(16) glm::mat4 view = glm::identity<glm::mat4>();
+            alignas(16) glm::mat4 proj  = glm::identity<glm::mat4>();
+            alignas(16) glm::mat4 viewproj = glm::identity<glm::mat4>();
+            alignas(16) glm::vec3 ambientColor = {0.0f, 0.0f, 0.0f};
+            alignas(16) glm::vec3 sunlightDirection = {0.0f, 0.0f, 0.0f};
+            alignas(16) glm::vec3 sunlightColor = {0.0f, 0.0f, 0.0f};
+            alignas(16) glm::vec3 cameraPosition = {0.0f, 0.0f, 0.0f};
+            alignas(16) glm::vec3 cameraDirection = {0.0f, 0.0f, 0.0f};
+            alignas(4) float time = 0.0f;
+        };
+
+        /** @brief Buffer with roughness value used in IBL specular rendering */
+        struct RoughnessBuffer {
+            float roughness;
+        };
+
+        /** @brief Buffer with resolution data */
+        struct ResolutionBuffer {
+            glm::vec2 data;
+        };
+
+    }
 
     /** Very work-in-progress push constants. */
     struct ComputePushConstants{
@@ -33,65 +155,6 @@ namespace VktTypes{
         ComputePushConstants data;
     };
 
-    /** @brief Abstraction over Vma buffer allocation. */
-    struct AllocatedBuffer{
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VmaAllocation allocation = VK_NULL_HANDLE;
-        VmaAllocationInfo info{};
-    };
-
-    /** @brief Abstraction over Vma image allocation. */
-    struct AllocatedImage{
-        VkImage image = VK_NULL_HANDLE;
-        VkImageView view = VK_NULL_HANDLE;
-        VmaAllocation allocation = VK_NULL_HANDLE;
-        VkExtent3D extent {.width = 0, .height = 0, .depth = 0};
-        VkFormat format = VK_FORMAT_UNDEFINED;
-    };
-
-    /** @brief Abstraction over Vma allocated cube map. */
-    struct AllocatedCubeMap{
-        VkImage image = VK_NULL_HANDLE;
-        VkImageView view = VK_NULL_HANDLE;
-        VmaAllocation allocation = VK_NULL_HANDLE;
-        VkExtent3D extent {.width = 0, .height = 0, .depth = 0}; // Defined for all 6 sides
-        VkFormat format = VK_FORMAT_UNDEFINED;
-    };
-
-    /** Helper constants to make templated structs more verbose. */
-    inline constexpr bool Static = false;
-    inline constexpr bool Skinned = true;
-
-    /**
-     * @brief GPU format of vertex data.
-     * @tparam S True if the vertex contains joints data.
-     */
-    template<bool S = Skinned>
-    struct Vertex;
-
-    /** @brief Graphics pipeline vertex */
-    template<>
-    struct Vertex<Static>{
-        glm::vec3 position = {0.0f, 0.0f, 0.0f};
-        float uvX = 0.0f;
-        glm::vec3 normal = {1.0f, 0.0f, 0.0f};
-        float uvY = 0.0f;
-        glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
-    };
-
-    /** @brief Graphics pipeline vertex with joints data. */
-    template<>
-    struct Vertex<Skinned>{
-        glm::vec3 position = {0.0f, 0.0f, 0.0f};
-        float uvX = 0.0f;
-        glm::vec3 normal = {1.0f, 0.0f, 0.0f};
-        float uvY = 0.0f;
-        glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
-
-        glm::uvec4 jointIndices = {0, 0, 0, 0};
-        glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
-    };
-
     /**
      * @brief Holds data needed for Vulkan to render a single frame.
      *
@@ -108,60 +171,7 @@ namespace VktTypes{
 
         VktDeletableQueue deletionQueue;
         DescriptorAllocatorDynamic descriptors;
-        AllocatedBuffer sceneUniformBuffer{};
-    };
-
-    /** @brief Buffers on GPU holding mesh data */
-    struct GPUMeshBuffers{
-        AllocatedBuffer indexBuffer{};
-        AllocatedBuffer vertexBuffer{};
-        VkDeviceAddress vertexBufferAddress = 0;
-    };
-
-    /** @brief Buffer on GPU holding joints data */
-    struct GPUJointsBuffers{
-        AllocatedBuffer jointsBuffer{};
-        VkDeviceAddress jointsBufferAddress = 0;
-    };
-
-    /**
-     * @brief Push constants pushed to GPU every frame.
-     * @tparam S True if it should contain an address to joint matrices.
-     *
-     * This contains the world matrix and GPU pointers to vertices and joints matrices (if available).
-     */
-    template<bool S>
-    struct GPUDrawPushConstants;
-
-    template<>
-    struct GPUDrawPushConstants<Static>{
-        glm::mat4 worldMatrix = glm::identity<glm::mat4>();
-        VkDeviceAddress vertexBuffer = 0;
-    };
-
-    template<>
-    struct GPUDrawPushConstants<Skinned>{
-        glm::mat4 worldMatrix = glm::identity<glm::mat4>();
-        VkDeviceAddress vertexBuffer = 0;
-        VkDeviceAddress jointsBuffer = 0;
-    };
-
-    /** @brief Environmental scene data. */
-    struct GPUSceneData{
-        glm::mat4 view = glm::identity<glm::mat4>();
-        glm::mat4 proj  = glm::identity<glm::mat4>();
-        glm::mat4 viewproj = glm::identity<glm::mat4>();
-        glm::vec3 ambientColor = {0.0f, 0.0f, 0.0f};
-        glm::vec3 sunlightDirection = {0.0f, 0.0f, 0.0f};
-        glm::vec3 sunlightColor = {0.0f, 0.0f, 0.0f};
-        glm::vec3 cameraPosition = {0.0f, 0.0f, 0.0f};
-        glm::vec3 cameraDirection = {0.0f, 0.0f, 0.0f};
-        float time = 0.0f;
-    };
-
-    /** @brief Data passed to IBL baking geometry shader */
-    struct GPUGeometryIBLData{
-        int32_t data;
+        Resources::Buffer sceneUniformBuffer{};
     };
 
     /** @brief Holds index, size and material index to buffers inside GPU */
@@ -174,7 +184,7 @@ namespace VktTypes{
     /** @brief Mesh surfaces with GPU buffers reference */
     struct MeshAsset{
         std::vector<MeshSurface> surfaces;
-        VktTypes::GPUMeshBuffers meshBuffers;
+        VktTypes::GPU::MeshBuffers meshBuffers;
     };
 
     /** @brief Vulkan pipeline for model rendering. */
@@ -198,8 +208,6 @@ namespace VktTypes{
         VktTypes::ModelPipeline skinnedOpaquePipeline{};
         VktTypes::ModelPipeline skinnedTransparentPipeline{};
 
-        VkDescriptorSetLayout materialLayout{};
-
         /**
          * @brief Metallic-Roughness factors
          *
@@ -218,9 +226,9 @@ namespace VktTypes{
 
         /** @brief Handles for material textures and buffers located on GPU. */
         struct MaterialResources {
-            VktTypes::AllocatedImage colorImage;
+            VktTypes::Resources::Image colorImage;
             VkSampler colorSampler = VK_NULL_HANDLE;
-            VktTypes::AllocatedImage metalRoughImage;
+            VktTypes::Resources::Image metalRoughImage;
             VkSampler metalRoughSampler = VK_NULL_HANDLE;
             VkBuffer dataBuffer = VK_NULL_HANDLE;
             uint32_t dataBufferOffset = 0;

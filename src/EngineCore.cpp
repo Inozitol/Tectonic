@@ -29,7 +29,7 @@ void EngineCore::run() {
 
 void EngineCore::clean() {
     if(m_isInitialized) {
-        m_vktCore.clean();
+        m_vktCore.clear();
         m_window.reset();
         glfwTerminate();
 
