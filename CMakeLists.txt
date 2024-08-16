@@ -17,7 +17,7 @@ add_executable(Tectonic
         src/VktCore.cpp
         src/VktStructs.cpp
         src/VktUtils.cpp
-        src/VktDescriptors.cpp
+        src/VktDescriptorUtils.cpp
         src/VktPipelines.cpp
         src/VktDeletableQueue.cpp
         src/VktTypes.cpp
@@ -32,25 +32,21 @@ add_executable(Tectonic
         src/Transformation.cpp
         src/Model.cpp
         include/utils/Serial.h
-        src/VktCubemaps.cpp
         src/VktBuffers.cpp
         src/VktInstantCommands.cpp
-        include/engine/vulkan/VktInstantCommands.h
-        include/engine/vulkan/VktImages.h
         src/VktImages.cpp
-        include/engine/vulkan/VktSkybox.cpp
-        include/engine/vulkan/VktSkybox.h
+        src/VktSkybox.cpp
         src/VktCache.cpp
-        include/engine/vulkan/VktCache.h
-        src/VktCache.cpp
-        include/engine/vulkan/VktCache.h
 )
+
+find_library(KTX_LIB ktx)
 
 target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic Vulkan::Vulkan)
 target_link_libraries(Tectonic vkbootstrap)
-target_link_libraries(Tectonic vma)
+target_link_libraries(Tectonic GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(Tectonic imgui)
+target_link_libraries(Tectonic ${KTX_LIB})
 
 include_directories(include)
 

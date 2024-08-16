@@ -75,7 +75,7 @@ void EngineCore::setTerrainModelRender(const std::shared_ptr<Terrain>& terrain) 
 }
 
 void EngineCore::setSkyboxModelRender(const std::shared_ptr<Skybox> &skybox) {
-    m_skybox = skybox;
+    m_skyboxColor = skybox;
 }
 
 void EngineCore::renderQueues() {
@@ -161,11 +161,11 @@ void EngineCore::renderQueues() {
     }
 
     // Skybox phase
-    if(m_skybox) {
+    if(m_skyboxColor) {
         glCullFace(GL_FRONT);
         glDepthFunc(GL_LEQUAL);
         m_skyboxShader.enable();
-        glBindVertexArray(m_skybox->getVAO());
+        glBindVertexArray(m_skyboxColor->getVAO());
         renderSkybox();
         glDepthFunc(GL_LESS);
     }
@@ -477,8 +477,8 @@ void EngineCore::renderSkybox() {
     glm::mat4 vp = m_gameCamera->getVPNoTranslate();
     m_skyboxShader.setVP(vp);
 
-    m_skybox->m_cubemapTex->bind(SKYBOX_CUBE_MAP_TEXTURE_UNIT);
-    renderMesh(m_skybox->m_meshes.at(0));
+    m_skyboxColor->m_cubemapTex->bind(SKYBOX_CUBE_MAP_TEXTURE_UNIT);
+    renderMesh(m_skyboxColor->m_meshes.at(0));
 }
 */
 
@@ -543,7 +543,6 @@ EngineCore::EngineCore() {
         m_isInitialized = true;
 
         m_gameCamera->setPosition({0.0f, 0.0f, 5.0f});
-        //initShaders();
     }catch(tectonicException& e){
         fprintf(stderr, "EXCEPTION: %s", e.what());
         exit(-1);

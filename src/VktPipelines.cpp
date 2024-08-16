@@ -1,13 +1,15 @@
 #include "engine/vulkan/VktPipelines.h"
 
-VktPipelineBuilder::VktPipelineBuilder(VkDevice device)
-: m_device(device){
+#include "engine/vulkan/VktCache.h"
+
+
+VktPipelineBuilder::VktPipelineBuilder(){
     clear();
 }
 
 VktPipelineBuilder::~VktPipelineBuilder() {
     for(const auto& [stage, module] : m_shaderStages){
-        vkDestroyShaderModule(m_device, module, nullptr);
+        vkDestroyShaderModule(VktCache::vkDevice, module, nullptr);
     }
 }
 
@@ -63,7 +65,7 @@ VkPipeline VktPipelineBuilder::buildPipeline() {
     pipelineInfo.pDynamicState = &dynamicInfo;
 
     VkPipeline graphicsPipeline;
-    VK_CHECK(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
+    VK_CHECK(vkCreateGraphicsPipelines(VktCache::vkDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
     return graphicsPipeline;
 }
 
@@ -95,9 +97,9 @@ void VktPipelineBuilder::setShaders(const char* vertexShaderPath, const char* fr
 void VktPipelineBuilder::setShader(VkShaderStageFlagBits stageBit, const char* path){
     // Delete old shader in case its still cached
     if(m_shaderStages.contains(stageBit)){
-        vkDestroyShaderModule(m_device, m_shaderStages.at(stageBit), nullptr);
+        vkDestroyShaderModule(VktCache::vkDevice, m_shaderStages.at(stageBit), nullptr);
     }
-    m_shaderStages[stageBit] = VktUtils::loadShaderModule(path, m_device);
+    m_shaderStages[stageBit] = VktUtils::loadShaderModule(path);
 }
 
 void VktPipelineBuilder::setInputTopology(VkPrimitiveTopology topology) {

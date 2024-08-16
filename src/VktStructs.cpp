@@ -71,20 +71,21 @@ VkSubmitInfo2 VktStructs::submitInfo(VkCommandBufferSubmitInfo* cmd, VkSemaphore
     return info;
 }
 
-VkImageCreateInfo VktStructs::imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent, uint32_t mipLevels){
+VkImageCreateInfo VktStructs::imageCreateInfo(VkFormat format, VkImageUsageFlags usageFlags, VkExtent3D extent,VkImageTiling tiling, uint32_t mipLevels, uint32_t layers){
     VkImageCreateInfo info{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .pNext = nullptr};
     info.imageType = VK_IMAGE_TYPE_2D;
     info.format = format;
     info.extent = extent;
     info.mipLevels = mipLevels;
-    info.arrayLayers = 1;
+    info.arrayLayers = layers;
     info.samples = VK_SAMPLE_COUNT_1_BIT;
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
     info.usage = usageFlags;
+    info.tiling = tiling;
     return info;
 }
 
-VkImageViewCreateInfo VktStructs::imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, uint32_t mipLevels){
+VkImageViewCreateInfo VktStructs::imageViewCreateInfo(VkFormat format, VkImage image, VkImageAspectFlags aspectFlags, uint32_t mipLevels, uint32_t layers){
     VkImageViewCreateInfo info{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .pNext = nullptr};
     info.image = image;
     info.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -92,7 +93,7 @@ VkImageViewCreateInfo VktStructs::imageViewCreateInfo(VkFormat format, VkImage i
     info.subresourceRange.baseMipLevel = 0;
     info.subresourceRange.levelCount = mipLevels;
     info.subresourceRange.baseArrayLayer = 0;
-    info.subresourceRange.layerCount = 1;
+    info.subresourceRange.layerCount = layers;
     info.subresourceRange.aspectMask = aspectFlags;
     return info;
 }
@@ -136,4 +137,25 @@ VkPipelineShaderStageCreateInfo VktStructs::pipelineShaderStageCreateInfo(VkShad
     info.module = shaderModule;
     info.pName = entry;
     return info;
+}
+
+VkViewport VktStructs::viewport(VkExtent2D extent) {
+    VkViewport viewport{};
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    return viewport;
+}
+
+
+VkRect2D VktStructs::scissors(VkExtent2D extent) {
+    VkRect2D scissors{};
+    scissors.offset.x = 0;
+    scissors.offset.y = 0;
+    scissors.extent.width = extent.width;
+    scissors.extent.height = extent.height;
+    return scissors;
 }

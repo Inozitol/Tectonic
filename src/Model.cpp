@@ -10,6 +10,8 @@
 #include "utils/Serial.h"
 #include "utils/SerialTypes.h"
 
+#include <engine/vulkan/VktCache.h>
+
 Logger Model::m_logger = Logger("Model");
 std::unordered_map<std::string, Model::Resources> Model::m_loadedModels = std::unordered_map<std::string, Model::Resources>{};
 
@@ -39,12 +41,14 @@ void Model::readImage(VktTypes::Resources::Image &dst, SerialTypes::BinDataVec_t
     VkExtent3D extent = Serial::readDataAtInc<VkExtent3D>(src, offset);
     VkFormat format = Serial::readDataAtInc<VkFormat>(src, offset);
     SerialTypes::Span<uint32_t, std::byte, false> imgData = SerialTypes::Span<uint32_t, std::byte, false>(src, offset);
-    dst = VktImages::createFilledImage(VktCore::device(), VktCore::allocator(), imgData.data(), extent, format, VK_IMAGE_USAGE_SAMPLED_BIT).value();
+    dst = VktImages::createDeviceMemory(extent, format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
+    size_t size = extent.width * extent.height * extent.depth * 4;
+    VktImages::copyFromRaw(dst, size, reinterpret_cast<char*>(imgData.data()));
 }
 
 void Model::readSampler(VkSampler &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     VkSamplerCreateInfo info = Serial::readDataAtInc<VkSamplerCreateInfo>(src, offset);
-    vkCreateSampler(VktCore::device(), &info, nullptr, &dst);
+    vkCreateSampler(VktCache::vkDevice, &info, nullptr, &dst);
 }
 
 void Model::readNode(ModelTypes::Node &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
@@ -75,9 +79,9 @@ void Model::readMaterial(ModelTypes::GLTFMaterial &dst,
     // Default error textures for missing textures
     VktTypes::GLTFMetallicRoughness::MaterialResources gpuResources;
     gpuResources.colorImage = VktCore::getInstance().m_errorCheckboardImage;
-    gpuResources.colorSampler = VktCore::getInstance().m_defaultSamplerLinear;
+    gpuResources.colorSampler = VktCache::getSampler(VktCache::Sampler::LINEAR);
     gpuResources.metalRoughImage = VktCore::getInstance().m_errorCheckboardImage;
-    gpuResources.metalRoughSampler = VktCore::getInstance().m_defaultSamplerLinear;
+    gpuResources.metalRoughSampler = VktCache::getSampler(VktCache::Sampler::LINEAR);
 
     // Upload constants to GPU buffer
     static_cast<VktTypes::GLTFMetallicRoughness::MaterialConstants *>(resources.materialBuffer.info.pMappedData)[mIndex] = loadedConstants;
@@ -99,7 +103,7 @@ void Model::readMaterial(ModelTypes::GLTFMaterial &dst,
     gpuResources.dataBufferOffset = mIndex * sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants);
 
     // Create material in GPU
-    dst.data = VktCore::getInstance().writeMaterial(VktCore::device(), loadedPass, gpuResources, resources.descriptorPool, resources.isSkinned);
+    dst.data = VktCore::getInstance().writeMaterial(loadedPass, gpuResources, resources.descriptorPool, resources.isSkinned);
 }
 
 void Model::readSkin(ModelTypes::Skin &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
@@ -150,6 +154,7 @@ Model::Model(const std::filesystem::path &path) {
     }
     resources.activeModels++;
     m_modelPath = path;
+    m_isLoaded = true;
 }
 
 void Model::loadModelData(const std::filesystem::path &path) {
@@ -234,8 +239,8 @@ void Model::loadModelData(const std::filesystem::path &path) {
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
-    resources.descriptorPool.initPool(VktCore::device(), materialCount, sizes);
-    resources.materialBuffer = VktBuffers::createBuffer(VktCore::allocator(), sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants) * materialCount,
+    resources.descriptorPool.initPool(materialCount, sizes);
+    resources.materialBuffer = VktBuffers::create(sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants) * materialCount,
                                                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     index = materialIndex + sizeof(uint32_t);
     for(std::size_t i = 0; i < materialCount; i++) {
@@ -458,23 +463,27 @@ uint32_t Model::currentAnimation() const {
 }
 
 void Model::clear() {
+    if(!m_isLoaded) {
+        m_logger(Logger::WARNING) << "Trying to clear unloaded model. Ignoring clear call.\n";
+        return;
+    }
     m_loadedModels.at(m_modelPath).activeModels--;
     if(m_loadedModels.at(m_modelPath).activeModels == 0) {
         Resources &resources = m_loadedModels.at(m_modelPath);
         for(const auto &mesh: resources.meshes) {
-            VktBuffers::destroyBuffer(VktCore::allocator(), mesh.meshBuffers.indexBuffer);
-            VktBuffers::destroyBuffer(VktCore::allocator(), mesh.meshBuffers.vertexBuffer);
+            VktBuffers::destroy(mesh.meshBuffers.indexBuffer);
+            VktBuffers::destroy(mesh.meshBuffers.vertexBuffer);
         }
         for(const auto &sampler: resources.samplers) {
-            vkDestroySampler(VktCore::device(), sampler, nullptr);
+            vkDestroySampler(VktCache::vkDevice, sampler, nullptr);
         }
         for(const auto &image : resources.images) {
-            VktImages::destroyImage(VktCore::device(), VktCore::allocator(), image);
+            VktImages::destroy(image);
         }
-        VktBuffers::destroyBuffer(VktCore::allocator(), resources.materialBuffer);
-        resources.descriptorPool.destroyPool(VktCore::device());
+        VktBuffers::destroy(resources.materialBuffer);
+        resources.descriptorPool.destroyPool();
     }
-    VktBuffers::destroyBuffer(VktCore::allocator(), m_jointsBuffer.jointsBuffer);
+    VktBuffers::destroy(m_jointsBuffer.jointsBuffer);
 }
 
 bool Model::isSkinned() const {

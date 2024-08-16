@@ -8,7 +8,7 @@
 
 class VktPipelineBuilder{
 public:
-    explicit VktPipelineBuilder(VkDevice device);
+    explicit VktPipelineBuilder();
     ~VktPipelineBuilder();
     void clear();
     VkPipeline buildPipeline();
@@ -30,8 +30,6 @@ public:
     void disableBlending();
     void disableDepthTest();
 private:
-    VkDevice m_device = VK_NULL_HANDLE;
-
     std::unordered_map<VkShaderStageFlagBits, VkShaderModule> m_shaderStages;
 
     VkPipelineInputAssemblyStateCreateInfo m_inputAssembly{};

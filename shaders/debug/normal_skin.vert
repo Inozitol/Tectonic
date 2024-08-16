@@ -17,10 +17,9 @@ void main(){
         v.jointWeights.w * PushConstants.jointsBuffer.jointMatrices[int(v.jointIndices.w)];
 
     mat4 mvMatrix = sceneData.view * PushConstants.modelMatrix;
-    mat3 normMatrix = transpose(inverse(mat3(mvMatrix)));
 
-    //outNormal = normalize(normMatrix * v.normal);
-    outNormal = normalize(transpose(inverse((PushConstants.modelMatrix * skinMat))) * vec4(v.normal, 0.0f)).xyz;
+    outNormal = normalize(transpose(inverse((mvMatrix * skinMat))) * vec4(v.normal, 0.0f)).xyz;
+    outNormal = normalize(skinMat * vec4(v.normal, 0.0f)).xyz;
     gl_Position = skinMat * vec4(v.pos,1.0f);
 
 }

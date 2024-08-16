@@ -1,9 +1,9 @@
 #include "engine/vulkan/VktBuffers.h"
+#include "engine/vulkan/VktCache.h"
 
 namespace VktBuffers {
 
-    VktTypes::Resources::Buffer createBuffer(VmaAllocator allocator,
-                                           size_t allocSize,
+    VktTypes::Resources::Buffer create(size_t allocSize,
                                            VkBufferUsageFlags usage,
                                            VmaMemoryUsage memoryUsage) {
         VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr};
@@ -15,7 +15,7 @@ namespace VktBuffers {
         vmaAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
         VktTypes::Resources::Buffer newBuffer{};
-        VK_CHECK(vmaCreateBuffer(allocator,
+        VK_CHECK(vmaCreateBuffer(VktCache::vmaAllocator,
                                  &bufferInfo,
                                  &vmaAllocInfo,
                                  &newBuffer.buffer,
@@ -24,8 +24,8 @@ namespace VktBuffers {
         return newBuffer;
     }
 
-    void destroyBuffer(VmaAllocator allocator, VktTypes::Resources::Buffer buffer) {
-        vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
+    void destroy(VktTypes::Resources::Buffer buffer) {
+        vmaDestroyBuffer(VktCache::vmaAllocator, buffer.buffer, buffer.allocation);
     }
 
 

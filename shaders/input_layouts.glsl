@@ -10,6 +10,7 @@ layout(set = 0, binding = 0) uniform SceneData{
     vec3 cameraDirection;
     float time;
 } sceneData;
+
 layout(set = 0, binding = 1) uniform samplerCube IBLDiffuseCube;
 layout(set = 0, binding = 2) uniform samplerCube IBLSpecularCube;
 layout(set = 0, binding = 3) uniform sampler2D IBLBRDFTexture;

@@ -20,7 +20,7 @@ void main(){
         v.jointWeights.w * PushConstants.jointsBuffer.jointMatrices[int(v.jointIndices.w)];
 
     outWPos = (PushConstants.modelMatrix * skinMat * vec4(v.pos,1.0f)).xyz;
-    gl_Position = sceneData.viewproj * PushConstants.modelMatrix * vec4(outWPos,1.0f);
+    gl_Position = sceneData.viewproj * vec4(outWPos,1.0f);
 
     outNormal = normalize(transpose(inverse(mat3(PushConstants.modelMatrix * skinMat))) * v.normal);
     outColor = v.color.xyz * materialData.colorFactors.xyz;

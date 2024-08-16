@@ -57,6 +57,7 @@ private:
         uint32_t activeModels = 0;
     };
     std::string m_modelPath;
+    bool m_isLoaded = false;
 
     std::vector<VktTypes::MeshAsset> *m_meshes = nullptr;
     std::vector<VktTypes::Resources::Image> *m_images = nullptr;

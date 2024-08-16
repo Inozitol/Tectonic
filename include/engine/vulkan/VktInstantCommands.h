@@ -11,17 +11,17 @@ public:
 
     static void submitCommands(std::function<void(VkCommandBuffer cmd)>&& func);
 
-    static void init(VkDevice device, uint32_t queueIndex, VkQueue queue);
+    static void init(uint32_t queueIndex, VkQueue queue);
     static void clear();
+
+    inline static uint32_t vkQueueIndex = UINT32_MAX;
+    inline static VkQueue vkQueue = VK_NULL_HANDLE;
+    inline static VkFence vkFence = VK_NULL_HANDLE;
+    inline static VkCommandPool vkCmdPool = VK_NULL_HANDLE;
+    inline static VkCommandBuffer vkCmdBuffer = VK_NULL_HANDLE;
 
 private:
     VktInstantCommands() = default;
 
-    uint32_t m_queueIndex = UINT32_MAX;
-    VkQueue m_queue = VK_NULL_HANDLE;
-    VkDevice m_device = VK_NULL_HANDLE;
-    VkFence m_fence = VK_NULL_HANDLE;
-    VkCommandPool m_cmdPool = VK_NULL_HANDLE;
-    VkCommandBuffer m_cmdBuffer = VK_NULL_HANDLE;
     bool isInitialized = false;
 };

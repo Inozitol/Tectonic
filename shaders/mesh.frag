@@ -37,43 +37,6 @@ vec3 R = reflect(-V, N);
 vec3 L = normalize(-sceneData.sunlightDirection).xyz;
 vec3 H = normalize(V + L);
 
-// Fresnel-Schlick Roughness
-vec3 specularReflection(PBRInfo pbrInputs)
-{
-    return pbrInputs.reflectance0 + (pbrInputs.reflectance90 - pbrInputs.reflectance0) * pow(clamp(1.0 - pbrInputs.VdotH, 0.0, 1.0), 5.0);
-}
-
-float geometricOcclusion(PBRInfo pbrInputs)
-{
-    float NdotL = pbrInputs.NdotL;
-    float NdotV = pbrInputs.NdotV;
-    float r = pbrInputs.alphaRoughness;
-
-    float attenuationL = 2.0 * NdotL / (NdotL + sqrt(r * r + (1.0 - r * r) * (NdotL * NdotL)));
-    float attenuationV = 2.0 * NdotV / (NdotV + sqrt(r * r + (1.0 - r * r) * (NdotV * NdotV)));
-    return attenuationL * attenuationV;
-}
-
-float microfacetDistribution(PBRInfo pbrInputs)
-{
-    float roughnessSq = pbrInputs.alphaRoughness * pbrInputs.alphaRoughness;
-    float f = (pbrInputs.NdotH * roughnessSq - pbrInputs.NdotH) * pbrInputs.NdotH + 1.0;
-    return roughnessSq / (PI * f * f);
-}
-
-vec3 diffuse(PBRInfo pbrInputs)
-{
-    return pbrInputs.diffuseColor / PI;
-}
-
-vec3 getIBLContrib(PBRInfo pbrInputs, vec3 reflection){
-    vec3 diffuse = texture(IBLDiffuseCube, N).rgb;
-    vec3 specular = texture(IBLDiffuseCube, reflection).rgb;
-    diffuse *= pbrInputs.diffuseColor;
-    specular *= pbrInputs.specularColor;
-    return diffuse + specular;
-}
-
 float GeometrySchlickGGX(float NdotV, float roughness)
 {
     float r = (roughness + 1.0);

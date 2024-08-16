@@ -9,7 +9,7 @@
 
 #include "VktUtils.h"
 #include "exceptions.h"
-#include "extern/vma/vk_mem_alloc.h"
+#include <vk_mem_alloc.h>
 
 enum class DeletableType {
     /**
@@ -115,23 +115,13 @@ enum class DeletableType {
      * data: VktTypes::Resources::Image \n
      * cont: {}
      */
-    TEC_RESOURCE_IMAGE,
-
-    /**
-     * Destroys VktTypes::Resources::Cubemap \n
-     * data: VktTypes::Resources::Cubemap \n
-     * cont: {}
-     */
-    TEC_RESOURCE_CUBEMAP
+    TEC_RESOURCE_IMAGE
 };
 
 class VktDeletableQueue {
 public:
     VktDeletableQueue() = default;
 
-    void setInstance(VkInstance instance);
-    void setDevice(VkDevice device);
-    void setVmaAllocator(VmaAllocator allocator);
     void pushDeletable(DeletableType type, void *data, std::vector<void *> &&cont = {});
     void flush();
 
@@ -142,9 +132,6 @@ private:
         std::vector<void *> cont;
     };
 
-    VkInstance m_instance = nullptr;
-    VkDevice m_device = nullptr;
-    VmaAllocator m_vmaAllocator = nullptr;
     std::deque<VktDeletable> m_delQueue;
 };
 

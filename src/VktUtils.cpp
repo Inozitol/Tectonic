@@ -1,5 +1,7 @@
 #include "engine/vulkan/VktUtils.h"
 
+#include "engine/vulkan/VktCache.h"
+
 void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, uint32_t mipLevels){
     VkImageMemoryBarrier2 imageBarrier {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
 
@@ -92,7 +94,7 @@ void VktUtils::copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExt
     vkCmdBlitImage2(cmd, &blitInfo);
 }
 
-VkShaderModule VktUtils::loadShaderModule(const char* path, VkDevice device){
+VkShaderModule VktUtils::loadShaderModule(const char* path){
     std::ifstream file(path, std::ios::ate | std::ios::binary);
     if(!file.is_open()){
         throw vulkanException("Failed to load a shader file ", path);
@@ -113,21 +115,21 @@ VkShaderModule VktUtils::loadShaderModule(const char* path, VkDevice device){
 
     // Create shader module from shader SpirV code
     VkShaderModule shaderModule;
-    if(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS){
+    if(vkCreateShaderModule(VktCache::vkDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS){
         throw vulkanException("Failed to create shader module from shader file ", path);
     }
 
     return shaderModule;
 }
 
-void VktUtils::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+void VktUtils::DestroyDebugUtilsMessengerEXT(VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(VktCache::vkInstance, "vkDestroyDebugUtilsMessengerEXT");
     if(func != nullptr){
-        func(instance, debugMessenger, pAllocator);
+        func(VktCache::vkInstance, debugMessenger, pAllocator);
     }
 }
 
-std::vector<VkImageView> VktUtils::createImageMipViews(VkDevice device, VkImage image, VkFormat format, uint32_t mipLevels) {
+std::vector<VkImageView> VktUtils::createImageMipViews(VkImage image, VkFormat format, uint32_t mipLevels) {
     std::vector<VkImageView> views(mipLevels);
     VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
     if(format == VK_FORMAT_D32_SFLOAT) {
@@ -141,12 +143,12 @@ std::vector<VkImageView> VktUtils::createImageMipViews(VkDevice device, VkImage 
         viewInfo.subresourceRange.baseArrayLayer = 0;
         viewInfo.subresourceRange.layerCount = 1;
 
-        VK_CHECK(vkCreateImageView(device, &viewInfo, nullptr, &views[level]))
+        VK_CHECK(vkCreateImageView(VktCache::vkDevice, &viewInfo, nullptr, &views[level]))
     }
     return views;
 }
 
-std::vector<VkImageView> VktUtils::createCubemapMipViews(VkDevice device, VkImage image, VkFormat format, uint32_t mipLevels) {
+std::vector<VkImageView> VktUtils::createCubemapMipViews(VkImage image, VkFormat format, uint32_t mipLevels) {
     std::vector<VkImageView> views(mipLevels);
     VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
     if(format == VK_FORMAT_D32_SFLOAT) {
@@ -161,7 +163,7 @@ std::vector<VkImageView> VktUtils::createCubemapMipViews(VkDevice device, VkImag
         viewInfo.subresourceRange.layerCount = 6;
         viewInfo.subresourceRange.baseArrayLayer = 0;
 
-        VK_CHECK(vkCreateImageView(device, &viewInfo, nullptr, &views[level]))
+        VK_CHECK(vkCreateImageView(VktCache::vkDevice, &viewInfo, nullptr, &views[level]))
     }
     return views;
 }

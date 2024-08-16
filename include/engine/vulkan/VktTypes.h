@@ -19,22 +19,21 @@ namespace VktTypes{
             VmaAllocationInfo info{};
         };
 
-        /** @brief Abstraction over Vma image allocation. */
+        /** @brief Abstraction over Vma image allocation.
+         *
+         * For cubemap images when isCubemap is true, the layers should be 6 with each cube side.
+         */
         struct Image{
             VkImage image = VK_NULL_HANDLE;
             VkImageView view = VK_NULL_HANDLE;
             VmaAllocation allocation = VK_NULL_HANDLE;
+            VmaAllocationInfo info{};
             VkExtent3D extent {.width = 0, .height = 0, .depth = 0};
             VkFormat format = VK_FORMAT_UNDEFINED;
-        };
-
-        /** @brief Abstraction over Vma allocated cube map. */
-        struct Cubemap{
-            VkImage image = VK_NULL_HANDLE;
-            VkImageView view = VK_NULL_HANDLE;
-            VmaAllocation allocation = VK_NULL_HANDLE;
-            VkExtent3D extent {.width = 0, .height = 0, .depth = 0}; // Defined for all 6 sides
-            VkFormat format = VK_FORMAT_UNDEFINED;
+            VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;    // TODO use this
+            uint32_t mipLevels = 1;
+            uint32_t layers = 1;
+            bool isCubemap = false;
         };
     }
 
@@ -101,7 +100,6 @@ namespace VktTypes{
             glm::uvec4 jointIndices = {0, 0, 0, 0};
             glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
         };
-
 
         /** @brief Buffer on GPU holding joints data */
         struct JointsBuffers{

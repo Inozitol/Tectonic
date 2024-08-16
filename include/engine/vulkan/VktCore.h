@@ -14,26 +14,27 @@
 
 #include "extern/vkbootstrap/VkBootstrap.h"
 
-#include "extern/vma/vk_mem_alloc.h"
+#include <vk_mem_alloc.h>
 #include "extern/imgui/imgui.h"
 #include "extern/imgui/imgui_impl_vulkan.h"
 #include "extern/imgui/imgui_impl_glfw.h"
 
-#include "engine/model/Model.h"
-#include "engine/model/ModelTypes.h"
-#include "exceptions.h"
-#include "engine/Window.h"
 #include "Logger.h"
 #include "Transformation.h"
+#include "VktDeletableQueue.h"
+#include "VktDescriptorUtils.h"
+#include "VktBuffers.h"
+#include "VktImages.h"
+#include "VktInstantCommands.h"
+#include "VktPipelines.h"
+#include "VktSkybox.h"
 #include "VktStructs.h"
 #include "VktTypes.h"
 #include "VktUtils.h"
-#include "VktDescriptorUtils.h"
-#include "VktPipelines.h"
-#include "VktDeletableQueue.h"
-#include "VktImages.h"
-#include "VktCubemaps.h"
-#include "VktInstantCommands.h"
+#include "engine/Window.h"
+#include "engine/model/Model.h"
+#include "engine/model/ModelTypes.h"
+#include "exceptions.h"
 
 class VktCore {
 public:
@@ -94,8 +95,7 @@ public:
     /** Number of in-flight frames being generated in parallel */
     static constexpr uint8_t FRAMES_OVERLAP = 2;
 
-    VktTypes::MaterialInstance writeMaterial(VkDevice device,
-                                             VktTypes::MaterialPass pass,
+    VktTypes::MaterialInstance writeMaterial(VktTypes::MaterialPass pass,
                                              const VktTypes::GLTFMetallicRoughness::MaterialResources& resources,
                                              DescriptorAllocatorDynamic& descriptorAllocator,
                                              bool isSkinned);
@@ -139,13 +139,6 @@ public:
     VktTypes::Resources::Image m_whiteImage{};
     VktTypes::Resources::Image m_blackImage{};
     VktTypes::Resources::Image m_greyImage{};
-    VktTypes::Resources::Cubemap m_skybox{};
-    VktTypes::Resources::Cubemap m_skyboxIBLDiffuse{};
-    VktTypes::Resources::Cubemap m_skyboxIBLSpecular{};
-    VktTypes::Resources::Image m_skyboxBRDF{};
-    Model m_cube;
-    VkSampler m_defaultSamplerNearest{};
-    VkSampler m_defaultSamplerLinear{};
     VktTypes::GLTFMetallicRoughness metalRoughMaterial;
 
     glm::vec3 cameraPosition;
@@ -165,7 +158,6 @@ private:
     void initPipelines();
     void initGeometryPipeline();
     void initMaterialPipelines();
-    void initSkyboxPipeline();
     void initImGui();
     void initDefaultData();
 
@@ -181,7 +173,6 @@ private:
     void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
     void drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
     void drawDebug(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
-    void drawSkybox(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
 
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                   VkDebugUtilsMessageTypeFlagsEXT type,
@@ -190,16 +181,11 @@ private:
 
     void resizeSwapchain();
     void updateScene();
-    VktTypes::Resources::Cubemap generateIBLDiffuseCubemap(VktTypes::Resources::Cubemap cubemap);
-    VktTypes::Resources::Cubemap generateIBLSpecularCubemap(VktTypes::Resources::Cubemap cubemap);
-    VktTypes::Resources::Image generateIBLBRDFImage();
 
     bool m_isInitialized = false;
     uint32_t m_frameNumber = 0;
 
-    VkInstance m_instance = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-    VkDevice m_device = VK_NULL_HANDLE;
 
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
     VkExtent2D m_windowExtent = {.width = 0, .height = 0};
@@ -214,7 +200,6 @@ private:
 
     VktTypes::Resources::Image m_drawImage;
     VktTypes::Resources::Image m_depthImage;
-    VkExtent2D m_drawExtent = {.width = 0, .height = 0};
     float m_renderScale = 1.0f;
 
     std::array<VktTypes::FrameData, FRAMES_OVERLAP> m_frames;
@@ -223,17 +208,13 @@ private:
 
     VktDeletableQueue m_coreDeletionQueue;
 
-    VmaAllocator m_vmaAllocator = VK_NULL_HANDLE;
-
-    DescriptorAllocatorDynamic m_globDescriptorAllocator;
     VkDescriptorSet m_drawImageDescriptors = VK_NULL_HANDLE;
 
     VktTypes::GPU::SceneData m_sceneData;
 
     VktTypes::DrawContext m_mainDrawContext;
 
-    VkDescriptorSet         m_skyboxDescriptorSet = VK_NULL_HANDLE;
-    VktTypes::ModelPipeline m_skyboxPipeline;
+    VktSkybox m_skybox;
 
     VktTypes::ModelPipeline m_normalsDebugStaticPipeline;
     VktTypes::ModelPipeline m_normalsDebugSkinnedPipeline;

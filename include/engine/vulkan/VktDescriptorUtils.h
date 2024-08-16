@@ -13,7 +13,7 @@ struct DescriptorLayoutBuilder {
 
     void addBinding(uint32_t binding, VkDescriptorType type);
     void clear();
-    VkDescriptorSetLayout build(VkDevice device, VkShaderStageFlags shaderStages);
+    VkDescriptorSetLayout build(VkShaderStageFlags shaderStages);
 };
 
 struct DescriptorAllocator{
@@ -24,11 +24,11 @@ struct DescriptorAllocator{
 
     VkDescriptorPool pool;
 
-    void initPool(VkDevice device, uint32_t maxSets, std::span<PoolSizeRatio> poolRatios);
-    void clearDescriptors(VkDevice device);
-    void destroyPool(VkDevice device);
+    void initPool(uint32_t maxSets, std::span<PoolSizeRatio> poolRatios);
+    void clearDescriptors();
+    void destroyPool();
 
-    VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout);
+    VkDescriptorSet allocate(VkDescriptorSetLayout layout);
 };
 
 struct DescriptorAllocatorDynamic{
@@ -37,17 +37,17 @@ struct DescriptorAllocatorDynamic{
         float ratio;
     };
 
-    void initPool(VkDevice device, uint32_t initSets, std::span<PoolSizeRatio> poolRatios);
-    void clearPools(VkDevice device);
-    void destroyPool(VkDevice device);
+    void initPool(uint32_t initSets, std::span<PoolSizeRatio> poolRatios);
+    void clearPools();
+    void destroyPool();
 
-    VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout);
+    VkDescriptorSet allocate(VkDescriptorSetLayout layout);
 
     static constexpr uint32_t MAX_POOL_SETS = 4092;
 
 private:
-    VkDescriptorPool getPool(VkDevice device);
-    VkDescriptorPool createPool(VkDevice device, uint32_t setCount, std::span<PoolSizeRatio> poolRatios);
+    VkDescriptorPool getPool();
+    VkDescriptorPool createPool(uint32_t setCount, std::span<PoolSizeRatio> poolRatios);
 
     std::vector<PoolSizeRatio> m_ratios;
     std::vector<VkDescriptorPool> m_fullPools;
@@ -61,10 +61,11 @@ struct DescriptorWriter{
     std::vector<VkWriteDescriptorSet> writes;
 
     void writeImage(uint32_t binding, VkImageView view, VkSampler sampler, VkImageLayout layout, VkDescriptorType type);
+    void writeImages(uint32_t binding, std::vector<VkImageView> views, std::vector<VkSampler> samplers, std::vector<VkImageLayout> layouts, VkDescriptorType type);
     void writeBuffer(uint32_t binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type);
 
     void clear();
-    void updateSet(VkDevice device, VkDescriptorSet set);
+    void updateSet(VkDescriptorSet set);
 };
 
 
