@@ -1,5 +1,7 @@
 #include "camera/GameCamera.h"
 
+#include "engine/TecCache.h"
+
 void GameCamera::handleKeyboardEvent(const keyboardButtonInfo& buttonInfo) {
     if(buttonInfo.action == GLFW_PRESS) {
         m_holdingButtons.emplace(buttonInfo.key);
@@ -42,9 +44,9 @@ void GameCamera::handleKeyboardEvent(const keyboardButtonInfo& buttonInfo) {
     }
 }
 
-void GameCamera::updatePosition(float delta) {
+void GameCamera::updatePosition() {
     glm::vec3 directionRotated = m_destinationNormVec * m_orientation;
-    m_position += directionRotated * delta * m_speed;
+    m_position += directionRotated * TecCache::deltaTime * m_speed;
 }
 
 void GameCamera::handleMouseEvent(double x_in, double y_in) {

@@ -9,34 +9,17 @@
 
 #include "connector/Signal.h"
 
-#define NUM_CUBE_MAP_FACES 6
-
 /**
  * Various constant normalized vectors of axis used in camera calculations.
  */
 namespace Axis{
-    static constexpr glm::vec3 POS_X(1.0f,0.0f,0.0f);
-    static constexpr glm::vec3 POS_Y(0.0f,1.0f,0.0f);
-    static constexpr glm::vec3 POS_Z(0.0f,0.0f,1.0f);
-    static constexpr glm::vec3 NEG_X(-1.0f,0.0f,0.0f);
-    static constexpr glm::vec3 NEG_Y(0.0f,-1.0f,0.0f);
-    static constexpr glm::vec3 NEG_Z(0.0f,0.0f,-1.0f);
+    static const glm::vec3 POS_X(1.0f,0.0f,0.0f);
+    static const glm::vec3 POS_Y(0.0f,1.0f,0.0f);
+    static const glm::vec3 POS_Z(0.0f,0.0f,1.0f);
+    static const glm::vec3 NEG_X(-1.0f,0.0f,0.0f);
+    static const glm::vec3 NEG_Y(0.0f,-1.0f,0.0f);
+    static const glm::vec3 NEG_Z(0.0f,0.0f,-1.0f);
 }
-
-struct CameraDirection{
-    GLenum cubemapFace;
-    glm::vec3 target;
-    glm::vec3 up;
-};
-
-constexpr CameraDirection g_cameraDirections[NUM_CUBE_MAP_FACES]{
-    {GL_TEXTURE_CUBE_MAP_POSITIVE_X, Axis::POS_X, Axis::POS_Y},
-    {GL_TEXTURE_CUBE_MAP_NEGATIVE_X, Axis::NEG_X, Axis::POS_Y},
-    {GL_TEXTURE_CUBE_MAP_POSITIVE_Y, Axis::POS_Y, Axis::NEG_Z},
-    {GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, Axis::NEG_Y, Axis::POS_Z},
-    {GL_TEXTURE_CUBE_MAP_POSITIVE_Z, Axis::NEG_Z, Axis::POS_Y},
-    {GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, Axis::POS_Z, Axis::POS_Y},
-};
 
 /**
  * Holds information needed to create a perspective projection matrix.
@@ -78,8 +61,8 @@ public:
     void setPerspectiveInfo(const PerspProjInfo& info);
     void setOrthographicInfo(const OrthoProjInfo& info);
 
-    const PerspProjInfo& getPerspectiveInfo() const;
-    const OrthoProjInfo& getOrthographicInfo() const;
+    [[nodiscard]] const PerspProjInfo& getPerspectiveInfo() const;
+    [[nodiscard]] const OrthoProjInfo& getOrthographicInfo() const;
 
     /**
      * Projection matrix is unchanged until the change of parameters in PerspProjInfo.
@@ -169,11 +152,11 @@ protected:
     glm::mat4 m_projectionMatrix = glm::identity<glm::mat4x4>();
 
 private:
-    inline glm::mat4x4 rotationMatrix(){
+    [[nodiscard]] glm::mat4x4 rotationMatrix() const{
         return glm::toMat4(m_orientation);
     }
 
-    inline glm::mat4x4 translationMatrix(){
+    [[nodiscard]] glm::mat4x4 translationMatrix() const{
         return glm::translate(glm::identity<glm::mat4>(), -m_position);
     }
 

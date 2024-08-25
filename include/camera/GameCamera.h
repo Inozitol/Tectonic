@@ -44,10 +44,11 @@ public:
      * Calculate new world space position from direction angles and direction vectors.
      * Should be called every frame.
      *
+     * Delta time is pulled from TecCache.
+     *
      * @brief Updates the world space of the camera.
-     * @param delta Delta time
      */
-    void updatePosition(float delta);
+    void updatePosition();
     
     /**
      * Handles incoming keyboard presses.

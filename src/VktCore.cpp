@@ -35,7 +35,7 @@ void VktCore::clear() {
         vkDeviceWaitIdle(VktCache::vkDevice);
 
         for(auto &[k, object]: loadedObjects) {
-            object.model.clear();
+            delete(object.model);
         }
 
         for(auto &[id, layout]: VktCache::getAllLayouts()) {
@@ -666,9 +666,9 @@ void VktCore::initGeometryPipeline() {
     skinnedMatrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>);
     skinnedMatrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
 
+    // Debug pipeline use scene data for mesh transformations
     const auto layouts = VktCache::getLayouts(VktCache::Layout::SCENE);
 
-    // Create pipeline layout with provided descriptors and push constants
     VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
 
     VkPipelineLayout staticLayout;
@@ -691,8 +691,8 @@ void VktCore::initGeometryPipeline() {
     m_normalsDebugSkinnedPipeline.layout = skinnedLayout;
 
     VktPipelineBuilder pipelineBuilder;
-    pipelineBuilder.setVertexShader("shaders/debug/normal.vert.spv");
-    pipelineBuilder.setFragmentShader("shaders/debug/normal.frag.spv");
+    pipelineBuilder.setVertexShader("shaders/debug/mesh.vert.spv");
+    pipelineBuilder.setFragmentShader("shaders/debug/mesh.frag.spv");
     pipelineBuilder.setGeometryShader("shaders/debug/normal.geom.spv");
     pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
@@ -707,8 +707,8 @@ void VktCore::initGeometryPipeline() {
     m_normalsDebugStaticPipeline.pipeline = pipelineBuilder.buildPipeline();
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugStaticPipeline.pipeline);
 
-    pipelineBuilder.setVertexShader("shaders/debug/normal_skin.vert.spv");
-    pipelineBuilder.setGeometryShader("shaders/debug/normal_skin.geom.spv");
+    pipelineBuilder.setVertexShader("shaders/debug/mesh_skin.vert.spv");
+    pipelineBuilder.setGeometryShader("shaders/debug/normal.geom.spv");
     pipelineBuilder.setPipelineLayout(skinnedLayout);
 
     m_normalsDebugSkinnedPipeline.pipeline = pipelineBuilder.buildPipeline();
@@ -828,33 +828,33 @@ void VktCore::runImGui() {
                 if(ImGui::TreeNode("Transformation")) {
 
                     // Change position
-                    glm::vec3 pos = object.model.transformation.getTranslation();
+                    glm::vec3 pos = object.model->transformation.getTranslation();
                     if(ImGui::DragFloat3("Pos", (float *) &(pos))) {
-                        object.model.transformation.setTranslation(pos.x, pos.y, pos.z);
+                        object.model->transformation.setTranslation(pos.x, pos.y, pos.z);
                     }
 
                     // Change rotation
-                    glm::vec3 rotation = object.model.transformation.getRotation();
+                    glm::vec3 rotation = object.model->transformation.getRotation();
                     if(ImGui::DragFloat3("Rotation", (float *) &(rotation))) {
-                        object.model.transformation.setRotation(rotation.x, rotation.y, rotation.z);
+                        object.model->transformation.setRotation(rotation.x, rotation.y, rotation.z);
                     }
 
                     // Change scale
-                    float scale = object.model.transformation.getScale();
+                    float scale = object.model->transformation.getScale();
                     if(ImGui::DragFloat("Scale", &scale)) {
-                        object.model.transformation.setScale(scale);
+                        object.model->transformation.setScale(scale);
                     }
                     ImGui::TreePop();
                 }
 
-                if(object.model.isSkinned() && ImGui::TreeNode("Animation")) {
-                    static std::size_t currentAnimation = object.model.currentAnimation();
+                if(object.model->isSkinned() && ImGui::TreeNode("Animation")) {
+                    static std::size_t currentAnimation = object.model->currentAnimation();
                     if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN, 5 * ImGui::GetTextLineHeightWithSpacing()))) {
-                        uint32_t animCount = object.model.animationCount();
+                        uint32_t animCount = object.model->animationCount();
                         for(std::size_t animID = 0; animID < animCount; animID++) {
                             const bool isActive = (currentAnimation == animID);
-                            if(ImGui::Selectable(object.model.animationName(animID).data(), isActive)) {
-                                object.model.setAnimation(animID);
+                            if(ImGui::Selectable(object.model->animationName(animID).data(), isActive)) {
+                                object.model->setAnimation(animID);
                                 currentAnimation = animID;
                             }
                             if(isActive) {
@@ -1029,21 +1029,18 @@ void VktCore::updateScene() {
     m_sceneData.viewproj = m_sceneData.proj * m_sceneData.view;
     m_sceneData.ambientColor = glm::vec3(0.1f);
     m_sceneData.sunlightColor = glm::vec3(1.0f);
-    glm::vec4 sunPos = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f) * glm::rotate(glm::identity<glm::mat4>(), static_cast<float>(glm::radians(currTime * 50.f)), glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::vec4 sunPos = glm::rotate(glm::identity<glm::mat4>(), static_cast<float>(glm::radians(currTime * 50.f)), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     m_sceneData.sunlightDirection = glm::vec3(sunPos - glm::vec4(0.0f));
     m_sceneData.cameraPosition = cameraPosition;
     m_sceneData.cameraDirection = cameraDirection;
     m_sceneData.time = currTime;
 
-    currTime = glfwGetTime();
-    double delta = currTime - prevTime;
-    prevTime = currTime;
     for(auto &[oID, object]: loadedObjects) {
-        if(object.model.isSkinned() && object.model.currentAnimation() != ModelTypes::NULL_ID) {
-            object.model.updateAnimationTime(static_cast<float>(delta));
-            object.model.updateJoints();
+        if(object.model->isSkinned() && object.model->currentAnimation() != ModelTypes::NULL_ID) {
+            object.model->updateAnimationTime();
+            object.model->updateJoints();
         }
-        object.model.gatherDrawContext(m_mainDrawContext);
+        object.model->gatherDrawContext(m_mainDrawContext);
     }
 }
 
@@ -1060,7 +1057,7 @@ void VktCore::setProjMatrix(const glm::mat4 &projMatrix) {
  */
 VktCore::objectID_t VktCore::EngineObject::lastID = 0;
 
-VktCore::EngineObject *VktCore::createObject(const std::filesystem::path &filePath, const std::string &name) {
+VktCore::EngineObject *VktCore::createObject(const std::string &name, const std::filesystem::path &filePath) {
     // Find free identifier
     while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
     objectID_t freeID = EngineObject::lastID++;
@@ -1069,15 +1066,35 @@ VktCore::EngineObject *VktCore::createObject(const std::filesystem::path &filePa
     loadedObjects[freeID] = EngineObject{
             .objectID = freeID,
             .name = name,
-            .model = Model(filePath),
+            .model = new Model(filePath),
     };
 
     // Upload default position
-    if(loadedObjects[freeID].model.isSkinned()) {
-        loadedObjects[freeID].model.updateJoints();
+    if(loadedObjects[freeID].model->isSkinned()) {
+        loadedObjects[freeID].model->updateJoints();
     }
 
-    // Return handle
+    m_logger(Logger::INFO) << "Created an object " << name << " with ID " << freeID << '\n';
+    return &loadedObjects[freeID];
+}
+
+VktCore::EngineObject* VktCore::createObject(const std::string &name, Model* model) {
+    // Find free identifier
+    while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
+    objectID_t freeID = EngineObject::lastID++;
+
+    // Create object
+    loadedObjects[freeID] = EngineObject{
+        .objectID = freeID,
+        .name = name,
+        .model = model
+    };
+
+    // Upload default position
+    if(loadedObjects[freeID].model->isSkinned()) {
+        loadedObjects[freeID].model->updateJoints();
+    }
+
     m_logger(Logger::INFO) << "Created an object " << name << " with ID " << freeID << '\n';
     return &loadedObjects[freeID];
 }

@@ -1,27 +1,51 @@
 #include "engine/EngineCore.h"
 
+#include "engine/TecCache.h"
+
 void EngineCore::run() {
     m_vktCore.setProjMatrix(m_gameCamera->getProjectionMatrix());
 
     double prevTime = glfwGetTime();
     double currTime = prevTime;
-    double deltaTime = currTime-prevTime;
-
+    TecCache::deltaTime = currTime-prevTime;
+    uint32_t ctr = 0;
     // TODO
     //  Seems like a bad idea to use shouldClose().
     //  The m_window isn't a hamster in a wheel.
     //  Should get close bool with a signal from Window class.
     while(!m_vktCore.shouldClose()) {
+        ctr++;
         prevTime = currTime;
         currTime = glfwGetTime();
-        deltaTime = currTime - prevTime;
+        TecCache::deltaTime = (currTime - prevTime);
+
+        bobAnimatrix.updateActions();
+        if(ctr % 200 < 50) {
+            bobAnimatrix.actions[0].target = {3.0f, 10.0f, 0.0f};
+            bobAnimatrix.actions[1].target = {3.0f, 6.0f, 0.0f};
+            bobAnimatrix.actions[2].target = {-3.0f, 6.0f, 0.0f};
+        }else if (ctr % 200 < 100){
+            bobAnimatrix.actions[0].target = {3.0f, 5.0f, 0.0f};
+            bobAnimatrix.actions[1].target = {3.0f, 0.0f, 0.0f};
+            bobAnimatrix.actions[2].target = {-3.0f, 0.0f, 0.0f};
+
+        }else if (ctr % 200 < 150){
+            bobAnimatrix.actions[0].target = {-3.0f, 5.0f, 0.0f};
+            bobAnimatrix.actions[1].target = {3.0f, 6.0f, 0.0f};
+            bobAnimatrix.actions[2].target = {-3.0f, 6.0f, 0.0f};
+
+        }else{
+            bobAnimatrix.actions[0].target = {-3.0f, 10.0f, 0.0f};
+            bobAnimatrix.actions[1].target = {3.0f, 0.0f, 0.0f};
+            bobAnimatrix.actions[2].target = {-3.0f, 0.0f, 0.0f};
+        }
 
         //m_objects[0]->model.transformation.setRotation(0.0f,glfwGetTime()*50.0f, 0.0f);
         m_vktCore.cameraPosition = m_gameCamera->getPosition();
         m_vktCore.cameraDirection = m_gameCamera->getDirection();
         glfwPollEvents();
         m_gameCamera->createView();
-        m_gameCamera->updatePosition(deltaTime);
+        m_gameCamera->updatePosition();
         m_vktCore.setViewMatrix(m_gameCamera->getViewMatrix());
         m_vktCore.run();
     }
@@ -510,6 +534,28 @@ EngineCore::EngineCore() {
         m_vktCore.setWindow(m_window.get());
         m_vktCore.init();
 
+        VktCore::EngineObject* bob = m_vktCore.createObject("bob", "meshes/bob.tecm");
+        if(!bob) throw engineException("Oops, no Bob");
+        m_objects.insert({bob->objectID, bob});
+        bob->model->transformation.scale(0.5);
+
+        bobAnimatrix = Animatrix(bob->model);
+        Animatrix::Action action{};
+        action.type = Animatrix::ActionType::PULLING;
+        action.body = Animatrix::BodyPart::HEAD;
+        action.target = {0.0f, 10.0f, 0.0f};
+        bobAnimatrix.actions.emplace(0,action);
+
+        action.body = Animatrix::BodyPart::LARM;
+        action.target = {3.0f, 1.0f, 0.0f};
+        bobAnimatrix.actions.emplace(1,action);
+
+        action.body = Animatrix::BodyPart::RARM;
+        action.target = {-3.0f, 1.0f, 0.0f};
+        bobAnimatrix.actions.emplace(2,action);
+
+
+/*
         VktCore::EngineObject* shrek = m_vktCore.createObject("meshes/shrek.tecm", "shrek");
         if(!shrek) throw engineException("Oops, no Shrek");
         m_objects.insert({shrek->objectID, shrek});
@@ -519,7 +565,7 @@ EngineCore::EngineCore() {
         m_objects.insert({bottle->objectID, bottle});
         m_objects[1]->model.transformation.setScale(5.0);
         m_objects[1]->model.transformation.setTranslation(1.0f, 3.0f, 0.0f);
-
+*/
 
         /*
         for(uint32_t i = 0; i < 5; i++){

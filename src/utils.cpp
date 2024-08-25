@@ -1,6 +1,8 @@
 
 #include "utils/utils.h"
 
+#include <glm/gtx/quaternion.hpp>
+
 namespace Utils{
     WindowDimension::WindowDimension(uint32_t width, uint32_t height) {
         this->width = width;
@@ -34,6 +36,43 @@ namespace Utils{
         }
 
         return ret;
+    }
+
+    float transformDistance(glm::vec3 s1, glm::quat r1, glm::vec3 t1, glm::mat4 mat1, glm::vec3 s2, glm::quat r2, glm::vec3 t2, glm::mat4 mat2) {
+        glm::mat4 sm = glm::scale(glm::identity<glm::mat4>(), s1);
+        glm::mat4 rm = glm::toMat4(r1);
+        glm::mat4 tm = glm::translate(glm::identity<glm::mat4>(), t1);
+        glm::vec3 pos1 = tm * rm * sm * mat1 * glm::vec4(0.0f,0.0f,0.0f,1.0f);
+
+        sm = glm::scale(glm::identity<glm::mat4>(), s2);
+        rm = glm::toMat4(r2);
+        tm = glm::translate(glm::identity<glm::mat4>(), t2);
+        glm::vec3 pos2 = tm * rm * sm * mat2 * glm::vec4(0.0f,0.0f,0.0f,1.0f);
+        return glm::distance(pos1, pos2);
+    }
+
+    float transformDistance(glm::vec3 s1, glm::quat r1, glm::vec3 t1, glm::mat4 mat1, glm::vec3 pos2) {
+        glm::mat4 sm = glm::scale(glm::identity<glm::mat4>(), s1);
+        glm::mat4 rm = glm::toMat4(r1);
+        glm::mat4 tm = glm::translate(glm::identity<glm::mat4>(), t1);
+        glm::vec3 pos1 = tm * rm * sm * mat1 * glm::vec4(0.0f,0.0f,0.0f,1.0f);
+
+        return glm::distance(pos1, pos2);
+    }
+
+    float transformDistance(glm::mat4 mat1, glm::mat4 mat2) {
+        glm::vec3 pos1 = mat1 * glm::vec4(0.0f,0.0f,0.0f,1.0f);
+        glm::vec3 pos2 = mat2 * glm::vec4(0.0f,0.0f,0.0f,1.0f);
+        return glm::distance(pos1, pos2);
+    }
+
+
+    glm::vec3 interpolateBetween(glm::vec3 pos1, glm::vec3 pos2, float delta) {
+        return {
+            pos1.x + delta*(pos2.x - pos1.x),
+            pos1.y + delta*(pos2.y - pos1.y),
+            pos1.z + delta*(pos2.z - pos1.z)
+        };
     }
 
 /*

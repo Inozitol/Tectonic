@@ -84,6 +84,8 @@ namespace ModelTypes {
         float end = std::numeric_limits<float>::min();
         std::vector<AnimationSampler> samplers;
         SerialTypes::Span<uint32_t,AnimationChannel,false> channels;
+
+        /** Each pair has ID of the node and ID of animation channel for that node */
         SerialTypes::Span<uint32_t,std::pair<uint32_t, uint32_t>,false> animatedNodes;
         float currentTime;
     };

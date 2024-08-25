@@ -1,6 +1,9 @@
 #include "engine/model/Model.h"
 
+#include "engine/TecCache.h"
+
 #include <glm/gtx/quaternion.hpp>
+#include <glm/simd/matrix.h>
 #include <iostream>
 #include <queue>
 #include <set>
@@ -316,9 +319,9 @@ void Model::gatherDrawContext(VktTypes::DrawContext &ctx) {
     }
 }
 
-void Model::updateAnimationTime(float delta) {
+void Model::updateAnimationTime() {
     ModelTypes::Animation *a = &m_animations[m_activeAnimation];
-    a->currentTime += delta;
+    a->currentTime += TecCache::deltaTime;
     if(a->currentTime > a->end) {
         a->currentTime -= a->end;
     }
@@ -415,29 +418,31 @@ void Model::updateJoints() {
             node->animationTransform = (*parentTransform) * animTransform;
         }
     }
+    uploadJointsMatrices();
+}
 
-    /*
-    for(unsigned int skinNode : m_skin.skinNodes){
-        ModelTypes::Node* node = &m_nodes[skinNode];
-        glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
-
-        for (std::size_t i = 0; i < numJoints; i++) {
-            jointMatrices[i] = inverseTransform * m_nodes[m_skin.joints[i]].animationTransform * m_skin.inverseBindMatrices[i];
-        }
-        memcpy(m_jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
-    }
-     */
-
+void Model::uploadJointsMatrices() {
     std::size_t numJoints = m_skin.joints.size();
     std::vector<glm::mat4> jointMatrices(numJoints);
 
-    ModelTypes::Node *node = &m_nodes[m_skin.skinNodes[0]];// For some reason this works too?
+    ModelTypes::Node *node = &m_nodes[m_skin.skinNodes[0]];  // For some reason this works too?
     glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
 
     for(std::size_t i = 0; i < numJoints; i++) {
         jointMatrices[i] = inverseTransform * m_nodes[m_skin.joints[i]].animationTransform * m_skin.inverseBindMatrices[i];
     }
     memcpy(m_jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+}
+
+std::vector<ModelTypes::Node>& Model::nodes() {
+    return m_nodes;
+}
+ModelTypes::Skin& Model::skin() {
+    return m_skin;
+}
+
+bool Model::isSkinned() const {
+    return m_isSkinned;
 }
 
 void Model::setAnimation(uint32_t aID) {
@@ -462,9 +467,42 @@ uint32_t Model::currentAnimation() const {
     return m_activeAnimation;
 }
 
+Model::~Model() {
+    clear();
+}
+
+Model& Model::operator=(Model const& other) {
+    if(this == &other){return *this;}
+
+    m_modelPath = other.m_modelPath;
+    m_isLoaded = other.isLoaded();
+    m_meshes = other.m_meshes;
+    m_samplers = other.m_samplers;
+    m_materials = other.m_materials;
+    m_nodes = other.m_nodes;
+    m_skin = other.m_skin;
+    m_animations = other.m_animations;
+    m_rootNode = other.m_rootNode;
+    m_isSkinned = other.m_isSkinned;
+    m_activeAnimation = other.m_activeAnimation;
+    if(other.m_isSkinned) {
+        m_jointsBuffer = VktCore::uploadJoints(
+                std::span<glm::mat4>(m_skin.inverseBindMatrices.data(), m_skin.inverseBindMatrices.size()));
+    }
+
+    m_loadedModels.at(m_modelPath).activeModels++;
+    return *this;
+}
+
 void Model::clear() {
     if(!m_isLoaded) {
         m_logger(Logger::WARNING) << "Trying to clear unloaded model. Ignoring clear call.\n";
+        return;
+    }
+
+    VktBuffers::destroy(m_jointsBuffer.jointsBuffer);
+
+    if(!m_loadedModels.contains(m_modelPath)){
         return;
     }
     m_loadedModels.at(m_modelPath).activeModels--;
@@ -483,9 +521,13 @@ void Model::clear() {
         VktBuffers::destroy(resources.materialBuffer);
         resources.descriptorPool.destroyPool();
     }
-    VktBuffers::destroy(m_jointsBuffer.jointsBuffer);
 }
 
-bool Model::isSkinned() const {
-    return m_isSkinned;
+bool Model::isLoaded() const {
+    return m_isLoaded;
 }
+
+const std::string& Model::path() const {
+    return m_modelPath;
+}
+

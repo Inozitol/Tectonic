@@ -51,7 +51,7 @@ void Camera::createVP() {
     createView();
     m_VP = m_projectionMatrix * m_viewMatrix;
 
-    sig_VPMatrix.emit(getVP());
+    sig_VPMatrix.emit(m_VP);
 }
 
 glm::mat4 Camera::getVPNoTranslate() {

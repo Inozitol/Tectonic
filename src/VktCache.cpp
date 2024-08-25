@@ -1,6 +1,3 @@
-//
-// Created by hadriel on 8/7/24.
-//
 
 #include "../include/engine/vulkan/VktCache.h"
 

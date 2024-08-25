@@ -43,7 +43,6 @@ namespace SerialTypes{
         T* data() const;
 
         struct iter{
-        public:
             iter(T* ptr): m_ptr(ptr){}
             iter operator++(){++m_ptr; return *this;}
             bool operator!=(const iter& other) const {return m_ptr != other.m_ptr;}

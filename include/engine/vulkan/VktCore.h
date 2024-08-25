@@ -111,10 +111,11 @@ public:
         static objectID_t lastID;
 
         std::string name;
-        Model model;
+        Model* model;
     };
 
-    VktCore::EngineObject* createObject(const std::filesystem::path& filePath, const std::string& name);
+    VktCore::EngineObject* createObject(const std::string& name, const std::filesystem::path& filePath);
+    VktCore::EngineObject* createObject(const std::string& name, Model* model);
 
     /**
      * @brief Stores performance measurements

@@ -257,8 +257,8 @@ void loadMaterials(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const s
 
 void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::filesystem::path& path) {
     for(fastgltf::Mesh& mesh : gltf.meshes){
-        std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::Static>>());
-        SerialTypes::Model::MeshAsset<VktTypes::Static>* newMesh = std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).back().get();
+        std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::GPU::Static>>());
+        SerialTypes::Model::MeshAsset<VktTypes::GPU::Static>* newMesh = std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).back().get();
         std::size_t initialVtx = 0;
 
         newMesh->surfaces.resize(mesh.primitives.size());
@@ -289,7 +289,7 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
 
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
                                                               [&](glm::vec3 v, size_t index){
-                                                                  VktTypes::Vertex<VktTypes::Static> vtx;
+                                                                  VktTypes::GPU::Vertex<VktTypes::GPU::Static> vtx;
                                                                   vtx.position = v;
                                                                   newMesh->vertices[verticesOffset + index] = vtx;
                                                               });
@@ -344,8 +344,8 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
 
 void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::filesystem::path& path) {
     for(fastgltf::Mesh& mesh : gltf.meshes){
-        std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::Skinned>>());
-        SerialTypes::Model::MeshAsset<VktTypes::Skinned>* newMesh = std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).back().get();
+        std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::GPU::Skinned>>());
+        SerialTypes::Model::MeshAsset<VktTypes::GPU::Skinned>* newMesh = std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).back().get();
         std::size_t initialVtx = 0;
 
         newMesh->surfaces.resize(mesh.primitives.size());
@@ -376,7 +376,7 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
 
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
                                                               [&](glm::vec3 v, size_t index){
-                                                                  VktTypes::Vertex vtx;
+                                                                  VktTypes::GPU::Vertex vtx;
                                                                   vtx.position = v;
                                                                   newMesh->vertices[verticesOffset + index] = vtx;
                                                               });
@@ -488,7 +488,7 @@ void loadSkin(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::f
     file.skin = std::make_unique<SerialTypes::Model::Skin>();
     SerialTypes::Model::Skin* newSkin = file.skin.get();
     newSkin->name = skin.name.c_str();
-    newSkin->skeletonRoot = skin.skeleton.value();
+    newSkin->skeletonRoot = skin.skeleton.value_or(file.topNode);
     std::vector<SerialTypes::Model::NodeID_t> joints(skin.joints.begin(), skin.joints.end());
     newSkin->joints = joints;
 
@@ -800,7 +800,7 @@ void writeMesh(SerialTypes::BinDataVec_t& data, const SerialTypes::Model::MeshAs
     Serial::pushData<uint32_t>(data, mesh.indices);
 
     // Write vertices size + vector [32bits + sizeof(Vertex) * size]
-    Serial::pushData<VktTypes::Vertex<S>>(data, mesh.vertices);
+    Serial::pushData<VktTypes::GPU::Vertex<S>>(data, mesh.vertices);
 
 }
 
@@ -1022,13 +1022,32 @@ gltf2tec::TectonicResources convertGLTFModel(const gltf2tec::GLTFResources& gltf
 }
 
 int main(){
+    std::filesystem::path bob{"meshes/bob.glb"};
+    std::filesystem::path outBob{"meshes/bob.tecm"};
+/*
     std::filesystem::path cube{"meshes/cube.gltf"};
     std::filesystem::path outCube{"meshes/cube.tecm"};
     std::filesystem::path bottle{"meshes/WaterBottle.glb"};
     std::filesystem::path outBottle{"meshes/WaterBottle.tecm"};
     std::filesystem::path shrek{"meshes/shrek.glb"};
     std::filesystem::path outShrek{"meshes/shrek.tecm"};
+*/
+    std::vector<std::filesystem::path> convertQueue = {
+        {"meshes/bob.glb"}
+    };
 
+    for(auto& inPath : convertQueue) {
+        std::filesystem::path outPath = inPath;
+        outPath.replace_extension("tecm");
+        gltf2tec::GLTFResources* resources = loadGltfModel(inPath);
+        if(resources) {
+            gltf2tec::TectonicResources tecResources = convertGLTFModel(*resources);
+            std::ofstream outFile(outPath, std::ios::out | std::ios::binary);
+            outFile.write(reinterpret_cast<const char *>(&tecResources.data[0]), tecResources.data.size());
+        }
+        delete(resources);
+    }
+/*
     gltf2tec::GLTFResources* resources = loadGltfModel(cube);
     if(resources) {
         gltf2tec::TectonicResources tecResources = convertGLTFModel(*resources);
@@ -1054,4 +1073,5 @@ int main(){
     }
 
     delete(resources);
+    */
 }

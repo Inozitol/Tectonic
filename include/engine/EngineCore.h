@@ -1,24 +1,27 @@
 #ifndef TECTONIC_ENGINECORE_H
 #define TECTONIC_ENGINECORE_H
 
+#include "Animatrix.h"
+
+
 #include <queue>
 
+#include "Logger.h"
+#include "Window.h"
 #include "camera/GameCamera.h"
 #include "connector/Slot.h"
-#include "exceptions.h"
-#include "Window.h"
-#include "Logger.h"
 #include "defs/ConfigDefs.h"
+#include "exceptions.h"
 
-#include "vulkan/VktCore.h"
 #include "engine/model/gltf2tec.h"
+#include "vulkan/VktCore.h"
 
 class EngineCore {
 public:
-    EngineCore(EngineCore const&) = delete;
-    void operator=(EngineCore const&) = delete;
+    EngineCore(EngineCore const &) = delete;
+    void operator=(EngineCore const &) = delete;
 
-    static EngineCore& getInstance(){
+    static EngineCore &getInstance() {
         static EngineCore instance;
         return instance;
     }
@@ -30,59 +33,28 @@ public:
      */
     void clean();
 
-    /*
-    void queueModelRender(const ObjectData& object, Model* model);
-    void queueSkinnedModelRender(const SkinnedObjectData& object, SkinnedModel* skinnedModel);
-    void setTerrainModelRender(const std::shared_ptr<Terrain>& terrain);
-    void setSkyboxModelRender(const std::shared_ptr<Skybox>& skybox);
-    void renderQueues();
-    */
-
     void setWindowSize(int32_t width, int32_t height);
 
-    /*
-    void setDirectionalLight(DirectionalLight* light) { m_dirLight = light; }
-    void setSpotLight(std::array<SpotLight, MAX_SPOT_LIGHTS>* lights) { m_spotLights = lights;}
-    void setSpotLightCount(decltype(MAX_SPOT_LIGHTS) count) { m_spotLightsCount = count; }
-    void setPointLight(std::array<PointLight, MAX_POINT_LIGHTS>* lights) { m_pointLights = lights; }
-    void setPointLightCount(decltype(MAX_POINT_LIGHTS) count) { m_pointLightsCount = count; }
-    */
-
-    static void glfwErrorCallback(int, const char* msg);
-
-    /*
-    LightingShader      m_lightingShader;
-    ShadowMapShader     m_shadowMapShader;
-    ShadowMapFBO        m_shadowMapFBO;
-    ShadowCubeMapFBO    m_shadowCubeMapFBO;
-    PickingShader       m_pickingShader;
-    PickingTexture      m_pickingTexture;
-    DebugShader         m_debugShader;
-    TerrainShader       m_terrainShader;
-    SkyboxShader        m_skyboxShader;
-
-    Signal<objectIndex_t> sig_objectClicked;
-    Signal<skinnedObjectIndex_t> sig_skinnedObjectClicked;
-    */
+    static void glfwErrorCallback(int, const char *msg);
 
     /**
      * @brief Informs the engine when the cursor is being pressed
      */
-    Slot<bool> slt_cursorPressed{[this](bool isPressed){
+    Slot<bool> slt_cursorPressed{[this](bool isPressed) {
         m_cursorPressed = isPressed;
     }};
 
     /**
      * @brief Informs the engine about new m_window dimension
      */
-    Slot<int32_t, int32_t> slt_windowDimensions{[this](int32_t width, int32_t height){
+    Slot<int32_t, int32_t> slt_windowDimensions{[this](int32_t width, int32_t height) {
         setWindowSize(width, height);
     }};
 
     /**
      * @brief Informs the engine about new cursor position
      */
-    Slot<double, double> slt_updateCursorPos{[this](double x, double y){
+    Slot<double, double> slt_updateCursorPos{[this](double x, double y) {
         m_cursorPosX = static_cast<int32_t>(x);
         m_cursorPosY = static_cast<int32_t>(y);
     }};
@@ -90,7 +62,7 @@ public:
     /**
      * @brief Informs th engine with mouse pressed position
      */
-    Slot<double, double> slt_updateCursorPressedPos{[this](double x, double y){
+    Slot<double, double> slt_updateCursorPressedPos{[this](double x, double y) {
         m_cursorPosX = static_cast<int32_t>(x);
         m_cursorPosY = static_cast<int32_t>(y);
         m_cursorPressed = true;
@@ -99,7 +71,7 @@ public:
     /**
      * @brief Toggles between debug rendering mode
      */
-    Slot<> slt_toggleDebug{[this](){
+    Slot<> slt_toggleDebug{[this]() {
         m_debugEnabled = !m_debugEnabled;
     }};
 
@@ -107,8 +79,8 @@ private:
     EngineCore();
     ~EngineCore();
 
-    VktCore& m_vktCore = VktCore::getInstance();
-    std::unordered_map<VktCore::objectID_t, VktCore::EngineObject*> m_objects;
+    VktCore &m_vktCore = VktCore::getInstance();
+    std::unordered_map<VktCore::objectID_t, VktCore::EngineObject *> m_objects;
 
     static void initGLFW();
     void initKeyGroups();
@@ -159,6 +131,9 @@ private:
     static inline void renderMesh(const MeshInfo& mesh);
      */
 
+    // TODO TMP
+    Animatrix bobAnimatrix;
+
     bool m_isInitialized = false;
 
     std::unique_ptr<Window> m_window;
@@ -186,4 +161,4 @@ private:
     Logger m_logger = Logger("Renderer");
 };
 
-#endif //TECTONIC_ENGINECORE_H
+#endif//TECTONIC_ENGINECORE_H

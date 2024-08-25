@@ -2,14 +2,8 @@
 #define TECTONIC_VKTDELETABLEQUEUE_H
 
 #include <deque>
-#include <functional>
-#include <optional>
-#include <span>
-#include <vulkan/vulkan.h>
 
 #include "VktUtils.h"
-#include "exceptions.h"
-#include <vk_mem_alloc.h>
 
 enum class DeletableType {
     /**

@@ -1,14 +1,15 @@
 #ifndef TECTONIC_VKTTYPES_H
 #define TECTONIC_VKTTYPES_H
 
-#include <glm/glm.hpp>
-#include <glm/ext/matrix_transform.hpp>
-#include <memory>
-#include <glm/detail/type_quat.hpp>
-#include "extern/imgui/imgui_impl_glfw.h"
+#include "Logger.h"
 #include "VktDeletableQueue.h"
 #include "VktDescriptorUtils.h"
-#include "Logger.h"
+#include "extern/imgui/imgui_impl_glfw.h"
+#include <glm/detail/type_quat.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/glm.hpp>
+#include <memory>
+#include <vk_mem_alloc.h>
 
 namespace VktTypes{
     namespace Resources {

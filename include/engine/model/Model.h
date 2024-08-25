@@ -23,17 +23,31 @@
 class Model {
 public:
     Model() = default;
+    ~Model();
+    Model& operator=(Model const&);
+
     void clear();
 
     explicit Model(const std::filesystem::path &path);
+
     void gatherDrawContext(VktTypes::DrawContext &ctx);
-    void updateAnimationTime(float delta);
-    void updateJoints();
-    uint32_t currentAnimation() const;
+
     void setAnimation(uint32_t aID);
+    uint32_t currentAnimation() const;
     std::string_view animationName(uint32_t aID) const;
     uint32_t animationCount() const;
+
+    void updateAnimationTime();
+    void updateJoints();
+    void uploadJointsMatrices();
+
+    std::vector<ModelTypes::Node>& nodes();
+    ModelTypes::Skin& skin();
+
     bool isSkinned() const;
+    bool isLoaded() const;
+    const std::string& path() const;
+
     Transformation transformation;
 
 private:
@@ -49,6 +63,9 @@ private:
         ModelTypes::Skin skin;
         std::vector<ModelTypes::Animation> animations;
         uint32_t rootNode;
+
+        std::vector<uint32_t> meshNodes;
+        std::vector<uint32_t> skinNodes;
 
         DescriptorAllocatorDynamic descriptorPool;
         VktTypes::Resources::Buffer materialBuffer;
@@ -69,7 +86,7 @@ private:
     uint32_t m_rootNode = ModelTypes::NULL_ID;
     bool m_isSkinned = false;
 
-    uint32_t m_activeAnimation = 0;
+    uint32_t m_activeAnimation = ModelTypes::NULL_ID;
 
     static void readMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset);
     static void readSkinnedMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset);

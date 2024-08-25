@@ -18,7 +18,6 @@ void main(){
 
     mat4 mvMatrix = sceneData.view * PushConstants.modelMatrix;
 
-    outNormal = normalize(transpose(inverse((mvMatrix * skinMat))) * vec4(v.normal, 0.0f)).xyz;
     outNormal = normalize(skinMat * vec4(v.normal, 0.0f)).xyz;
     gl_Position = skinMat * vec4(v.pos,1.0f);
 
