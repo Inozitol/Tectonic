@@ -93,7 +93,6 @@ void VktPipelineBuilder::setShaders(const char* vertexShaderPath, const char* fr
     }
 }
 
-
 void VktPipelineBuilder::setShader(VkShaderStageFlagBits stageBit, const char* path){
     // Delete old shader in case its still cached
     if(m_shaderStages.contains(stageBit)){

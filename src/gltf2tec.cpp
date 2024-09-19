@@ -6,15 +6,16 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <fastgltf/glm_element_traits.hpp>
-#include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
+#include <fastgltf/types.hpp>
+#include <fastgltf/core.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <set>
 #include <queue>
 #include <algorithm>
 
 #include "Logger.h"
-#include "utils/utils.h"
+#include "utils/Utils.h"
 
 Logger vktLoaderLogger("VulkanLoader");
 
@@ -85,8 +86,8 @@ std::optional<SerialTypes::Model::Image> loadImage(fastgltf::Asset& asset, fastg
                 newImage.data = SerialTypes::Span<uint32_t,std::byte,true>(reinterpret_cast<std::byte*>(data),imgSize);
             }
         },
-        [&newImage, &width, &height, &channels](fastgltf::sources::Vector& vector){
-            unsigned char* data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()),
+        [&newImage, &width, &height, &channels](fastgltf::sources::Array& array){
+            unsigned char* data = stbi_load_from_memory(reinterpret_cast<stbi_uc*>(array.bytes.data()), static_cast<int>(array.bytes.size()),
                                                         &width, &height, &channels, 4);
             if(data){
                 newImage.extent.width = width;
@@ -102,8 +103,8 @@ std::optional<SerialTypes::Model::Image> loadImage(fastgltf::Asset& asset, fastg
 
             std::visit(fastgltf::visitor{
                 [](auto& arg){},
-                [&newImage, &width, &height, &channels, &bufferView](fastgltf::sources::Vector& vector){
-                    unsigned char* data = stbi_load_from_memory(vector.bytes.data() + bufferView.byteOffset,
+                [&newImage, &width, &height, &channels, &bufferView](fastgltf::sources::Array& array){
+                    unsigned char* data = stbi_load_from_memory(reinterpret_cast<stbi_uc*>(array.bytes.data() + bufferView.byteOffset),
                                                                 static_cast<int>(bufferView.byteLength),
                                                                 &width, &height, &channels, 4);
                     if(data) {
@@ -133,39 +134,39 @@ std::optional<SerialTypes::Model::Image> loadImage(fastgltf::Asset& asset, fastg
 std::optional<fastgltf::Asset> loadFile(const std::filesystem::path& path){
     constexpr auto gltfOptions = fastgltf::Options::DontRequireValidAssetMember |
                                  fastgltf::Options::AllowDouble |
-                                 fastgltf::Options::LoadGLBBuffers |
                                  fastgltf::Options::LoadExternalBuffers;
 
     fastgltf::Parser parser{};
 
-    fastgltf::GltfDataBuffer data;
-    data.loadFromFile(path);
+    auto data = fastgltf::MappedGltfFile::FromPath(path);
 
-    auto type = fastgltf::determineGltfFileType(&data);
-    if(type == fastgltf::GltfType::glTF){
-        auto load = parser.loadGltf(&data, path.parent_path(), gltfOptions);
-        if(load){
-            vktLoaderLogger(Logger::DEBUG) << path << " Detected as JSON glTF file\n";
-            return std::move(load.get());
-        }else{
-            vktLoaderLogger(Logger::ERROR) << "Failed to load glTF: " << path
-                                           << " | error: " << fastgltf::to_underlying(load.error()) << '\n';
-            return {};
-
+    auto type = fastgltf::determineGltfFileType(data.get());
+    switch(type) {
+        case fastgltf::GltfType::glTF: {
+            auto load = parser.loadGltf(data.get(), path.parent_path(), gltfOptions);
+            if(load){
+                vktLoaderLogger(Logger::DEBUG) << path << " Detected as JSON glTF file\n";
+                return std::move(load.get());
+            }else{
+                vktLoaderLogger(Logger::ERROR) << "Failed to load glTF: " << path
+                                               << " | error: " << fastgltf::to_underlying(load.error()) << '\n';
+                return {};
+            }
         }
-    }else if(type == fastgltf::GltfType::GLB){
-        auto load = parser.loadGltfBinary(&data, path.parent_path(), gltfOptions);
-        if(load){
-            vktLoaderLogger(Logger::DEBUG) << path << " Detected as binary GLB file\n";
-            return std::move(load.get());
-        }else{
-            vktLoaderLogger(Logger::ERROR) << "Failed to load glTF: " << path
-                                           << " | error: " << fastgltf::to_underlying(load.error()) << '\n';
-            return {};
+        case fastgltf::GltfType::GLB: {
+            auto load = parser.loadGltfBinary(data.get(), path.parent_path(), gltfOptions);
+            if(load){
+                vktLoaderLogger(Logger::DEBUG) << path << " Detected as binary GLB file\n";
+                return std::move(load.get());
+            }else{
+                vktLoaderLogger(Logger::ERROR) << "Failed to load glTF: " << path
+                                               << " | error: " << fastgltf::to_underlying(load.error()) << '\n';
+                return {};
+            }
         }
-    }else{
-        vktLoaderLogger(Logger::ERROR) << "Failed to determine glTF type" << '\n';
-        return {};
+        default:
+            vktLoaderLogger(Logger::ERROR) << "Failed to determine glTF type" << '\n';
+            return {};
     }
 }
 
@@ -257,8 +258,8 @@ void loadMaterials(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const s
 
 void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::filesystem::path& path) {
     for(fastgltf::Mesh& mesh : gltf.meshes){
-        std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::GPU::Static>>());
-        SerialTypes::Model::MeshAsset<VktTypes::GPU::Static>* newMesh = std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).back().get();
+        std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::GPU::VertexType::STATIC>>());
+        SerialTypes::Model::MeshAsset<VktTypes::GPU::VertexType::STATIC>* newMesh = std::get<gltf2tec::GLTFResources::StaticMeshVec_t>(file.meshes).back().get();
         std::size_t initialVtx = 0;
 
         newMesh->surfaces.resize(mesh.primitives.size());
@@ -284,12 +285,12 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
 
             // Load positions
             {
-                fastgltf::Accessor& posAccessor = gltf.accessors[p->findAttribute("POSITION")->second];
+                fastgltf::Accessor& posAccessor = gltf.accessors[p->findAttribute("POSITION")->accessorIndex];
                 newMesh->vertices.resize(newMesh->vertices.size() + posAccessor.count);
 
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
                                                               [&](glm::vec3 v, size_t index){
-                                                                  VktTypes::GPU::Vertex<VktTypes::GPU::Static> vtx;
+                                                                  VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::STATIC> vtx;
                                                                   vtx.position = v;
                                                                   newMesh->vertices[verticesOffset + index] = vtx;
                                                               });
@@ -299,7 +300,7 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
             {
                 auto normals = p->findAttribute("NORMAL");
                 if (normals != p->attributes.end()) {
-                    fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[normals->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[normals->accessorIndex],
                                                                   [&](glm::vec3 v, size_t index) {
                                                                       newMesh->vertices[verticesOffset + index].normal = v;
                                                                   });
@@ -310,7 +311,7 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
             {
                 auto uv = p->findAttribute("TEXCOORD_0");
                 if (uv != p->attributes.end()) {
-                    fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[uv->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[uv->accessorIndex],
                                                                   [&](glm::vec2 v, size_t index) {
                                                                       newMesh->vertices[verticesOffset + index].uvX = v.x;
                                                                       newMesh->vertices[verticesOffset + index].uvY = v.y;
@@ -322,7 +323,7 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
             {
                 auto colors = p->findAttribute("COLOR_0");
                 if (colors != p->attributes.end()) {
-                    fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[colors->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[colors->accessorIndex],
                                                                   [&](glm::vec4 v, size_t index) {
                                                                       newMesh->vertices[verticesOffset + index].color = v;
                                                                   });
@@ -344,8 +345,8 @@ void loadMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std:
 
 void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::filesystem::path& path) {
     for(fastgltf::Mesh& mesh : gltf.meshes){
-        std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::GPU::Skinned>>());
-        SerialTypes::Model::MeshAsset<VktTypes::GPU::Skinned>* newMesh = std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).back().get();
+        std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).push_back(std::make_unique<SerialTypes::Model::MeshAsset<VktTypes::GPU::VertexType::SKINNED>>());
+        SerialTypes::Model::MeshAsset<VktTypes::GPU::VertexType::SKINNED>* newMesh = std::get<gltf2tec::GLTFResources::SkinnedMeshVec_t>(file.meshes).back().get();
         std::size_t initialVtx = 0;
 
         newMesh->surfaces.resize(mesh.primitives.size());
@@ -371,12 +372,12 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
 
             // Load positions
             {
-                fastgltf::Accessor& posAccessor = gltf.accessors[p->findAttribute("POSITION")->second];
+                fastgltf::Accessor& posAccessor = gltf.accessors[p->findAttribute("POSITION")->accessorIndex];
                 newMesh->vertices.resize(newMesh->vertices.size() + posAccessor.count);
 
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
                                                               [&](glm::vec3 v, size_t index){
-                                                                  VktTypes::GPU::Vertex vtx;
+                                                                  VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::SKINNED> vtx;
                                                                   vtx.position = v;
                                                                   newMesh->vertices[verticesOffset + index] = vtx;
                                                               });
@@ -386,7 +387,7 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
             {
                 auto normals = p->findAttribute("NORMAL");
                 if (normals != p->attributes.end()) {
-                    fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[normals->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[normals->accessorIndex],
                                                                   [&](glm::vec3 v, size_t index) {
                                                                       newMesh->vertices[verticesOffset + index].normal = v;
                                                                   });
@@ -397,7 +398,7 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
             {
                 auto uv = p->findAttribute("TEXCOORD_0");
                 if (uv != p->attributes.end()) {
-                    fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[uv->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[uv->accessorIndex],
                                                                   [&](glm::vec2 v, size_t index) {
                                                                       newMesh->vertices[verticesOffset + index].uvX = v.x;
                                                                       newMesh->vertices[verticesOffset + index].uvY = v.y;
@@ -409,7 +410,7 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
             {
                 auto colors = p->findAttribute("COLOR_0");
                 if (colors != p->attributes.end()) {
-                    fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[colors->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[colors->accessorIndex],
                                                                   [&](glm::vec4 v, size_t index) {
                                                                       newMesh->vertices[verticesOffset + index].color = v;
                                                                   });
@@ -420,7 +421,7 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
             {
                 auto joints = p->findAttribute("JOINTS_0");
                 if(joints != p->attributes.end()){
-                    fastgltf::iterateAccessorWithIndex<glm::uvec4>(gltf, gltf.accessors[joints->second],
+                    fastgltf::iterateAccessorWithIndex<glm::uvec4>(gltf, gltf.accessors[joints->accessorIndex],
                                                                    [&](const glm::uvec4& v, size_t index){
                                                                        newMesh->vertices[verticesOffset + index].jointIndices = v;
                                                                    });
@@ -432,7 +433,7 @@ void loadSkinnedMeshes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, con
             {
                 auto weights = p->findAttribute("WEIGHTS_0");
                 if(weights != p->attributes.end()){
-                    fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[weights->second],
+                    fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[weights->accessorIndex],
                                                                   [&](glm::vec4 v, size_t index){
                                                                       newMesh->vertices[verticesOffset + index].jointWeights = v;
                                                                   });
@@ -465,12 +466,12 @@ void loadNodes(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::
         }
 
         std::visit(fastgltf::visitor{
-                [&](const fastgltf::Node::TransformMatrix& matrix){
+                [&](const fastgltf::math::fmat4x4& matrix){
                     newNode->localTransform = glm::make_mat4(matrix.data());
                 },
                 [&](const fastgltf::TRS& transform){
                     newNode->translation = glm::make_vec3(transform.translation.data());
-                    newNode->rotation = glm::mat4(glm::make_quat(transform.rotation.data()));
+                    newNode->rotation = glm::mat4(glm::make_quat(transform.rotation.value_ptr()));
                     newNode->scale = glm::make_vec3(transform.scale.data());
                 }},node.transform);
 
@@ -498,8 +499,8 @@ void loadSkin(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const std::f
         const fastgltf::Buffer&     buffer      = gltf.buffers[bufferView.bufferIndex];
         newSkin->inverseBindMatrices.resize(accessor.count);
         std::visit(fastgltf::visitor{
-            [&accessor, &bufferView, &newSkin](const fastgltf::sources::Vector& vector){
-                std::memcpy(newSkin->inverseBindMatrices.data(), vector.bytes.data() + accessor.byteOffset + bufferView.byteOffset, accessor.count * sizeof(glm::mat4));
+            [&accessor, &bufferView, &newSkin](const fastgltf::sources::Array& array){
+                std::memcpy(newSkin->inverseBindMatrices.data(), array.bytes.data() + accessor.byteOffset + bufferView.byteOffset, accessor.count * sizeof(glm::mat4));
                 },
                 [&path](auto){vktLoaderLogger(Logger::WARNING) << path << " Unhandled variant type while loading model inverse bind matrices\n";}},
                 buffer.data);
@@ -553,8 +554,8 @@ void loadAnimations(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const 
 
                 newSampler.inputs.resize(accessor.count);
                 std::visit(fastgltf::visitor{
-                        [&accessor, &bufferView, &newSampler](const fastgltf::sources::Vector& vector){
-                            memcpy(newSampler.inputs.data(), vector.bytes.data() + accessor.byteOffset + bufferView.byteOffset, accessor.count * sizeof(float));
+                        [&accessor, &bufferView, &newSampler](const fastgltf::sources::Array& array){
+                            memcpy(newSampler.inputs.data(), array.bytes.data() + accessor.byteOffset + bufferView.byteOffset, accessor.count * sizeof(float));
                         },
                         [&path](auto&){vktLoaderLogger(Logger::WARNING) << path << " Unhandled variant type while loading model animations input sampler\n";}
                 }, buffer.data);
@@ -576,8 +577,8 @@ void loadAnimations(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const 
 
                 newSampler.outputsVec4.resize(accessor.count);
                 std::visit(fastgltf::visitor {
-                        [&accessor, &bufferView, &newSampler, &path](const fastgltf::sources::Vector& vector){
-                            const void* dataPtr = vector.bytes.data() + accessor.byteOffset + bufferView.byteOffset;
+                        [&accessor, &bufferView, &newSampler, &path](const fastgltf::sources::Array& array){
+                            const void* dataPtr = array.bytes.data() + accessor.byteOffset + bufferView.byteOffset;
 
                             switch(accessor.type){
                                 case fastgltf::AccessorType::Vec3:
@@ -627,8 +628,8 @@ void loadAnimations(fastgltf::Asset& gltf, gltf2tec::GLTFResources& file, const 
                     vktLoaderLogger(Logger::DEBUG) << path << " Ignored WEIGHTS channel\n";
                     break;
             }
-            newChannel.node = static_cast<uint32_t>(channel.nodeIndex);
-            tmpAnimatedNodes.emplace_back(channel.nodeIndex,channelID);
+            newChannel.node = static_cast<uint32_t>(channel.nodeIndex.value());
+            tmpAnimatedNodes.emplace_back(channel.nodeIndex.value(),channelID);
         }
 
         // Sort by BFS reordering so that top nodes are before their children
@@ -791,8 +792,8 @@ gltf2tec::GLTFResources* loadGltfModel(const std::filesystem::path& filePath){
     return scene;
 }
 
-template<bool S>
-void writeMesh(SerialTypes::BinDataVec_t& data, const SerialTypes::Model::MeshAsset<S>& mesh){
+template<VktTypes::GPU::VertexType vType>
+void writeMesh(SerialTypes::BinDataVec_t& data, const SerialTypes::Model::MeshAsset<vType>& mesh){
     // Write material surface span size + vector [32bits + sizeof(MeshSurface) * size]
     Serial::pushData<SerialTypes::Model::MeshSurface>(data, mesh.surfaces);
 
@@ -800,7 +801,7 @@ void writeMesh(SerialTypes::BinDataVec_t& data, const SerialTypes::Model::MeshAs
     Serial::pushData<uint32_t>(data, mesh.indices);
 
     // Write vertices size + vector [32bits + sizeof(Vertex) * size]
-    Serial::pushData<VktTypes::GPU::Vertex<S>>(data, mesh.vertices);
+    Serial::pushData<VktTypes::GPU::Vertex<vType>>(data, mesh.vertices);
 
 }
 

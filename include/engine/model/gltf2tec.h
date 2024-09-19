@@ -18,8 +18,8 @@
 namespace gltf2tec{
 
     struct GLTFResources {
-        using StaticMeshVec_t = std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset<VktTypes::GPU::Static>>>;
-        using SkinnedMeshVec_t = std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset<VktTypes::GPU::Skinned>>>;
+        using StaticMeshVec_t = std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset<VktTypes::GPU::VertexType::STATIC>>>;
+        using SkinnedMeshVec_t = std::vector<std::unique_ptr<SerialTypes::Model::MeshAsset<VktTypes::GPU::VertexType::SKINNED>>>;
 
         std::variant<StaticMeshVec_t,SkinnedMeshVec_t> meshes;
         std::vector<std::unique_ptr<SerialTypes::Model::Image>> images;

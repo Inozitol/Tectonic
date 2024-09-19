@@ -19,26 +19,28 @@ void EngineCore::run() {
         currTime = glfwGetTime();
         TecCache::deltaTime = (currTime - prevTime);
 
-        bobAnimatrix.updateActions();
         if(ctr % 200 < 50) {
-            bobAnimatrix.actions[0].target = {3.0f, 10.0f, 0.0f};
+            bobAnimatrix.actions[0].target = {1.0f, 5.0f, 0.0f};
             bobAnimatrix.actions[1].target = {3.0f, 6.0f, 0.0f};
-            bobAnimatrix.actions[2].target = {-3.0f, 6.0f, 0.0f};
+            bobAnimatrix.actions[2].target = {-3.0f,3.0f, -6.0f};
+            //bobAnimatrix.actions[3].target = {0.0f, -2.0f, 0.0f};
         }else if (ctr % 200 < 100){
-            bobAnimatrix.actions[0].target = {3.0f, 5.0f, 0.0f};
+            bobAnimatrix.actions[0].target = {1.0f, 4.0f, 0.0f};
             bobAnimatrix.actions[1].target = {3.0f, 0.0f, 0.0f};
-            bobAnimatrix.actions[2].target = {-3.0f, 0.0f, 0.0f};
-
+            bobAnimatrix.actions[2].target = {-3.0f, 3.0f, 6.0f};
+            //bobAnimatrix.actions[3].target = {0.0f, -2.0f, -5.0f};
         }else if (ctr % 200 < 150){
-            bobAnimatrix.actions[0].target = {-3.0f, 5.0f, 0.0f};
+            bobAnimatrix.actions[0].target = {-1.0f, 5.0f, 0.0f};
             bobAnimatrix.actions[1].target = {3.0f, 6.0f, 0.0f};
-            bobAnimatrix.actions[2].target = {-3.0f, 6.0f, 0.0f};
-
+            bobAnimatrix.actions[2].target = {-3.0f, 3.0f, 6.0f};
+            //bobAnimatrix.actions[3].target = {0.0f, -2.0f, 0.0f};
         }else{
-            bobAnimatrix.actions[0].target = {-3.0f, 10.0f, 0.0f};
+            bobAnimatrix.actions[0].target = {-1.0f, 4.0f, 0.0f};
             bobAnimatrix.actions[1].target = {3.0f, 0.0f, 0.0f};
-            bobAnimatrix.actions[2].target = {-3.0f, 0.0f, 0.0f};
+            bobAnimatrix.actions[2].target = {-3.0f, 3.0f, -6.0f};
+            //bobAnimatrix.actions[3].target = {0.0f, -2.0f, 5.0f};
         }
+        bobAnimatrix.updateActions();
 
         //m_objects[0]->model.transformation.setRotation(0.0f,glfwGetTime()*50.0f, 0.0f);
         m_vktCore.cameraPosition = m_gameCamera->getPosition();
@@ -537,9 +539,16 @@ EngineCore::EngineCore() {
         VktCore::EngineObject* bob = m_vktCore.createObject("bob", "meshes/bob.tecm");
         if(!bob) throw engineException("Oops, no Bob");
         m_objects.insert({bob->objectID, bob});
-        bob->model->transformation.scale(0.5);
+        //bob->model->transformation.scale(0.5);
 
         bobAnimatrix = Animatrix(bob->model);
+        for(auto& [bodyPart, points] : bobAnimatrix.debugJointLines) {
+            //m_vktCore.debugLines[Utils::enumVal(bodyPart)] = &points;
+        }
+        for(auto& [bodyPart, points] : bobAnimatrix.debugJointBasis) {
+            m_vktCore.debugLines[-Utils::enumVal(bodyPart)] = &points;
+        }
+
         Animatrix::Action action{};
         action.type = Animatrix::ActionType::PULLING;
         action.body = Animatrix::BodyPart::HEAD;
@@ -553,6 +562,10 @@ EngineCore::EngineCore() {
         action.body = Animatrix::BodyPart::RARM;
         action.target = {-3.0f, 1.0f, 0.0f};
         bobAnimatrix.actions.emplace(2,action);
+
+        //action.body = Animatrix::BodyPart::RLEG;
+        //action.target = {0.0f, -2.0f, 0.0f};
+        //bobAnimatrix.actions.emplace(3,action);
 
 
 /*

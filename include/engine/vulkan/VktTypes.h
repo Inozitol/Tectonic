@@ -72,35 +72,49 @@ namespace VktTypes{
             VkDeviceAddress jointsBuffer = 0;
         };
 
+        enum class VertexType {
+            STATIC,     // For statically placed verticies of 3D meshes
+            SKINNED,    // For skinned 3D meshes
+            POINT       // For colored 3D points
+        };
+
         /**
          * @brief GPU format of vertex data.
-         * @tparam S True if the vertex contains joints data.
+         * @tparam vType Type of vertex data.
          */
-        template<bool S = Skinned>
+        template<VertexType vType>
         struct Vertex;
 
         /** @brief Graphics pipeline vertex */
         template<>
-        struct Vertex<Static>{
-            glm::vec3 position = {0.0f, 0.0f, 0.0f};
-            float uvX = 0.0f;
-            glm::vec3 normal = {1.0f, 0.0f, 0.0f};
-            float uvY = 0.0f;
-            glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        struct Vertex<VertexType::STATIC>{
+            alignas(16) glm::vec3 position = {0.0f, 0.0f, 0.0f};
+            alignas(4) float uvX = 0.0f;
+            alignas(16) glm::vec3 normal = {1.0f, 0.0f, 0.0f};
+            alignas(4) float uvY = 0.0f;
+            alignas(16) glm::vec3 color = {1.0f, 1.0f, 1.0f};
         };
 
         /** @brief Graphics pipeline vertex with joints data. */
         template<>
-        struct Vertex<Skinned>{
-            glm::vec3 position = {0.0f, 0.0f, 0.0f};
-            float uvX = 0.0f;
-            glm::vec3 normal = {1.0f, 0.0f, 0.0f};
-            float uvY = 0.0f;
-            glm::vec4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+        struct Vertex<VertexType::SKINNED>{
+            alignas(16) glm::vec3 position = {0.0f, 0.0f, 0.0f};
+            alignas(4) float uvX = 0.0f;
+            alignas(16)glm::vec3 normal = {1.0f, 0.0f, 0.0f};
+            alignas(4) float uvY = 0.0f;
+            alignas(16) glm::vec3 color = {1.0f, 1.0f, 1.0f};
 
-            glm::uvec4 jointIndices = {0, 0, 0, 0};
-            glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
+            alignas(16) glm::uvec4 jointIndices = {0, 0, 0, 0};
+            alignas(16) glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
         };
+
+        /** @brief Graphics pipeline vertex for colored point */
+        template<>
+        struct Vertex<VertexType::POINT>{
+            alignas(16) glm::vec3 position = {0.0f, 0.0f, 0.0f};
+            alignas(16) glm::vec3 color = {1.0f, 1.0f, 1.0f};
+        };
+
 
         /** @brief Buffer on GPU holding joints data */
         struct JointsBuffers{
@@ -132,6 +146,12 @@ namespace VktTypes{
         };
 
     }
+
+    struct PointMesh {
+        std::vector<GPU::Vertex<GPU::VertexType::POINT>> vertices;
+        std::vector<uint32_t> indices;
+        GPU::MeshBuffers meshBuffers;
+    };
 
     /** Very work-in-progress push constants. */
     struct ComputePushConstants{

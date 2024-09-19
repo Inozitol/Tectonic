@@ -4,3 +4,6 @@
 [submodule "include/extern/VulkanMemoryAllocator"]
 	path = include/extern/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
+[submodule "include/extern/KTX-Software"]
+	path = include/extern/KTX-Software
+	url = https://github.com/KhronosGroup/KTX-Software.git

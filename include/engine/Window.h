@@ -7,7 +7,7 @@
 #include <functional>
 #include <vulkan/vulkan.h>
 
-#include "utils/utils.h"
+#include "utils/Utils.h"
 #include "connector/Signal.h"
 #include "Cursor.h"
 #include "Keyboard.h"

@@ -23,10 +23,10 @@ void Model::readMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, s
     dst.surfaces.resize(surfaces.size());
     std::memcpy(dst.surfaces.data(), surfaces.data(), surfaces.size() * sizeof(VktTypes::MeshSurface));
     SerialTypes::Span<uint32_t, uint32_t, false> indices(src, offset);
-    SerialTypes::Span<uint32_t, VktTypes::GPU::Vertex<VktTypes::GPU::Static>, false> vertices(src, offset);
+    SerialTypes::Span<uint32_t, VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::STATIC>, false> vertices(src, offset);
 
-    dst.meshBuffers = VktCore::uploadMesh<VktTypes::GPU::Static>(std::span<uint32_t>(indices.data(), indices.size()),
-                                                            std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Static>>(vertices.data(), vertices.size()));
+    dst.meshBuffers = VktCore::createPrimitivesDeviceMemory<VktTypes::GPU::VertexType::STATIC>(std::span(indices.data(), indices.size()),
+                                                                                   std::span(vertices.data(), vertices.size()));
 }
 
 void Model::readSkinnedMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
@@ -34,10 +34,10 @@ void Model::readSkinnedMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t 
     dst.surfaces.resize(surfaces.size());
     std::memcpy(dst.surfaces.data(), surfaces.data(), surfaces.size() * sizeof(VktTypes::MeshSurface));
     SerialTypes::Span<uint32_t, uint32_t, false> indices(src, offset);
-    SerialTypes::Span<uint32_t, VktTypes::GPU::Vertex<VktTypes::GPU::Skinned>, false> vertices(src, offset);
+    SerialTypes::Span<uint32_t, VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::SKINNED>, false> vertices(src, offset);
 
-    dst.meshBuffers = VktCore::uploadMesh<VktTypes::GPU::Skinned>(std::span<uint32_t>(indices.data(), indices.size()),
-                                                             std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Skinned>>(vertices.data(), vertices.size()));
+    dst.meshBuffers = VktCore::createPrimitivesDeviceMemory<VktTypes::GPU::VertexType::SKINNED>(std::span(indices.data(), indices.size()),
+                                                                                    std::span(vertices.data(), vertices.size()));
 }
 void Model::readImage(VktTypes::Resources::Image &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     SerialTypes::Span<uint32_t, char, false> name = SerialTypes::Span<uint32_t, char, false>(src, offset);
@@ -46,7 +46,7 @@ void Model::readImage(VktTypes::Resources::Image &dst, SerialTypes::BinDataVec_t
     SerialTypes::Span<uint32_t, std::byte, false> imgData = SerialTypes::Span<uint32_t, std::byte, false>(src, offset);
     dst = VktImages::createDeviceMemory(extent, format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
     size_t size = extent.width * extent.height * extent.depth * 4;
-    VktImages::copyFromRaw(dst, size, reinterpret_cast<char*>(imgData.data()));
+    VktImages::copyFromRaw(dst, size, reinterpret_cast<char *>(imgData.data()));
 }
 
 void Model::readSampler(VkSampler &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
@@ -244,7 +244,7 @@ void Model::loadModelData(const std::filesystem::path &path) {
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
     resources.descriptorPool.initPool(materialCount, sizes);
     resources.materialBuffer = VktBuffers::create(sizeof(VktTypes::GLTFMetallicRoughness::MaterialConstants) * materialCount,
-                                                        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+                                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     index = materialIndex + sizeof(uint32_t);
     for(std::size_t i = 0; i < materialCount; i++) {
         readMaterial(resources.materials[i], data, index, i, resources);
@@ -425,7 +425,7 @@ void Model::uploadJointsMatrices() {
     std::size_t numJoints = m_skin.joints.size();
     std::vector<glm::mat4> jointMatrices(numJoints);
 
-    ModelTypes::Node *node = &m_nodes[m_skin.skinNodes[0]];  // For some reason this works too?
+    ModelTypes::Node *node = &m_nodes[m_skin.skinNodes[0]];// For some reason this works too?
     glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
 
     for(std::size_t i = 0; i < numJoints; i++) {
@@ -434,10 +434,10 @@ void Model::uploadJointsMatrices() {
     memcpy(m_jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
 }
 
-std::vector<ModelTypes::Node>& Model::nodes() {
+std::vector<ModelTypes::Node> &Model::nodes() {
     return m_nodes;
 }
-ModelTypes::Skin& Model::skin() {
+ModelTypes::Skin &Model::skin() {
     return m_skin;
 }
 
@@ -471,8 +471,8 @@ Model::~Model() {
     clear();
 }
 
-Model& Model::operator=(Model const& other) {
-    if(this == &other){return *this;}
+Model &Model::operator=(Model const &other) {
+    if(this == &other) { return *this; }
 
     m_modelPath = other.m_modelPath;
     m_isLoaded = other.isLoaded();
@@ -502,7 +502,7 @@ void Model::clear() {
 
     VktBuffers::destroy(m_jointsBuffer.jointsBuffer);
 
-    if(!m_loadedModels.contains(m_modelPath)){
+    if(!m_loadedModels.contains(m_modelPath)) {
         return;
     }
     m_loadedModels.at(m_modelPath).activeModels--;
@@ -515,7 +515,7 @@ void Model::clear() {
         for(const auto &sampler: resources.samplers) {
             vkDestroySampler(VktCache::vkDevice, sampler, nullptr);
         }
-        for(const auto &image : resources.images) {
+        for(const auto &image: resources.images) {
             VktImages::destroy(image);
         }
         VktBuffers::destroy(resources.materialBuffer);
@@ -527,7 +527,6 @@ bool Model::isLoaded() const {
     return m_isLoaded;
 }
 
-const std::string& Model::path() const {
+const std::string &Model::path() const {
     return m_modelPath;
 }
-

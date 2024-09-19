@@ -2,7 +2,6 @@ find_package(Vulkan REQUIRED)
 
 # Link libraries
 add_library(vkbootstrap STATIC)
-#add_library(vma INTERFACE)
 add_library(stb STATIC)
 add_library(imgui STATIC)
 
@@ -36,3 +35,5 @@ target_sources(imgui PRIVATE
         imgui/imgui_impl_glfw.h
         imgui/imgui_impl_glfw.cpp)
 target_include_directories(imgui INTERFACE imgui)
+
+add_subdirectory(KTX-Software)

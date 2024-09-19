@@ -235,11 +235,11 @@ namespace SerialTypes{
         };
 
         /** @brief Serializable mesh */
-        template<bool Skinned>
+        template<VktTypes::GPU::VertexType vType>
         struct MeshAsset{
             SerialTypes::Span<uint32_t,MeshSurface,true> surfaces;
             SerialTypes::Span<uint32_t,uint32_t,true> indices;
-            SerialTypes::Span<uint32_t,VktTypes::GPU::Vertex<Skinned>,true> vertices;
+            SerialTypes::Span<uint32_t,VktTypes::GPU::Vertex<vType>,true> vertices;
         };
 
         /** @brief Serializable image */

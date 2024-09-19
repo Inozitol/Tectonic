@@ -68,19 +68,12 @@ public:
         m_cursorPressed = true;
     }};
 
-    /**
-     * @brief Toggles between debug rendering mode
-     */
-    Slot<> slt_toggleDebug{[this]() {
-        m_debugEnabled = !m_debugEnabled;
-    }};
-
 private:
     EngineCore();
     ~EngineCore();
 
     VktCore &m_vktCore = VktCore::getInstance();
-    std::unordered_map<VktCore::objectID_t, VktCore::EngineObject *> m_objects;
+    std::unordered_map<VktCore::objectID_t, VktCore::EngineObject*> m_objects;
 
     static void initGLFW();
     void initKeyGroups();

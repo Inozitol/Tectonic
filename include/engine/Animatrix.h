@@ -1,4 +1,5 @@
 #pragma once
+
 #include "model/Model.h"
 #include <regex>
 
@@ -34,17 +35,36 @@ public:
 
     Model* model() const;
 
+    std::unordered_map<BodyPart, VktTypes::PointMesh> debugJointLines;
+    std::unordered_map<BodyPart, VktTypes::PointMesh> debugJointBasis;
+
 private:
     bool loadArmature();
     void updateDistances();
 
+    void pullBodyPart(BodyPart bodyPart, const glm::vec3& dest);
+    void cascadeChange(BodyPart bodyPart, bool fromRoot);
+    void updateDebug();
+
     struct JointInfo {
+        /** The distance from this joint to the next out-going joint */
         float distance;
+
         ModelTypes::NodeID_t nodeID;
         uint32_t jointID;
 
         glm::vec3 position;
         glm::vec3 direction;
+
+        struct Basis {
+            glm::vec3 x;
+            glm::vec3 y;
+            glm::vec3 z;
+        } basis;
+
+        void applyTransformation(Model* model, const glm::mat4& t) const;
+        void setPosition(Model* model, const glm::vec3& p);
+        void setDirection(Model* model, const glm::vec3& d);
     };
 
     // End of limb is at start of vectors
@@ -57,7 +77,7 @@ private:
             {BodyPart::RARM, {}},
     };
 
-    Model* m_model;
+    Model* m_model = nullptr;
     bool m_isLoaded = false;
 
     static inline const std::regex m_skinNodeRegex = std::regex(R"~(^(spine|leg|arm|head)\.(\d{3})(?:\.([RL]))?$)~");

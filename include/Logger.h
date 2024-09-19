@@ -1,6 +1,8 @@
 #ifndef TECTONIC_LOGGER_H
 #define TECTONIC_LOGGER_H
 
+#undef DEBUG
+
 #include <string>
 #include <iostream>
 #include <chrono>

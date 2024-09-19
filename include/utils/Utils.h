@@ -138,6 +138,9 @@ namespace Utils {
      */
     glm::vec3 interpolateBetween(glm::vec3 pos1, glm::vec3 pos2, float delta);
 
+    glm::vec3 closestOrthonormal(const glm::vec3& base, const glm::vec3& target);
+
+    bool isRightHanded(const glm::vec3& x, const glm::vec3& y, const glm::vec3& z);
     /*
     class Frustum{
     public:

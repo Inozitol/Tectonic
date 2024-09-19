@@ -34,12 +34,18 @@ void VktCore::clear() {
     if(m_isInitialized) {
         vkDeviceWaitIdle(VktCache::vkDevice);
 
-        for(auto &[k, object]: loadedObjects) {
+        for(auto &[id, object]: loadedObjects) {
             delete(object.model);
         }
 
         for(auto &[id, layout]: VktCache::getAllLayouts()) {
             vkDestroyDescriptorSetLayout(VktCache::vkDevice, layout, nullptr);
+        }
+
+        // TODO This should have the possiblity to be cleared by engine at runtime
+        for(auto& [id, line]: debugLines) {
+            VktBuffers::destroy(line->meshBuffers.indexBuffer);
+            VktBuffers::destroy(line->meshBuffers.vertexBuffer);
         }
 
         m_skybox.clear();
@@ -101,6 +107,10 @@ void VktCore::initVulkan() {
     m_logger(Logger::DEBUG) << "Enabling geometry shader feature\n";
     features.geometryShader = true;
 
+    // Enabling line fill mode for debugging tools
+    m_logger(Logger::DEBUG) << "Enabling fillModeNonSolid feature\n";
+    features.fillModeNonSolid = true;
+
     VkPhysicalDeviceVulkan13Features features13{};
 
     m_logger(Logger::DEBUG) << "Enabling dynamicRendering feature\n";
@@ -110,7 +120,7 @@ void VktCore::initVulkan() {
     features13.synchronization2 = true;
 
     m_logger(Logger::DEBUG) << "Enabling maintenance4 feature\n";
-    features13.maintenance4 = true; // TODO remove this, used to keep performance warning quiet
+    features13.maintenance4 = true;// TODO remove this, used to keep performance warning quiet
 
     VkPhysicalDeviceVulkan12Features features12{};
 
@@ -339,9 +349,13 @@ void VktCore::draw() {
     VktSkybox::draw(cmd, sceneDescriptorSet);
     //drawSkybox(cmd, sceneDescriptorSet);
     drawGeometry(cmd, sceneDescriptorSet);
-    if(m_debugConf.enableDebugPipeline) {
-        drawDebug(cmd, sceneDescriptorSet);
+    if(m_debugConf.enableDebugNormals) {
+        drawDebugNormals(cmd, sceneDescriptorSet);
     }
+    if(m_debugConf.enableDebugVectors) {
+        drawDebugLines(cmd, sceneDescriptorSet);
+    }
+
 
     vkCmdEndRendering(cmd);
 
@@ -448,7 +462,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorS
     }
 }
 
-void VktCore::drawDebug(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
+void VktCore::drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
     auto draw = [&](const VktTypes::RenderObject &renderObject) {
         m_stats.drawCallCount++;
         m_stats.trigDrawCount += renderObject.indexCount / 3;
@@ -500,6 +514,38 @@ void VktCore::drawDebug(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet)
 
     for(const VktTypes::RenderObject &renderObject: m_mainDrawContext.transparentSurfaces) {
         draw(renderObject);
+    }
+}
+
+void VktCore::drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
+
+    for(auto &[id, line]: debugLines) {
+        if(line->meshBuffers.vertexBufferAddress == 0) {
+            line->meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(line->indices, line->vertices);
+        }else{
+            uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(line->meshBuffers, line->indices, line->vertices);
+        }
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_lineStripDebugPipeline.pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_lineStripDebugPipeline.layout,
+                            0, 1,
+                            &sceneDescriptorSet, 0,
+                            nullptr);
+
+        VkViewport viewport = VktStructs::viewport(VktCache::drawExtent);
+        VkRect2D scissors = VktStructs::scissors(VktCache::drawExtent);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+        vkCmdBindIndexBuffer(cmd, line->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.worldMatrix = glm::identity<glm::mat4>();
+        pushConstants.vertexBuffer = line->meshBuffers.vertexBufferAddress;
+        vkCmdPushConstants(cmd, m_lineStripDebugPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+        vkCmdDrawIndexed(cmd, line->indices.size(), 1, 0, 0, 0);
+        //vkCmdDraw(cmd, line->vertices.size(), 1, 0, 0);
     }
 }
 
@@ -561,7 +607,7 @@ void VktCore::initDescriptors() {
 
 void VktCore::initPipelines() {
     initMaterialPipelines();
-    initGeometryPipeline();
+    initDebugPipeline();
     m_logger(Logger::INFO) << "Finished initializing graphics pipelines\n";
 }
 
@@ -655,64 +701,99 @@ void VktCore::initMaterialPipelines() {
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, metalRoughMaterial.skinnedTransparentPipeline.pipeline);
 }
 
-void VktCore::initGeometryPipeline() {
-    VkPushConstantRange matrixRange{};
-    matrixRange.offset = 0;
-    matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
-    matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
+void VktCore::initDebugPipeline() {
+    VkPushConstantRange normalStaticPushConstants{};
+    normalStaticPushConstants.offset = 0;
+    normalStaticPushConstants.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
+    normalStaticPushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
 
-    VkPushConstantRange skinnedMatrixRange{};
-    skinnedMatrixRange.offset = 0;
-    skinnedMatrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>);
-    skinnedMatrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
+    VkPushConstantRange normalSkinnedPushConstants{};
+    normalSkinnedPushConstants.offset = 0;
+    normalSkinnedPushConstants.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>);
+    normalSkinnedPushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT;
+
+    VkPushConstantRange linesPushConstants{};
+    linesPushConstants.offset = 0;
+    linesPushConstants.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
+    linesPushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     // Debug pipeline use scene data for mesh transformations
     const auto layouts = VktCache::getLayouts(VktCache::Layout::SCENE);
 
-    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
+    VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, normalStaticPushConstants);
 
-    VkPipelineLayout staticLayout;
+    VkPipelineLayout normalStaticLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
-                                    &staticLayout))
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, staticLayout);
+                                    &normalStaticLayout))
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, normalStaticLayout);
 
-    meshLayoutInfo.pPushConstantRanges = &skinnedMatrixRange;
+    meshLayoutInfo.pPushConstantRanges = &normalSkinnedPushConstants;
 
-    VkPipelineLayout skinnedLayout;
+    VkPipelineLayout normalSkinnedLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
-                                    &skinnedLayout))
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, skinnedLayout);
+                                    &normalSkinnedLayout))
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, normalSkinnedLayout);
 
-    m_normalsDebugStaticPipeline.layout = staticLayout;
-    m_normalsDebugSkinnedPipeline.layout = skinnedLayout;
+    meshLayoutInfo.pPushConstantRanges = &linesPushConstants;
 
-    VktPipelineBuilder pipelineBuilder;
-    pipelineBuilder.setVertexShader("shaders/debug/mesh.vert.spv");
-    pipelineBuilder.setFragmentShader("shaders/debug/mesh.frag.spv");
-    pipelineBuilder.setGeometryShader("shaders/debug/normal.geom.spv");
-    pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
-    pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-    pipelineBuilder.setMultisamplingNone();
-    pipelineBuilder.disableBlending();
-    pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
-    pipelineBuilder.setColorAttachmentFormat(m_drawImage.format);
-    pipelineBuilder.setDepthFormat(m_depthImage.format);
-    pipelineBuilder.setPipelineLayout(staticLayout);
+    VkPipelineLayout linesLayout;
+    VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
+                                    &meshLayoutInfo,
+                                    nullptr,
+                                    &linesLayout))
+    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, linesLayout);
 
-    m_normalsDebugStaticPipeline.pipeline = pipelineBuilder.buildPipeline();
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugStaticPipeline.pipeline);
+    m_normalsDebugStaticPipeline.layout = normalStaticLayout;
+    m_normalsDebugSkinnedPipeline.layout = normalSkinnedLayout;
+    m_lineStripDebugPipeline.layout = linesLayout;
 
-    pipelineBuilder.setVertexShader("shaders/debug/mesh_skin.vert.spv");
-    pipelineBuilder.setGeometryShader("shaders/debug/normal.geom.spv");
-    pipelineBuilder.setPipelineLayout(skinnedLayout);
+    {
+        VktPipelineBuilder pipelineBuilder;
+        pipelineBuilder.setVertexShader("shaders/debug/normal.vert.spv");
+        pipelineBuilder.setFragmentShader("shaders/debug/mesh.frag.spv");
+        pipelineBuilder.setGeometryShader("shaders/debug/normal.geom.spv");
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.disableBlending();
+        pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+        pipelineBuilder.setColorAttachmentFormat(m_drawImage.format);
+        pipelineBuilder.setDepthFormat(m_depthImage.format);
+        pipelineBuilder.setPipelineLayout(normalStaticLayout);
 
-    m_normalsDebugSkinnedPipeline.pipeline = pipelineBuilder.buildPipeline();
-    m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugSkinnedPipeline.pipeline);
+        m_normalsDebugStaticPipeline.pipeline = pipelineBuilder.buildPipeline();
+        m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugStaticPipeline.pipeline);
+
+        pipelineBuilder.setVertexShader("shaders/debug/normal_skin.vert.spv");
+        pipelineBuilder.setPipelineLayout(normalSkinnedLayout);
+
+        m_normalsDebugSkinnedPipeline.pipeline = pipelineBuilder.buildPipeline();
+        m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_normalsDebugSkinnedPipeline.pipeline);
+    }
+
+    {
+        VktPipelineBuilder pipelineBuilder;
+        pipelineBuilder.setVertexShader("shaders/debug/line.vert.spv");
+        pipelineBuilder.setFragmentShader("shaders/debug/mesh.frag.spv");
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_LINE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_LINE);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.disableBlending();
+        pipelineBuilder.enableDepthTest(true, VK_COMPARE_OP_LESS_OR_EQUAL);
+        pipelineBuilder.disableDepthTest();
+        pipelineBuilder.setColorAttachmentFormat(m_drawImage.format);
+        pipelineBuilder.setDepthFormat(m_depthImage.format);
+        pipelineBuilder.setPipelineLayout(linesLayout);
+
+        m_lineStripDebugPipeline.pipeline = pipelineBuilder.buildPipeline();
+        m_coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, m_lineStripDebugPipeline.pipeline);
+    }
 }
 
 void VktCore::initImGui() {
@@ -872,32 +953,32 @@ void VktCore::runImGui() {
     }
 
     if(ImGui::Begin("Debug")) {
-        ImGui::Checkbox("Debug pipeline", &m_debugConf.enableDebugPipeline);
-
+        ImGui::Checkbox("Debug normals", &m_debugConf.enableDebugNormals);
+        ImGui::Checkbox("Debug vectors", &m_debugConf.enableDebugVectors);
         ImGui::End();
     }
 
     ImGui::Render();
 }
 
-template VktTypes::GPU::MeshBuffers VktCore::uploadMesh<VktTypes::GPU::Skinned>(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Skinned>> vertices);
-template VktTypes::GPU::MeshBuffers VktCore::uploadMesh<VktTypes::GPU::Static>(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<VktTypes::GPU::Static>> vertices);
+template VktTypes::GPU::MeshBuffers VktCore::createPrimitivesDeviceMemory<VktTypes::GPU::VertexType::SKINNED>(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::SKINNED>> &vertices);
+template VktTypes::GPU::MeshBuffers VktCore::createPrimitivesDeviceMemory<VktTypes::GPU::VertexType::STATIC>(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::STATIC>> &vertices);
 
-template<bool S>
-VktTypes::GPU::MeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<S>> vertices) {
-    const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::GPU::Vertex<S>);
+template<VktTypes::GPU::VertexType vType>
+VktTypes::GPU::MeshBuffers VktCore::createPrimitivesDeviceMemory(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<vType>> &vertices) {
+    const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::GPU::Vertex<vType>);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
-    VktTypes::GPU::MeshBuffers newSurface{};
-    newSurface.vertexBuffer = VktBuffers::create(vertexBufferSize,
+    VktTypes::GPU::MeshBuffers newBuffers{};
+    newBuffers.vertexBuffer = VktBuffers::create(vertexBufferSize,
                                                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                                  VMA_MEMORY_USAGE_GPU_ONLY);
 
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
-    deviceAddressInfo.buffer = newSurface.vertexBuffer.buffer;
-    newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(VktCache::vkDevice, &deviceAddressInfo);
+    deviceAddressInfo.buffer = newBuffers.vertexBuffer.buffer;
+    newBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(VktCache::vkDevice, &deviceAddressInfo);
 
-    newSurface.indexBuffer = VktBuffers::create(indexBufferSize,
+    newBuffers.indexBuffer = VktBuffers::create(indexBufferSize,
                                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                                 VMA_MEMORY_USAGE_GPU_ONLY);
 
@@ -913,20 +994,64 @@ VktTypes::GPU::MeshBuffers VktCore::uploadMesh(std::span<uint32_t> indices, std:
         vertexCopy.dstOffset = 0;
         vertexCopy.size = vertexBufferSize;
 
-        vkCmdCopyBuffer(cmd, staging.buffer, newSurface.vertexBuffer.buffer, 1, &vertexCopy);
+        vkCmdCopyBuffer(cmd, staging.buffer, newBuffers.vertexBuffer.buffer, 1, &vertexCopy);
 
         VkBufferCopy indexCopy{};
         indexCopy.srcOffset = vertexBufferSize;
         indexCopy.dstOffset = 0;
         indexCopy.size = indexBufferSize;
 
-        vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
+        vkCmdCopyBuffer(cmd, staging.buffer, newBuffers.indexBuffer.buffer, 1, &indexCopy);
     });
     VktBuffers::destroy(staging);
 
-    return newSurface;
+    return newBuffers;
 }
 
+template VktTypes::GPU::MeshBuffers VktCore::createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::POINT>> &vertices);
+
+template<VktTypes::GPU::VertexType vType>
+VktTypes::GPU::MeshBuffers VktCore::createPrimitivesHostVisible(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<vType>> &vertices) {
+    const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::GPU::Vertex<vType>);
+    const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+    VktTypes::GPU::MeshBuffers newBuffers{};
+    newBuffers.vertexBuffer = VktBuffers::create(vertexBufferSize,
+                                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                                 VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
+    deviceAddressInfo.buffer = newBuffers.vertexBuffer.buffer;
+    newBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(VktCache::vkDevice, &deviceAddressInfo);
+
+    newBuffers.indexBuffer = VktBuffers::create(indexBufferSize,
+                                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    void *vertexBufferData = newBuffers.vertexBuffer.info.pMappedData;
+    memcpy(vertexBufferData, vertices.data(), vertexBufferSize);
+
+    void *indexBufferData = newBuffers.indexBuffer.info.pMappedData;
+    memcpy(indexBufferData, indices.data(), indexBufferSize);
+
+    return newBuffers;
+}
+
+template void VktCore::uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(const VktTypes::GPU::MeshBuffers &meshBuffers,
+                                                                                       std::span<uint32_t> indices,
+                                                                                       std::span<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::POINT>> vertices);
+
+template<VktTypes::GPU::VertexType vType>
+void VktCore::uploadPrimitivesToHostVisible(const VktTypes::GPU::MeshBuffers& meshBuffers, std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<vType>> vertices) {
+    const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::GPU::Vertex<vType>);
+    const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+    void *vertexBufferData = meshBuffers.vertexBuffer.info.pMappedData;
+    memcpy(vertexBufferData, vertices.data(), vertexBufferSize);
+
+    void *indexBufferData = meshBuffers.indexBuffer.info.pMappedData;
+    memcpy(indexBufferData, indices.data(), indexBufferSize);
+}
 
 VktTypes::GPU::JointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &jointMatrices) {
     const size_t jointsBufferSize = jointMatrices.size() * sizeof(glm::mat4);
@@ -946,16 +1071,16 @@ VktTypes::GPU::JointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &j
 }
 
 void VktCore::initDefaultData() {
-    std::array<u_char, 4> white = {0xFF,0xFF,0xFF,0xFF};
-    std::array<u_char, 4> black = {0x00,0x00,0x00,0x00};
-    std::array<u_char, 4> gray = {0xAA,0xAA,0xAA,0xFF};
+    std::array<u_char, 4> white = {0xFF, 0xFF, 0xFF, 0xFF};
+    std::array<u_char, 4> black = {0x00, 0x00, 0x00, 0x00};
+    std::array<u_char, 4> gray = {0xAA, 0xAA, 0xAA, 0xFF};
 
     m_whiteImage = VktImages::createDeviceMemory(VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
     m_blackImage = VktImages::createDeviceMemory(VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
     m_greyImage = VktImages::createDeviceMemory(VkExtent3D{1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
-    VktImages::copyFromRaw(m_whiteImage, 4, reinterpret_cast<char*>(white.data()));
-    VktImages::copyFromRaw(m_blackImage, 4, reinterpret_cast<char*>(black.data()));
-    VktImages::copyFromRaw(m_greyImage, 4, reinterpret_cast<char*>(gray.data()));
+    VktImages::copyFromRaw(m_whiteImage, 4, reinterpret_cast<char *>(white.data()));
+    VktImages::copyFromRaw(m_blackImage, 4, reinterpret_cast<char *>(black.data()));
+    VktImages::copyFromRaw(m_greyImage, 4, reinterpret_cast<char *>(gray.data()));
 
     uint32_t pink = 0xFF00DC;
     std::array<uint32_t, 16 * 16> pixels{};
@@ -965,7 +1090,7 @@ void VktCore::initDefaultData() {
         }
     }
     m_errorCheckboardImage = VktImages::createDeviceMemory(VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
-    VktImages::copyFromRaw(m_errorCheckboardImage, 16*16*4, reinterpret_cast<char*>(pixels.data()));
+    VktImages::copyFromRaw(m_errorCheckboardImage, 16 * 16 * 4, reinterpret_cast<char *>(pixels.data()));
 
     VkSamplerCreateInfo samplerInfo{.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr};
 
@@ -1078,17 +1203,16 @@ VktCore::EngineObject *VktCore::createObject(const std::string &name, const std:
     return &loadedObjects[freeID];
 }
 
-VktCore::EngineObject* VktCore::createObject(const std::string &name, Model* model) {
+VktCore::EngineObject *VktCore::createObject(const std::string &name, Model *model) {
     // Find free identifier
     while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
     objectID_t freeID = EngineObject::lastID++;
 
     // Create object
     loadedObjects[freeID] = EngineObject{
-        .objectID = freeID,
-        .name = name,
-        .model = model
-    };
+            .objectID = freeID,
+            .name = name,
+            .model = model};
 
     // Upload default position
     if(loadedObjects[freeID].model->isSkinned()) {

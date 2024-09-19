@@ -24,7 +24,7 @@ add_executable(Tectonic
         src/VktTypes.cpp
         src/Logger.cpp
         src/Window.cpp
-        src/utils.cpp
+        src/Utils.cpp
         src/GameCamera.cpp
         src/Camera.cpp
         src/EngineCore.cpp
@@ -44,14 +44,14 @@ add_executable(Tectonic
         include/engine/TecCache.h
 )
 
-find_library(KTX_LIB ktx)
+#find_library(KTX_LIB ktx)
 
 target_link_libraries(Tectonic glfw)
 target_link_libraries(Tectonic Vulkan::Vulkan)
 target_link_libraries(Tectonic vkbootstrap)
 target_link_libraries(Tectonic GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(Tectonic imgui)
-target_link_libraries(Tectonic ${KTX_LIB})
+target_link_libraries(Tectonic ktx)
 
 include_directories(include)
 

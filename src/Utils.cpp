@@ -1,5 +1,5 @@
 
-#include "utils/utils.h"
+#include "utils/Utils.h"
 
 #include <glm/gtx/quaternion.hpp>
 
@@ -73,6 +73,15 @@ namespace Utils{
             pos1.y + delta*(pos2.y - pos1.y),
             pos1.z + delta*(pos2.z - pos1.z)
         };
+    }
+
+    glm::vec3 closestOrthonormal(const glm::vec3& base, const glm::vec3& target) {
+        // TODO Handle colinearity case between base and target
+        return glm::normalize(glm::cross(base, glm::cross(target, base)));
+    }
+
+    bool isRightHanded(const glm::vec3& x, const glm::vec3& y, const glm::vec3& z) {
+        return glm::dot(glm::cross(x,y),z) < 0;
     }
 
 /*

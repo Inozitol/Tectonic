@@ -2,7 +2,7 @@
 
 #include <GLFW/glfw3.h>
 #include <string>
-#include <utils/utils.h>
+#include <utils/Utils.h>
 
 #include "exceptions.h"
 #include "connector/Slot.h"

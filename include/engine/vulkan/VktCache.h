@@ -2,7 +2,7 @@
 
 #include "Logger.h"
 #include "VktDescriptorUtils.h"
-#include "utils/utils.h"
+#include "utils/Utils.h"
 
 #include <unordered_map>
 #include <vk_mem_alloc.h>

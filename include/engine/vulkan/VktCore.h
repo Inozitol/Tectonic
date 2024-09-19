@@ -1,29 +1,29 @@
 #ifndef TECTONIC_VKTCORE_H
 #define TECTONIC_VKTCORE_H
 
-#include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
+#include <vulkan/vulkan.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 #include <glm/gtx/transform.hpp>
 
-#include <memory>
 #include <deque>
+#include <memory>
 
 #include "extern/vkbootstrap/VkBootstrap.h"
 
-#include <vk_mem_alloc.h>
 #include "extern/imgui/imgui.h"
-#include "extern/imgui/imgui_impl_vulkan.h"
 #include "extern/imgui/imgui_impl_glfw.h"
+#include "extern/imgui/imgui_impl_vulkan.h"
+#include <vk_mem_alloc.h>
 
 #include "Logger.h"
 #include "Transformation.h"
+#include "VktBuffers.h"
 #include "VktDeletableQueue.h"
 #include "VktDescriptorUtils.h"
-#include "VktBuffers.h"
 #include "VktImages.h"
 #include "VktInstantCommands.h"
 #include "VktPipelines.h"
@@ -38,9 +38,9 @@
 
 class VktCore {
 public:
-    VktCore(VktCore const&) = delete;
-    void operator=(VktCore const&) = delete;
-    static VktCore& getInstance();
+    VktCore(VktCore const &) = delete;
+    void operator=(VktCore const &) = delete;
+    static VktCore &getInstance();
 
     /**
      * @brief Initializes Vulkan.
@@ -54,14 +54,24 @@ public:
     void clear();
 
     /** @brief Inserts initialized Window. */
-    void setWindow(Window* window);
+    void setWindow(Window *window);
 
-    /** @brief Uploads a mesh into the created Vulkan device memory. */
-    template <bool S>
-    static VktTypes::GPU::MeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<S>> vertices);
+    /** @brief Creates MeshBuffers for the provided mesh data, uploads the primitives and returns created buffers. */
+    template<VktTypes::GPU::VertexType vType>
+    static VktTypes::GPU::MeshBuffers createPrimitivesDeviceMemory(const std::span<uint32_t>& indices, const std::span<VktTypes::GPU::Vertex<vType>>& vertices);
+
+    /** @brief Creates MeshBuffers for the provided mesh data, uploads the primitives and returns created host-visible buffers. */
+    template<VktTypes::GPU::VertexType vType>
+    static VktTypes::GPU::MeshBuffers createPrimitivesHostVisible(const std::span<uint32_t>& indices, const std::span<VktTypes::GPU::Vertex<vType>>& vertices);
+
+
+    /** @brief Uploads a primitives into the provided host-visible buffers. */
+    template<VktTypes::GPU::VertexType vType>
+    static void uploadPrimitivesToHostVisible(const VktTypes::GPU::MeshBuffers &meshBuffers, std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<vType>> vertices);
+
 
     /** @brief Uploads joint matrices */
-    static VktTypes::GPU::JointsBuffers uploadJoints(const std::span<glm::mat4>& jointMatrices);
+    static VktTypes::GPU::JointsBuffers uploadJoints(const std::span<glm::mat4> &jointMatrices);
 
     /**
      * @brief Checks if the Window inside should close.
@@ -77,8 +87,8 @@ public:
      */
     void run();
 
-    void setViewMatrix(const glm::mat4& viewMatrix);
-    void setProjMatrix(const glm::mat4& projMatrix);
+    void setViewMatrix(const glm::mat4 &viewMatrix);
+    void setProjMatrix(const glm::mat4 &projMatrix);
 
     /**
      * @brief Returns current VkDevice (if initialized).
@@ -96,8 +106,8 @@ public:
     static constexpr uint8_t FRAMES_OVERLAP = 2;
 
     VktTypes::MaterialInstance writeMaterial(VktTypes::MaterialPass pass,
-                                             const VktTypes::GLTFMetallicRoughness::MaterialResources& resources,
-                                             DescriptorAllocatorDynamic& descriptorAllocator,
+                                             const VktTypes::GLTFMetallicRoughness::MaterialResources &resources,
+                                             DescriptorAllocatorDynamic &descriptorAllocator,
                                              bool isSkinned);
 
 
@@ -106,21 +116,21 @@ public:
     /**
      * @brief Represents a objects created from 3D model.
      */
-    struct EngineObject{
+    struct EngineObject {
         objectID_t objectID = 0;
         static objectID_t lastID;
 
         std::string name;
-        Model* model;
+        Model *model;
     };
 
-    VktCore::EngineObject* createObject(const std::string& name, const std::filesystem::path& filePath);
-    VktCore::EngineObject* createObject(const std::string& name, Model* model);
+    VktCore::EngineObject *createObject(const std::string &name, const std::filesystem::path &filePath);
+    VktCore::EngineObject *createObject(const std::string &name, Model *model);
 
     /**
      * @brief Stores performance measurements
      */
-    struct PerfStats{
+    struct PerfStats {
         float frametime = 0.0f;
         uint32_t trigDrawCount = 0;
         uint32_t drawCallCount = 0;
@@ -131,8 +141,9 @@ public:
     /**
      * @brief Various configurations to enable debugging information in pipeline
      */
-    struct DebugConfig{
-        bool enableDebugPipeline = false;
+    struct DebugConfig {
+        bool enableDebugNormals = false;
+        bool enableDebugVectors = false;
     };
 
     // TODO REMOVE LATER
@@ -147,6 +158,8 @@ public:
 
     std::unordered_map<objectID_t, EngineObject> loadedObjects;
 
+    std::unordered_map<uint32_t, VktTypes::PointMesh *> debugLines;
+
 private:
     VktCore() = default;
     ~VktCore();
@@ -157,7 +170,7 @@ private:
     void initSyncStructs();
     void initDescriptors();
     void initPipelines();
-    void initGeometryPipeline();
+    void initDebugPipeline();
     void initMaterialPipelines();
     void initImGui();
     void initDefaultData();
@@ -165,7 +178,7 @@ private:
     void createSwapchain(uint32_t width, uint32_t height);
     void destroySwapchain();
 
-    VktTypes::FrameData& getCurrentFrame();
+    VktTypes::FrameData &getCurrentFrame();
 
     void runImGui();
 
@@ -173,12 +186,13 @@ private:
 
     void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
     void drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
-    void drawDebug(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
+    void drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
+    void drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
 
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                   VkDebugUtilsMessageTypeFlagsEXT type,
-                                  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-                                  void* pUserData);
+                                  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                                  void *pUserData);
 
     void resizeSwapchain();
     void updateScene();
@@ -190,7 +204,7 @@ private:
 
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
     VkExtent2D m_windowExtent = {.width = 0, .height = 0};
-    Window* m_window = nullptr;
+    Window *m_window = nullptr;
 
     VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
     VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
@@ -219,6 +233,8 @@ private:
 
     VktTypes::ModelPipeline m_normalsDebugStaticPipeline;
     VktTypes::ModelPipeline m_normalsDebugSkinnedPipeline;
+    VktTypes::ModelPipeline m_lineStripDebugPipeline;
+
 
     glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
     glm::mat4 m_projMatrix = glm::identity<glm::mat4>();
@@ -229,4 +245,4 @@ private:
     Logger m_logger = Logger("VktCore");
 };
 
-#endif //TECTONIC_VKTCORE_H
+#endif//TECTONIC_VKTCORE_H
