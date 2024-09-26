@@ -19,7 +19,7 @@
 #include "model/AssimpLoader.h"
 
 constexpr float g_roughness = 0.95;
-constexpr uint32_t g_size = 1009;
+constexpr uint32_t g_size = 300;
 
 Cursor g_cursor;
 Keyboard g_keyboard;
@@ -77,9 +77,9 @@ void redoTerrain(){
     g_terrain->generateMidpoint(g_size, g_roughness, {
             "terrain/textures/rock.png",
             "terrain/textures/dry.png",
-            "terrain/textures/grass_dark.png",
+            "terrain/textures/grass_light.png",
             "terrain/textures/snow.jpg"});
-    g_boneScene.getGameCamera()->setPosition({0.0, g_terrain->hMapLCoord(g_terrain->getCenterCoords()), 0.0});
+    //g_boneScene.getGameCamera()->setPosition({0.0, g_terrain->hMapLCoord(g_terrain->getCenterCoords()), 0.0});
 }
 
 Slot<> g_slt_redoTerrain{[](){ redoTerrain(); }};
@@ -182,7 +182,7 @@ void initScenes(){
     g_terrain->generateMidpoint(g_size, g_roughness, {
         "terrain/textures/rock.png",
         "terrain/textures/dry.png",
-        "terrain/textures/grass_dark.png",
+        "terrain/textures/grass_light.png",
         "terrain/textures/snow.jpg"});
     //g_terrain->generateFlat(g_size, g_size, "terrain/textures/grass.png");
     g_terrain->setCamera(*gameCamera);

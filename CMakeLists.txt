@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 
+add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
+
 find_package(glfw3 3.3 REQUIRED)
 find_package(OpenGL REQUIRED)
 
