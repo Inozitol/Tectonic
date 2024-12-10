@@ -6,8 +6,7 @@
 #include <vulkan/vulkan.h>
 #include "VktUtils.h"
 
-class VktPipelineBuilder{
-public:
+struct VktPipelineBuilder{
     explicit VktPipelineBuilder();
     ~VktPipelineBuilder();
     void clear();
@@ -29,18 +28,18 @@ public:
     void enableBlendingAlpha();
     void disableBlending();
     void disableDepthTest();
-private:
-    std::unordered_map<VkShaderStageFlagBits, VkShaderModule> m_shaderStages;
 
-    VkPipelineInputAssemblyStateCreateInfo m_inputAssembly{};
-    VkPipelineRasterizationStateCreateInfo m_rasterizer{};
-    VkPipelineColorBlendAttachmentState m_colorBlendAttachment{};
-    VkPipelineMultisampleStateCreateInfo m_multisampling{};
-    VkPipelineDepthStencilStateCreateInfo m_depthStencil{};
-    VkPipelineRenderingCreateInfo m_renderInfo{};
-    VkFormat m_colorAttachmentFormat{};
+    std::unordered_map<VkShaderStageFlagBits, VkShaderModule> shaderStages;
 
-    VkPipelineLayout m_layout{};
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    VkPipelineRenderingCreateInfo renderInfo{};
+    VkFormat colorAttachmentFormat{};
+
+    VkPipelineLayout layout{};
 };
 
 #endif //TECTONIC_VKTPIPELINES_H

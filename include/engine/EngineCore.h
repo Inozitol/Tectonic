@@ -81,51 +81,8 @@ private:
     void initCursor();
     void initGameCamera();
 
-    /*
-    using meshQueue_t = std::vector<std::pair<const Material*, std::vector<Drawable>>>;
-    using vaoQueue_t = std::unordered_map<GLuint, meshQueue_t>;
-
-    using skinnedMeshQueue_t = std::vector<std::pair<std::pair<const Material*,boneTransfoms_t>, std::vector<SkinnedDrawable>>>;
-    using skinnedVaoQueue_t = std::unordered_map<GLuint, skinnedMeshQueue_t>;
-
-    vaoQueue_t m_drawQueue;
-    skinnedVaoQueue_t m_skinnedDrawQueue;
-    std::shared_ptr<Terrain> m_terrain;
-    std::shared_ptr<Skybox> m_skybox;
-
-    static void initGL();
-    void initShaders();
-
-    void clearRender() const;
-
-    void lightingPass(const meshQueue_t& queue);
-    void shadowPass(const meshQueue_t& queue);
-    void pickingPass(const meshQueue_t& queue);
-    void debugPass(const meshQueue_t& queue);
-
-    void lightingPass(const skinnedMeshQueue_t& queue);
-    void shadowPass(const skinnedMeshQueue_t& queue);
-    void pickingPass(const skinnedMeshQueue_t& queue);
-    void debugPass(const skinnedMeshQueue_t& queue);
-
-    void renderModelLight(const Drawable& drawable);
-    void renderModelShadow(const Drawable& drawable);
-    void renderModelPicking(const Drawable& drawable);
-    void renderModelDebug(const Drawable& drawable);
-
-    void renderModelLight(const SkinnedDrawable& drawable);
-    void renderModelShadow(const SkinnedDrawable& drawable);
-    void renderModelPicking(const SkinnedDrawable& drawable);
-    void renderModelDebug(const SkinnedDrawable& drawable);
-
-    void renderTerrain();
-    void renderSkybox();
-
-    static inline void renderMesh(const MeshInfo& mesh);
-     */
-
     // TODO TMP
-    Animatrix bobAnimatrix;
+    std::unique_ptr<Animatrix> bobAnimatrix;
 
     bool m_isInitialized = false;
 
@@ -138,20 +95,12 @@ private:
 
     std::shared_ptr<GameCamera> m_gameCamera = nullptr;
 
-    /*
-    DirectionalLight* m_dirLight = nullptr;
-    std::array<SpotLight, MAX_SPOT_LIGHTS>* m_spotLights = nullptr;
-    decltype(MAX_SPOT_LIGHTS) m_spotLightsCount = 0;
-    std::array<PointLight, MAX_POINT_LIGHTS>* m_pointLights = nullptr;
-    decltype(MAX_POINT_LIGHTS) m_pointLightsCount = 0;
-    */
-
     bool m_cursorPressed = false;
     int32_t m_cursorPosX = 0, m_cursorPosY = 0;
 
     bool m_debugEnabled = false;
 
-    Logger m_logger = Logger("Renderer");
+    Logger m_logger = Logger("EngineCore");
 };
 
 #endif//TECTONIC_ENGINECORE_H

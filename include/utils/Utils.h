@@ -141,6 +141,9 @@ namespace Utils {
     glm::vec3 closestOrthonormal(const glm::vec3& base, const glm::vec3& target);
 
     bool isRightHanded(const glm::vec3& x, const glm::vec3& y, const glm::vec3& z);
+
+    float ellipse(float x, float y, float a, float b);
+
     /*
     class Frustum{
     public:

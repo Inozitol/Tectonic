@@ -58,11 +58,11 @@ public:
 
     /** @brief Creates MeshBuffers for the provided mesh data, uploads the primitives and returns created buffers. */
     template<VktTypes::GPU::VertexType vType>
-    static VktTypes::GPU::MeshBuffers createPrimitivesDeviceMemory(const std::span<uint32_t>& indices, const std::span<VktTypes::GPU::Vertex<vType>>& vertices);
+    static VktTypes::GPU::MeshBuffers createPrimitivesDeviceMemory(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<vType>> &vertices);
 
     /** @brief Creates MeshBuffers for the provided mesh data, uploads the primitives and returns created host-visible buffers. */
     template<VktTypes::GPU::VertexType vType>
-    static VktTypes::GPU::MeshBuffers createPrimitivesHostVisible(const std::span<uint32_t>& indices, const std::span<VktTypes::GPU::Vertex<vType>>& vertices);
+    static VktTypes::GPU::MeshBuffers createPrimitivesHostVisible(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<vType>> &vertices);
 
 
     /** @brief Uploads a primitives into the provided host-visible buffers. */
@@ -75,7 +75,7 @@ public:
 
     /**
      * @brief Checks if the Window inside should close.
-     * @return True if the m_window wants to close, False if not.
+     * @return True if the m_window wants to close.
      *
      * It only calls the Window::shouldClose. It would be better to check it from the actual Window,
      * or setup a signal to get the data without polling glfwWindowShouldClose.
@@ -159,6 +159,8 @@ public:
     std::unordered_map<objectID_t, EngineObject> loadedObjects;
 
     std::unordered_map<uint32_t, VktTypes::PointMesh *> debugLines;
+
+    std::unordered_map<uint32_t, std::function<void()>> imguiProcedures;
 
 private:
     VktCore() = default;

@@ -84,6 +84,10 @@ namespace Utils{
         return glm::dot(glm::cross(x,y),z) < 0;
     }
 
+    float ellipse(float x, float y, float a, float b) {
+        return (x*x)/(a*a)+(y*y)/(b*b);
+    }
+
 /*
     void Frustum::calcCorners(const Camera &camera) {
         const PerspProjInfo perspInfo = camera.getPerspectiveInfo();

@@ -5,6 +5,7 @@
 #include "engine/vulkan/VktCache.h"
 #include "extern/stb/stb_image.h"
 #include <vk_mem_alloc.h>
+#include <functional>
 
 VktCore &VktCore::getInstance() {
     static VktCore instance;
@@ -236,7 +237,7 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
     m_logger(Logger::INFO) << "Creating swapchain of dimensions: " << width << 'x' << height << '\n';
 
     vkb::SwapchainBuilder vkbSwapchainBuilder(m_physicalDevice, VktCache::vkDevice, m_surface);
-    m_swapchainImageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    m_swapchainImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     vkb::Swapchain vkbSwapchain = vkbSwapchainBuilder
                                           .set_desired_format(VkSurfaceFormatKHR{
@@ -836,10 +837,16 @@ void VktCore::initImGui() {
     initInfo.MinImageCount = 3;
     initInfo.ImageCount = 3;
     initInfo.UseDynamicRendering = true;
-    initInfo.ColorAttachmentFormat = m_swapchainImageFormat;
+    initInfo.PipelineRenderingCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext = VK_NULL_HANDLE,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &m_drawImage.format,
+        .depthAttachmentFormat = m_depthImage.format
+    };
     initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
-    ImGui_ImplVulkan_Init(&initInfo, VK_NULL_HANDLE);
+    ImGui_ImplVulkan_Init(&initInfo);
     ImGui_ImplVulkan_CreateFontsTexture();
 
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_POOL, imguiPool);
@@ -879,6 +886,10 @@ void VktCore::runImGui() {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+    for(const auto& [id,func] : imguiProcedures) {
+        func();
+    }
 
     if(ImGui::Begin("Scene")) {
         ImGui::InputFloat3("Ambient color: ", (float *) &m_sceneData.ambientColor);
