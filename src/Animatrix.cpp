@@ -10,6 +10,7 @@
 #include <cmath>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/rotate_vector.hpp>
+#include <numeric>
 #include <utils/Utils.h>
 
 Animatrix::Animatrix(Model *model) : m_model(model) {
@@ -50,16 +51,25 @@ bool Animatrix::loadArmature() {
     }
 
     // First is joint index from name string, second is JointID, third is NodeID
-    std::unordered_map<BodyPart, std::vector<std::tuple<uint32_t, uint32_t, ModelTypes::NodeID_t>>> bodyNodes{
+    /*std::unordered_map<BodyPart, std::vector<std::tuple<uint32_t, uint32_t, ModelTypes::NodeID_t>>> bodyNodes{
             {BodyPart::SPINE, {}},
             {BodyPart::HEAD, {}},
             {BodyPart::LLEG, {}},
             {BodyPart::RLEG, {}},
             {BodyPart::LARM, {}},
             {BodyPart::RARM, {}},
+    };*/
+    struct loadedJoint {
+        BodyPart bodyPart;
+        uint32_t bodyPartID;
+        uint32_t jointID;
+        uint32_t nodeID;
     };
 
     ModelTypes::Skin &skin = m_model->skin();
+    std::vector<loadedJoint> bodyJoints;
+    uint32_t numOfJoints = skin.joints.size();
+    bodyJoints.reserve(numOfJoints);
     uint32_t jointID = 0;
     for(const auto &nID: skin.joints) {
         ModelTypes::Node &skinJoint = m_model->nodes()[nID];
@@ -69,78 +79,155 @@ bool Animatrix::loadArmature() {
             return false;
         }
 
-        if(m[1] == "spine") {
-            bodyNodes[BodyPart::SPINE].emplace_back(std::stoi(m[2]), jointID++, nID);
-        } else if(m[1] == "head") {
-            bodyNodes[BodyPart::HEAD].emplace_back(std::stoi(m[2]), jointID++, nID);
-        } else if(m[1] == "leg") {
-            if(m[3] == "L") {
-                bodyNodes[BodyPart::LLEG].emplace_back(std::stoi(m[2]), jointID++, nID);
-            } else if(m[3] == "R") {
-                bodyNodes[BodyPart::RLEG].emplace_back(std::stoi(m[2]), jointID++, nID);
-            }
-        } else if(m[1] == "arm") {
-            if(m[3] == "L") {
-                bodyNodes[BodyPart::LARM].emplace_back(std::stoi(m[2]), jointID++, nID);
-            } else if(m[3] == "R") {
-                bodyNodes[BodyPart::RARM].emplace_back(std::stoi(m[2]), jointID++, nID);
-            }
+        // Switching based on first char of name
+        switch(m[1].str()[0]) {
+            case 's':// spine
+                bodyJoints.push_back(loadedJoint{
+                        .bodyPart = BODYPART_SPINE,
+                        .bodyPartID = static_cast<uint32_t>(std::stoi(m[2])),
+                        .jointID = jointID++,
+                        .nodeID = nID});
+                break;
+
+            case 'h':// head
+                bodyJoints.push_back(loadedJoint{
+                        .bodyPart = BODYPART_HEAD,
+                        .bodyPartID = static_cast<uint32_t>(std::stoi(m[2])),
+                        .jointID = jointID++,
+                        .nodeID = nID});
+                break;
+
+            case 'l':// leg
+                switch(m[3].str()[0]) {
+                    case 'L':
+                        bodyJoints.push_back(loadedJoint{
+                                .bodyPart = BODYPART_LLEG,
+                                .bodyPartID = static_cast<uint32_t>(std::stoi(m[2])),
+                                .jointID = jointID++,
+                                .nodeID = nID});
+                        break;
+                    case 'R':
+                        bodyJoints.push_back(loadedJoint{
+                                .bodyPart = BODYPART_RLEG,
+                                .bodyPartID = static_cast<uint32_t>(std::stoi(m[2])),
+                                .jointID = jointID++,
+                                .nodeID = nID});
+                        break;
+                }
+                break;
+
+            case 'a':// arm
+                switch(m[3].str()[0]) {
+                    case 'L':
+                        bodyJoints.push_back(loadedJoint{
+                                .bodyPart = BODYPART_LARM,
+                                .bodyPartID = static_cast<uint32_t>(std::stoi(m[2])),
+                                .jointID = jointID++,
+                                .nodeID = nID});
+                        break;
+                    case 'R':
+                        bodyJoints.push_back(loadedJoint{
+                                .bodyPart = BODYPART_RARM,
+                                .bodyPartID = static_cast<uint32_t>(std::stoi(m[2])),
+                                .jointID = jointID++,
+                                .nodeID = nID});
+                        break;
+                }
+                break;
         }
     }
 
-    auto comparFunc = [](const std::tuple<uint32_t, uint32_t, ModelTypes::NodeID_t> &a, const std::tuple<uint32_t, uint32_t, ModelTypes::NodeID_t> &b) {
-        return std::get<0>(a) > std::get<0>(b);
+    std::ranges::sort(bodyJoints.begin(), bodyJoints.end(), [](const loadedJoint &a, const loadedJoint &b) {
+        return a.jointID > b.jointID;
+    });
+
+    assert(std::accumulate(bodyJoints.begin(), bodyJoints.end(), 0,
+                           [](uint32_t acc, const loadedJoint &joint) { return acc + joint.jointID; }) == numOfJoints * (numOfJoints + 1) << 1);
+
+    /*
+        if(bodyNodes[BodyPart::LLEG].size() != bodyNodes[BodyPart::RLEG].size()) {
+            m_logger(Logger::WARNING) << "Model [" << m_model->path() << "] has different number of joins in legs\n";
+        }
+        if(bodyNodes[BodyPart::LARM].size() != bodyNodes[BodyPart::RARM].size()) {
+            m_logger(Logger::WARNING) << "Model [" << m_model->path() << "] has different number of joins in arms\n";
+        }
+        */
+
+    auto copyFunc = [](const loadedJoint &joint) {
+        return JointInfo{.distance = 0.0f, .nodeID = joint.nodeID, .jointID = joint.jointID, .bodyPart = joint.bodyPart, .bodyPartID = joint.bodyPartID};
     };
 
-    for(auto &[partType, partVector]: bodyNodes) {
-        std::ranges::sort(partVector.begin(), partVector.end(), comparFunc);
-    }
+    std::ranges::transform(bodyJoints.begin(), bodyJoints.end(), std::back_inserter(m_bodyJoints), copyFunc);
+    m_bodyJoints.shrink_to_fit();
 
-    if(bodyNodes[BodyPart::LLEG].size() != bodyNodes[BodyPart::RLEG].size()) {
-        m_logger(Logger::WARNING) << "Model [" << m_model->path() << "] has different number of joins in legs\n";
-    }
-    if(bodyNodes[BodyPart::LARM].size() != bodyNodes[BodyPart::RARM].size()) {
-        m_logger(Logger::WARNING) << "Model [" << m_model->path() << "] has different number of joins in arms\n";
-    }
-    auto copyFunc = [](const std::tuple<uint32_t, uint32_t, ModelTypes::NodeID_t> &joint) {
-        return JointInfo{.distance = 0.0f, .nodeID = std::get<2>(joint), .jointID = std::get<1>(joint)};
-    };
-    for(auto &[partType, partVector]: bodyNodes) {
-        std::ranges::transform(partVector.begin(), partVector.end(), std::back_inserter(m_bodyNodes[partType]), copyFunc);
-        m_bodyNodes[partType].shrink_to_fit();
-    }
-
+    loadBodyPartVectors();
+    Utils::enumSetBits( m_bodyJoints[m_bodyPartsJoints[BODYPART_SPINE].back()].flags, JointInfo::Flags::IS_ROOT);
     loadJointGeometry();
     createDebugLines();
 
     return true;
 }
 
+void Animatrix::loadBodyPartVectors() {
+    for(auto& joint : m_bodyJoints) {
+        switch(joint.bodyPart) {
+            case BODYPART_SPINE:
+                m_bodyPartsJoints[BODYPART_SPINE].push_back(joint.jointID);
+            break;
+            case BODYPART_HEAD:
+                m_bodyPartsJoints[BODYPART_HEAD].push_back(joint.jointID);
+            break;
+            case BODYPART_LLEG:
+                m_bodyPartsJoints[BODYPART_LLEG].push_back(joint.jointID);
+            break;
+            case BODYPART_RLEG:
+                m_bodyPartsJoints[BODYPART_RLEG].push_back(joint.jointID);
+            break;
+            case BODYPART_LARM:
+                m_bodyPartsJoints[BODYPART_LARM].push_back(joint.jointID);
+            break;
+            case BODYPART_RARM:
+                m_bodyPartsJoints[BODYPART_RARM].push_back(joint.jointID);
+            break;
+            default:
+                assert(false);
+        }
+    }
+
+    for(auto& jointVec : m_bodyPartsJoints) {
+        std::ranges::sort(jointVec.begin(), jointVec.end(), [this](uint32_t a, uint32_t b) {
+            return m_bodyJoints[a].bodyPartID < m_bodyJoints[b].bodyPartID;
+        });
+    }
+}
+
 void Animatrix::loadJointGeometry() {
-    auto updateFunc = [this](std::vector<JointInfo> &joints) {
-        // The position of each bone can be calculated by transforming an origin point by inverse of inverse bind transformation of that bone (this bs took me whole night)
-        joints[0].origPosition = glm::inverse(m_model->skin().inverseBindMatrices[joints[0].jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        joints[0].currPosition = joints[0].tempPosition = joints[0].origPosition;
-        joints[0].origAnimTransform = m_model->nodes()[joints[0].nodeID].animationTransform;
-        joints[0].origAnimTransformInverse = glm::inverse(joints[0].origAnimTransform);
+    auto updateFunc = [this](std::vector<uint32_t> &jointIDs) {
+        auto joints = [this, &jointIDs](uint32_t index)->JointInfo&{ return m_bodyJoints[jointIDs[index]]; };
 
-        JointInfo prevJoint = joints[0];
-        joints[0].inner = &(joints[1]);
+        // The position of each bone can be calculated by transforming an origin point by inverse of inverse bind transformation of that bone (this took me whole night)
+        joints(0).origPosition = glm::inverse(m_model->skin().inverseBindMatrices[joints(0).jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        joints(0).currPosition = joints(0).tempPosition = joints(0).origPosition;
+        joints(0).origAnimTransform = m_model->nodes()[joints(0).nodeID].animationTransform;
+        joints(0).origAnimTransformInverse = glm::inverse(joints(0).origAnimTransform);
 
-        for(size_t jointInfoIndex = 1; jointInfoIndex < joints.size(); jointInfoIndex++) {
+        JointInfo& prevJoint = joints(0);
+        joints(0).inner = joints(1).jointID;
 
-            ModelTypes::Node &currJointNode = m_model->nodes()[joints[jointInfoIndex].nodeID];
+        for(size_t jointInfoIndex = 1; jointInfoIndex < jointIDs.size(); jointInfoIndex++) {
+
+            JointInfo &currJoint = joints(jointInfoIndex);
+            ModelTypes::Node &currJointNode = m_model->nodes()[currJoint.nodeID];
             ModelTypes::Node &prevJointNode = m_model->nodes()[prevJoint.nodeID];
-            JointInfo &currJoint = joints[jointInfoIndex];
 
-            assert(prevJointNode.parent == joints[jointInfoIndex].nodeID);
+            assert(prevJointNode.parent == currJoint.nodeID);
             if(currJointNode.parent != ModelTypes::NULL_ID) {
                 currJoint.origPosition = glm::inverse(m_model->skin().inverseBindMatrices[currJoint.jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
                 currJoint.currPosition = currJoint.tempPosition = currJoint.origPosition;
                 currJoint.origAnimTransform = m_model->nodes()[currJoint.nodeID].animationTransform;
                 currJoint.origAnimTransformInverse = glm::inverse(currJoint.origAnimTransform);
                 currJoint.distance = glm::distance(currJoint.currPosition, prevJoint.currPosition);
-                currJoint.origDirection = glm::normalize(joints[jointInfoIndex - 1].currPosition - currJoint.currPosition);
+                currJoint.origDirection = glm::normalize(joints(jointInfoIndex - 1).currPosition - currJoint.currPosition);
                 currJoint.currDirection = currJoint.origDirection;
                 currJoint.tempDirection = currJoint.origDirection;
                 currJoint.origBasis.y = currJoint.origDirection;
@@ -151,41 +238,41 @@ void Animatrix::loadJointGeometry() {
                 }
                 currJoint.currBasis = currJoint.origBasis;
 
-                currJoint.outer = &(joints[jointInfoIndex - 1]);
-                currJoint.inner = jointInfoIndex < joints.size() - 1 ? &(joints[jointInfoIndex + 1]) : nullptr;
+                currJoint.outer[0] = joints(jointInfoIndex - 1).jointID;
+                currJoint.inner = jointInfoIndex < jointIDs.size() - 1 ? joints(jointInfoIndex + 1).jointID : nullptr;
             }
             prevJoint = currJoint;
         }
-        if(joints.size() > 1) {
-            joints[0].origDirection = joints[1].currDirection;
-            joints[0].currDirection = joints[0].origDirection;
-            joints[0].tempDirection = joints[0].origDirection;
-            joints[0].origBasis.y = joints[1].currDirection;
-            joints[0].origBasis.x = Utils::closestOrthonormal(joints[0].origBasis.y, Axis::POS_X);
-            joints[0].origBasis.z = glm::normalize(glm::cross(joints[0].origBasis.x, joints[0].origBasis.y));
-            if(!Utils::isRightHanded(joints[0].origBasis.x, joints[0].origBasis.y, joints[0].origBasis.z)) {
-                joints[0].origBasis.z = -joints[0].origBasis.z;
+        if(jointIDs.size() > 1) {
+            joints(0).origDirection = joints(1).currDirection;
+            joints(0).currDirection = joints(0).origDirection;
+            joints(0).tempDirection = joints(0).origDirection;
+            joints(0).origBasis.y = joints(1).currDirection;
+            joints(0).origBasis.x = Utils::closestOrthonormal(joints(0).origBasis.y, Axis::POS_X);
+            joints(0).origBasis.z = glm::normalize(glm::cross(joints(0).origBasis.x, joints(0).origBasis.y));
+            if(!Utils::isRightHanded(joints(0).origBasis.x, joints(0).origBasis.y, joints(0).origBasis.z)) {
+                joints(0).origBasis.z = -joints(0).origBasis.z;
             }
-            joints[0].currBasis = joints[0].origBasis;
+            joints(0).currBasis = joints(0).origBasis;
         }
     };
 
-    for(auto &[partType, partVector]: m_bodyNodes) {
+    for(auto &partVector: m_bodyPartsJoints) {
         updateFunc(partVector);
     }
 
     // TODO Temp modification for testing, erase this later
-    m_bodyNodes[BodyPart::RARM].back().inner = &(m_bodyNodes[BodyPart::SPINE].back());
-    m_bodyNodes[BodyPart::RARM].back().flags = Utils::enumSetBits(m_bodyNodes[BodyPart::RARM].back().flags, JointInfo::Flags::FIXED_DIR);
+    //m_bodyJoints[m_bodyPartsJoints[BODYPART_RARM].back()].inner = m_bodyJoints[m_bodyPartsJoints[BODYPART_SPINE].back()].jointID;
+    Utils::enumSetBits(m_bodyJoints[m_bodyPartsJoints[BODYPART_RARM].back()].flags, JointInfo::Flags::FIXED_DIR);
 }
 
 void Animatrix::createDebugLines() {
-    for(const auto &[bodyPart, joints]: m_bodyNodes) {
-        const std::size_t lineCount = joints.size() - 1;
+    for(std::underlying_type_t<BodyPart> bodyPartID = 0; bodyPartID < m_bodyPartsJoints.size(); bodyPartID++) {
+        const std::size_t lineCount = m_bodyPartsJoints[bodyPartID].size() - 1;
         const std::size_t indicesCount = lineCount * 2;
-        const std::size_t verticesCount = joints.size();
+        const std::size_t verticesCount = m_bodyPartsJoints[bodyPartID].size();
         if(verticesCount <= 1) continue;
-        debugJointLines[bodyPart].vertices.resize(verticesCount);
+        debugJointLines[Utils::enumVal()bodyPartID].vertices.resize(verticesCount);
         debugJointLines[bodyPart].indices.resize(indicesCount);
         for(std::size_t lineIndex = 0; lineIndex < lineCount; lineIndex++) {
             debugJointLines[bodyPart].indices[lineIndex * 2] = lineIndex;
@@ -262,11 +349,11 @@ void Animatrix::pullBodyPart(BodyPart bodyPart, const glm::vec3 &dest) {
             if(fromRoot) joints[jointIndex].tempPosition = rootPos;
             if(fromRoot && Utils::enumCheckBit(joints[jointIndex].flags, JointInfo::Flags::FIXED_DIR)) {
                 if(joints.size() > 1) {
-                    joints[jointIndex-1].tempPosition = joints[jointIndex].tempPosition + joints[jointIndex].currDirection * joints[jointIndex].distance;
-                    joints[jointIndex-1].fixTempDirection();
+                    joints[jointIndex - 1].tempPosition = joints[jointIndex].tempPosition + joints[jointIndex].currDirection * joints[jointIndex].distance;
+                    joints[jointIndex - 1].fixTempDirection();
                     joints[jointIndex].fixTempDirection();
                 }
-            }else{
+            } else {
                 joints[jointIndex].fixTempDirection();
             }
 
@@ -279,7 +366,7 @@ void Animatrix::pullBodyPart(BodyPart bodyPart, const glm::vec3 &dest) {
             joints.back().tempPosition = rootPos;
             cascadeConstraint(bodyPart, true);
             distance = glm::distance(joints.back().tempPosition, rootPos);
-        }while(distance != 0.0f);
+        } while(distance != 0.0f);
 
         for(std::size_t jointIndex = 0; jointIndex < joints.size(); jointIndex++) {
             //if(jointIndex == 0) {
@@ -317,7 +404,7 @@ void Animatrix::cascadeChange(BodyPart bodyPart, bool fromRoot) {
 
             if(Utils::enumCheckBit(innerJoint.flags, JointInfo::Flags::FIXED_DIR)) {
                 destPos = innerJoint.tempPosition + (innerJoint.currDirection * innerJoint.distance);
-            }else{
+            } else {
                 float newDistance = glm::distance(innerJoint.tempPosition, outerJoint.tempPosition);
                 if(newDistance > innerJoint.distance) {// The joint moved further away
                     float distanceDiff = newDistance - innerJoint.distance;
@@ -344,7 +431,7 @@ void Animatrix::cascadeChange(BodyPart bodyPart, bool fromRoot) {
 
             if(Utils::enumCheckBit(innerJoint.flags, JointInfo::Flags::FIXED_DIR)) {
                 destPos = outerJoint.tempPosition + ((-innerJoint.currDirection) * innerJoint.distance);
-            }else{
+            } else {
                 const float newDistance = glm::distance(innerJoint.tempPosition, outerJoint.tempPosition);
                 if(newDistance > innerJoint.distance) {// The joint moved further away
                     float distanceDiff = newDistance - innerJoint.distance;
@@ -375,14 +462,13 @@ void Animatrix::cascadeConstraint(BodyPart bodyPart, bool fromRoot) {
             m_bodyNodes[bodyPart][jointInfoIndex].applyConstraint(fromRoot);
             m_bodyNodes[bodyPart][jointInfoIndex].fixTempDirection();
         }
-    }else{
+    } else {
         for(std::size_t jointInfoIndex = 1; jointInfoIndex < m_bodyNodes[bodyPart].size(); jointInfoIndex++) {
             if(Utils::enumCheckBit(m_bodyNodes[bodyPart][jointInfoIndex - 1].flags, JointInfo::Flags::FIXED_DIR)) continue;
             m_bodyNodes[bodyPart][jointInfoIndex].applyConstraint(fromRoot);
             m_bodyNodes[bodyPart][jointInfoIndex].fixTempDirection();
         }
     }
-
 }
 
 void Animatrix::JointInfo::applyTransformation(Model *model, const glm::mat4 &t) const {
@@ -436,14 +522,14 @@ void Animatrix::JointInfo::applyConstraint(bool fromRoot) {
     if(!changed) return;
     if(fromRoot) {
         if(!changed->inner) return;
-    }else {
+    } else {
         if(!changed->outer) return;
     }
 
     glm::vec3 L1;
-    if(fromRoot){
+    if(fromRoot) {
         L1 = changed->inner->tempDirection;
-    }else{
+    } else {
         L1 = -changed->outer->tempDirection;
     }
     glm::vec3 Svec = glm::dot(this->tempPosition - changed->tempPosition, L1) * L1;
@@ -500,7 +586,7 @@ void Animatrix::JointInfo::applyConstraint(bool fromRoot) {
         float k = (a * b) / std::sqrtf(b * b * std::cosf(d) * std::cosf(d) + a * a * std::sinf(d) * std::sinf(d));
         x = k * std::cosf(d);
         y = k * std::sinf(d);
-    }else {
+    } else {
         return;
     }
 
@@ -515,23 +601,22 @@ void Animatrix::JointInfo::applyConstraint(bool fromRoot) {
         } else if(newDistance < changed->distance) {// The joint moved closer
             float distanceDiff = changed->distance - newDistance;
             destPos = Utils::interpolateBetween(changed->tempPosition, this->tempPosition, 1.0f + distanceDiff / changed->distance);
-        }else{
+        } else {
             return;
         }
-    }else{
+    } else {
         if(newDistance > this->distance) {// The joint moved further away
             float distanceDiff = newDistance - this->distance;
             destPos = Utils::interpolateBetween(this->tempPosition, changed->tempPosition, distanceDiff / newDistance);
         } else if(newDistance < this->distance) {// The joint moved closer
             float distanceDiff = this->distance - newDistance;
             destPos = Utils::interpolateBetween(changed->tempPosition, this->tempPosition, 1.0f + distanceDiff / this->distance);
-        }else {
+        } else {
             return;
         }
     }
 
     this->tempPosition = destPos;
-
 }
 
 
@@ -570,7 +655,7 @@ void Animatrix::updateDebug() {
     }
 }
 
-const char* bodyPart2string(Animatrix::BodyPart part) {
+const char *bodyPart2string(Animatrix::BodyPart part) {
     switch(part) {
         case Animatrix::BodyPart::HEAD:
             return "Head";
@@ -599,7 +684,7 @@ void Animatrix::runImGui() {
 
         ImGui::SeparatorText("Actions");
         ImGui::PushID("Actions");
-        for(auto& [id, action] : instance->actions) {
+        for(auto &[id, action]: instance->actions) {
             if(!ImGui::TreeNode(bodyPart2string(action.body))) continue;
             ImGui::DragFloat3("Position", &action.target[0]);
             ImGui::TreePop();
@@ -608,17 +693,17 @@ void Animatrix::runImGui() {
 
         ImGui::SeparatorText("Joints");
         ImGui::PushID("Joints");
-        for(auto& [bodyPart, partVector] : instance->m_bodyNodes) {
+        for(auto &[bodyPart, partVector]: instance->m_bodyNodes) {
             if(!ImGui::TreeNode(bodyPart2string(bodyPart))) continue;
-            for(auto& joint : partVector) {
+            for(auto &joint: partVector) {
                 if(!ImGui::TreeNode(std::to_string(joint.jointID).c_str())) continue;
                 ImGui::Text("Distance: %f", joint.distance);
-                ImGui::Text("Current position: %f,%f,%f", joint.currPosition.x,joint.currPosition.y,joint.currPosition.z);
-                ImGui::Text("Temporary position: %f,%f,%f", joint.tempPosition.x,joint.tempPosition.y,joint.tempPosition.z);
-                ImGui::Text("Original position: %f,%f,%f", joint.origPosition.x,joint.origPosition.y,joint.origPosition.z);
-                ImGui::Text("Current direction: %f,%f,%f", joint.currDirection.x,joint.currDirection.y,joint.currDirection.z);
-                ImGui::Text("Temporary direction: %f,%f,%f", joint.tempDirection.x,joint.tempDirection.y,joint.tempDirection.z);
-                ImGui::Text("Original direction: %f,%f,%f", joint.origDirection.x,joint.origDirection.y,joint.origDirection.z);
+                ImGui::Text("Current position: %f,%f,%f", joint.currPosition.x, joint.currPosition.y, joint.currPosition.z);
+                ImGui::Text("Temporary position: %f,%f,%f", joint.tempPosition.x, joint.tempPosition.y, joint.tempPosition.z);
+                ImGui::Text("Original position: %f,%f,%f", joint.origPosition.x, joint.origPosition.y, joint.origPosition.z);
+                ImGui::Text("Current direction: %f,%f,%f", joint.currDirection.x, joint.currDirection.y, joint.currDirection.z);
+                ImGui::Text("Temporary direction: %f,%f,%f", joint.tempDirection.x, joint.tempDirection.y, joint.tempDirection.z);
+                ImGui::Text("Original direction: %f,%f,%f", joint.origDirection.x, joint.origDirection.y, joint.origDirection.z);
                 glm::vec4 degConstraint = glm::degrees(joint.angleConstraints);
                 if(ImGui::DragFloat4("Constraints", &degConstraint[0])) {
                     joint.angleConstraints = glm::radians(degConstraint);

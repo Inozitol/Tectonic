@@ -72,22 +72,28 @@ namespace Utils {
         return static_cast<typename std::underlying_type_t<E>>(val);
     }
 
+    /*
     template<typename E>
     E enumVal(E const val) {
         return val;
     }
+    */
+
+    template<typename E>
+    E enumFromVal(E const val) {
+        return val;
+    }
+
 
     /**
      * Sets bits present in val into current and returns a new value.
      * @tparam T1 Numeric or Enum type
-     * @tparam T2 Numeric or Enum type
-     * @param val Bits to add
      * @param current Current bits
-     * @return Current with new bits
+     * @param bits Bits to add
      */
-    template<typename T1, typename T2>
-    T2 enumSetBits(const T1 val, const T2 current) {
-        return static_cast<T2>((enumVal(val) | enumVal(current)));
+    template<typename T1>
+    void enumSetBits(T1 current, T1 bits) {
+        current = enumVal(bits) | enumVal(current);
     }
 
     /** Checks whether a bit of underlying enum value in comp is present in val */

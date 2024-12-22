@@ -119,6 +119,14 @@ EngineCore::EngineCore() {
     action.target = {-3.0f, 1.0f, 0.0f};
     bobAnimatrix->actions.emplace(2, action);
 
+    action.body = Animatrix::BodyPart::LLEG;
+    action.target = {0.0f, -5.0f, 0.0f};
+    bobAnimatrix->actions.emplace(3, action);
+
+    action.body = Animatrix::BodyPart::RLEG;
+    action.target = {0.0f, -5.0f, 0.0f};
+    bobAnimatrix->actions.emplace(4, action);
+
     //action.body = Animatrix::BodyPart::RLEG;
     //action.target = {0.0f, -2.0f, 0.0f};
     //bobAnimatrix.actions.emplace(3,action);

@@ -1,8 +1,10 @@
 #pragma once
 
+#include "defs/ConfigDefs.h"
 #include "model/Model.h"
 #include <regex>
 #include <set>
+#include <utils/Utils.h>
 
 class Animatrix {
 public:
@@ -16,13 +18,14 @@ public:
         PULLING
     };
 
-    enum class BodyPart : uint8_t {
-        SPINE,
-        HEAD,
-        LLEG,
-        RLEG,
-        LARM,
-        RARM
+    enum BodyPart : uint8_t {
+        BODYPART_SPINE,
+        BODYPART_HEAD,
+        BODYPART_LLEG,
+        BODYPART_RLEG,
+        BODYPART_LARM,
+        BODYPART_RARM,
+        BODYPART_MAX
     };
 
     struct Action {
@@ -44,6 +47,7 @@ public:
 
 private:
     bool loadArmature();
+    void loadBodyPartVectors();
     void loadJointGeometry();
     void createDebugLines();
 
@@ -103,16 +107,19 @@ private:
         enum class Flags {
             NO_FLAG = 0,
 
-            /** Fixes the joint direction */
-            FIXED_POS = 1 << 0,
+            /** Sets the joint as root */
+            IS_ROOT = 1 << 0,
 
             /** Fixes the joint position */
             FIXED_DIR = 1 << 1
         };
         Flags flags = Flags::NO_FLAG;
 
-        JointInfo* inner = nullptr;
-        JointInfo* outer = nullptr;
+        uint32_t inner;
+        std::array<uint32_t, ANIMATRIX_MAX_CHILD_JOINTS> outer;
+
+        BodyPart bodyPart;
+        uint32_t bodyPartID;
 
         void applyTransformation(Model* model, const glm::mat4& t) const;
         void setTransformation(Model* model, const glm::mat4& t) const;
@@ -126,14 +133,8 @@ private:
 
 
     // End of limb is at start of vectors
-    std::unordered_map<BodyPart, std::vector<JointInfo>> m_bodyNodes{
-            {BodyPart::SPINE, {}},
-            {BodyPart::HEAD, {}},
-            {BodyPart::LLEG, {}},
-            {BodyPart::RLEG, {}},
-            {BodyPart::LARM, {}},
-            {BodyPart::RARM, {}},
-    };
+    std::vector<JointInfo> m_bodyJoints;
+    std::array<std::vector<uint32_t>, BODYPART_MAX> m_bodyPartsJoints;
 
     Model* m_model = nullptr;
 
