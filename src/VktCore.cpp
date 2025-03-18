@@ -2,21 +2,19 @@
 #include "engine/vulkan/VktCore.h"
 #define VMA_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
+#include "engine/GlobalMemory.h"
+#include "engine/ImGuiHandler.h"
 #include "engine/vulkan/VktCache.h"
 #include "extern/stb/stb_image.h"
-#include <vk_mem_alloc.h>
 #include <functional>
-
-VktCore &VktCore::getInstance() {
-    static VktCore instance;
-    return instance;
-}
+#include <vk_mem_alloc.h>
+#include "World.h"
 
 void VktCore::init() {
-    assert(m_window != nullptr);
 
-    m_logger(Logger::INFO) << "Initializing VktCore\n";
+    LOG(LOG_INFO, "Initializing VktCore");
 
+    setExtentDimensions();
     initVulkan();
     initSwapchain();
     initCommands();
@@ -25,7 +23,7 @@ void VktCore::init() {
     initPipelines();
     initImGui();
     VktInstantCommands::init(m_graphicsQueueFamily, m_graphicsQueue);
-    ktxVulkanDeviceInfo_Construct(&VktCache::ktxInfo, m_physicalDevice, VktCache::vkDevice, m_graphicsQueue, VktInstantCommands::vkCmdPool, nullptr);
+    ktxVulkanDeviceInfo_Construct(&VktCachePtr->ktxInfo, VktCachePtr->vkPhysicalDevice, VktCachePtr->vkDevice, m_graphicsQueue, VktInstantCommands::vkCmdPool, nullptr);
     initDefaultData();
 
     m_isInitialized = true;
@@ -33,23 +31,19 @@ void VktCore::init() {
 
 void VktCore::clear() {
     if(m_isInitialized) {
-        vkDeviceWaitIdle(VktCache::vkDevice);
-
         for(auto &[id, object]: loadedObjects) {
             delete(object.model);
         }
 
-        for(auto &[id, layout]: VktCache::getAllLayouts()) {
-            vkDestroyDescriptorSetLayout(VktCache::vkDevice, layout, nullptr);
+        for(auto &[id, layout]: VktCachePtr->getAllLayouts()) {
+            vkDestroyDescriptorSetLayout(VktCachePtr->vkDevice, layout, nullptr);
         }
 
         // TODO This should have the possiblity to be cleared by engine at runtime
-        for(auto& [id, line]: debugLines) {
+        for(auto &[id, line]: m_debugLines) {
             VktBuffers::destroy(line->meshBuffers.indexBuffer);
             VktBuffers::destroy(line->meshBuffers.vertexBuffer);
         }
-
-        m_skybox.clear();
 
         VktImages::destroy(m_whiteImage);
         VktImages::destroy(m_blackImage);
@@ -63,21 +57,21 @@ void VktCore::clear() {
         ImGui::DestroyContext();
 
         m_coreDeletionQueue.flush();
-        VktCache::descriptorAllocator.destroyPool();
+        VktCachePtr->descriptorAllocator.destroyPool();
 
         for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
-            vkDestroyCommandPool(VktCache::vkDevice, m_frames[i].commandPool, nullptr);
-            vkDestroyFence(VktCache::vkDevice, m_frames[i].renderFence, nullptr);
-            vkDestroySemaphore(VktCache::vkDevice, m_frames[i].renderSemaphore, nullptr);
-            vkDestroySemaphore(VktCache::vkDevice, m_frames[i].swapchainSemaphore, nullptr);
+            vkDestroyCommandPool(VktCachePtr->vkDevice, m_frames[i].commandPool, nullptr);
+            vkDestroyFence(VktCachePtr->vkDevice, m_frames[i].renderFence, nullptr);
+            vkDestroySemaphore(VktCachePtr->vkDevice, m_frames[i].renderSemaphore, nullptr);
+            vkDestroySemaphore(VktCachePtr->vkDevice, m_frames[i].swapchainSemaphore, nullptr);
         }
 
         destroySwapchain();
 
-        vkDestroySurfaceKHR(VktCache::vkInstance, m_surface, nullptr);
-        vkDestroyDevice(VktCache::vkDevice, nullptr);
+        vkDestroySurfaceKHR(VktCachePtr->vkInstance, m_surface, nullptr);
+        vkDestroyDevice(VktCachePtr->vkDevice, nullptr);
 
-        vkDestroyInstance(VktCache::vkInstance, nullptr);
+        vkDestroyInstance(VktCachePtr->vkInstance, nullptr);
 
         m_isInitialized = false;
     }
@@ -95,79 +89,88 @@ void VktCore::initVulkan() {
                             .require_api_version(1, 3, 0)
                             .build();
 
-    m_logger(Logger::INFO) << "Finished building vkbInstance\n";
+    LOG(LOG_INFO, "Finished building vkbInstance");
 
     vkb::Instance vkbInstance = instance.value();
 
-    VktCache::vkInstance = vkbInstance.instance;
-    m_surface = m_window->createWindowSurface(VktCache::vkInstance);
+    VktCachePtr->vkInstance = vkbInstance.instance;
+    m_surface = WindowPtr->createWindowSurface(VktCachePtr->vkInstance);
 
     VkPhysicalDeviceFeatures features{};
 
     // Enabling geometry shader for debugging tools
-    m_logger(Logger::DEBUG) << "Enabling geometry shader feature\n";
+    LOG(LOG_DEBUG, "Enabling geometry shader feature");
     features.geometryShader = true;
 
     // Enabling line fill mode for debugging tools
-    m_logger(Logger::DEBUG) << "Enabling fillModeNonSolid feature\n";
+    LOG(LOG_DEBUG, "Enabling fillModeNonSolid feature");
     features.fillModeNonSolid = true;
 
     VkPhysicalDeviceVulkan13Features features13{};
 
-    m_logger(Logger::DEBUG) << "Enabling dynamicRendering feature\n";
+    LOG(LOG_DEBUG, "Enabling dynamicRendering feature");
     features13.dynamicRendering = true;
 
-    m_logger(Logger::DEBUG) << "Enabling synchronization2 feature\n";
+    LOG(LOG_DEBUG, "Enabling synchronization2 feature");
     features13.synchronization2 = true;
 
-    m_logger(Logger::DEBUG) << "Enabling maintenance4 feature\n";
+    LOG(LOG_DEBUG, "Enabling maintenance4 feature");
     features13.maintenance4 = true;// TODO remove this, used to keep performance warning quiet
 
     VkPhysicalDeviceVulkan12Features features12{};
 
-    m_logger(Logger::DEBUG) << "Enabling bufferDeviceAddress feature\n";
+    LOG(LOG_DEBUG, "Enabling bufferDeviceAddress feature");
     features12.bufferDeviceAddress = true;
 
-    m_logger(Logger::DEBUG) << "Enabling descriptorIndexing feature\n";
+    LOG(LOG_DEBUG, "Enabling descriptorIndexing feature");
     features12.descriptorIndexing = true;
 
+    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dynamicFeatures3{};
+
+    LOG(LOG_DEBUG, "Enabling extendedDynamicState3PolygonMode feature");
+
+    dynamicFeatures3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    dynamicFeatures3.pNext = VK_NULL_HANDLE;
+    dynamicFeatures3.extendedDynamicState3PolygonMode = VK_TRUE;
+
     vkb::PhysicalDeviceSelector vkbSelector{vkbInstance};
-    vkb::PhysicalDevice vkbPhysicalDevice = vkbSelector
-                                                    .set_minimum_version(1, 3)
-                                                    .add_required_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME)
-                                                    .set_required_features_13(features13)
-                                                    .set_required_features_12(features12)
-                                                    .set_required_features(features)
-                                                    .set_surface(m_surface)
-                                                    .select()
-                                                    .value();
+    vkb::PhysicalDevice vkbPhysicalDevice =
+        vkbSelector.set_minimum_version(1, 3)
+                    .add_required_extension_features(dynamicFeatures3)
+                    .add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME)
+                    .add_required_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME)
+                    .set_required_features_13(features13)
+                    .set_required_features_12(features12)
+                    .set_required_features(features)
+                    .set_surface(m_surface)
+                    .select()
+                    .value();
 
     vkb::DeviceBuilder vkbDeviceBuilder{vkbPhysicalDevice};
     vkb::Device vkbDevice = vkbDeviceBuilder.build().value();
 
-    m_logger(Logger::INFO) << "Found physical device: " << vkbDevice.physical_device.name << '\n';
+    LOG(LOG_INFO, "Found physical device: " << vkbDevice.physical_device.name);
 
-    VktCache::vkDevice = vkbDevice.device;// Caching device to be used globablly
-    m_physicalDevice = vkbPhysicalDevice.physical_device;
-
+    VktCachePtr->vkDevice = vkbDevice.device;// Caching device to be used globablly
+    VktCachePtr->vkPhysicalDevice = vkbPhysicalDevice.physical_device;
 
     m_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
     m_graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
     VmaAllocatorCreateInfo allocatorInfo{};
-    allocatorInfo.physicalDevice = m_physicalDevice;
-    allocatorInfo.device = VktCache::vkDevice;
-    allocatorInfo.instance = VktCache::vkInstance;
+    allocatorInfo.physicalDevice = VktCachePtr->vkPhysicalDevice;
+    allocatorInfo.device = VktCachePtr->vkDevice;
+    allocatorInfo.instance = VktCachePtr->vkInstance;
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_3;
-    vmaCreateAllocator(&allocatorInfo, &VktCache::vmaAllocator);// Caching allocator to be used globally
+    vmaCreateAllocator(&allocatorInfo, &VktCachePtr->vmaAllocator);// Caching allocator to be used globally
 
-    m_logger(Logger::INFO) << "Finished creating vmaAllocator\n";
+    LOG(LOG_INFO, "Finished creating vmaAllocator");
 
-    m_coreDeletionQueue.pushDeletable(DeletableType::VMA_ALLOCATOR, VktCache::vmaAllocator);
+    m_coreDeletionQueue.pushDeletable(DeletableType::VMA_ALLOCATOR, VktCachePtr->vmaAllocator);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_DEBUG_UTILS_MESSENGER, vkbInstance.debug_messenger);
 
-    m_logger(Logger::INFO) << "Finished initializing Vulkan device\n";
+    LOG(LOG_INFO, "Finished initializing Vulkan device");
 }
 
 void VktCore::initSwapchain() {
@@ -190,33 +193,33 @@ void VktCore::initSwapchain() {
     m_drawImage = VktImages::createDeviceMemory(drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageFlags).value();
     m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &m_drawImage);
 
-    m_logger(Logger::INFO) << "Finished creating draw image with format: "
-                           << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
-                           << " and extent dimensions: "
-                           << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
+    LOG(LOG_INFO, "Finished creating draw image with format: "
+                          << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
+                          << " and extent dimensions: "
+                          << drawImageExtent.width << 'x' << drawImageExtent.height);
 
     // Create depth image
     m_depthImage = VktImages::createDeviceMemory(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageFlags).value();
     m_coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &m_depthImage);
 
-    m_logger(Logger::INFO) << "Finished creating depth image with format: "
-                           << string_VkFormat(VK_FORMAT_D32_SFLOAT)
-                           << " and extent dimensions: "
-                           << drawImageExtent.width << 'x' << drawImageExtent.height << '\n';
+    LOG(LOG_INFO, "Finished creating depth image with format: "
+                          << string_VkFormat(VK_FORMAT_D32_SFLOAT)
+                          << " and extent dimensions: "
+                          << drawImageExtent.width << 'x' << drawImageExtent.height);
 }
 
 void VktCore::initCommands() {
     VkCommandPoolCreateInfo commandPoolCreateInfo = VktStructs::commandPoolCreateInfo(m_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
     for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
-        VK_CHECK(vkCreateCommandPool(VktCache::vkDevice,
+        VK_CHECK(vkCreateCommandPool(VktCachePtr->vkDevice,
                                      &commandPoolCreateInfo,
                                      nullptr,
                                      &m_frames[i].commandPool))
 
         VkCommandBufferAllocateInfo cmdAllocInfo = VktStructs::commandBufferAllocateInfo(m_frames[i].commandPool, 1);
 
-        VK_CHECK(vkAllocateCommandBuffers(VktCache::vkDevice,
+        VK_CHECK(vkAllocateCommandBuffers(VktCachePtr->vkDevice,
                                           &cmdAllocInfo,
                                           &m_frames[i].mainCommandBuffer))
     }
@@ -227,16 +230,16 @@ void VktCore::initSyncStructs() {
     VkSemaphoreCreateInfo semaphoreCreateInfo = VktStructs::semaphoreCreateInfo();
 
     for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
-        VK_CHECK(vkCreateFence(VktCache::vkDevice, &fenceCreateInfo, nullptr, &m_frames[i].renderFence))
-        VK_CHECK(vkCreateSemaphore(VktCache::vkDevice, &semaphoreCreateInfo, nullptr, &m_frames[i].swapchainSemaphore))
-        VK_CHECK(vkCreateSemaphore(VktCache::vkDevice, &semaphoreCreateInfo, nullptr, &m_frames[i].renderSemaphore))
+        VK_CHECK(vkCreateFence(VktCachePtr->vkDevice, &fenceCreateInfo, nullptr, &m_frames[i].renderFence))
+        VK_CHECK(vkCreateSemaphore(VktCachePtr->vkDevice, &semaphoreCreateInfo, nullptr, &m_frames[i].swapchainSemaphore))
+        VK_CHECK(vkCreateSemaphore(VktCachePtr->vkDevice, &semaphoreCreateInfo, nullptr, &m_frames[i].renderSemaphore))
     }
 }
 
 void VktCore::createSwapchain(uint32_t width, uint32_t height) {
-    m_logger(Logger::INFO) << "Creating swapchain of dimensions: " << width << 'x' << height << '\n';
+    LOG(LOG_INFO, "Creating swapchain of dimensions: " << width << 'x' << height);
 
-    vkb::SwapchainBuilder vkbSwapchainBuilder(m_physicalDevice, VktCache::vkDevice, m_surface);
+    vkb::SwapchainBuilder vkbSwapchainBuilder(VktCachePtr->vkPhysicalDevice, VktCachePtr->vkDevice, m_surface);
     m_swapchainImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     vkb::Swapchain vkbSwapchain = vkbSwapchainBuilder
@@ -254,14 +257,14 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
     m_swapchainImages = vkbSwapchain.get_images().value();
     m_swapchainImageViews = vkbSwapchain.get_image_views().value();
     m_swapchainImageFormat = vkbSwapchain.image_format;// Builder might choose different format
-    m_logger(Logger::INFO) << "Finished building swapchain with format: " << string_VkFormat(vkbSwapchain.image_format) << '\n';
+    LOG(LOG_INFO, "Finished building swapchain with format: " << string_VkFormat(vkbSwapchain.image_format));
 }
 
 void VktCore::destroySwapchain() {
-    vkDestroySwapchainKHR(VktCache::vkDevice, m_swapchain, nullptr);
+    vkDestroySwapchainKHR(VktCachePtr->vkDevice, m_swapchain, nullptr);
 
     for(auto &imageView: m_swapchainImageViews) {
-        vkDestroyImageView(VktCache::vkDevice, imageView, nullptr);
+        vkDestroyImageView(VktCachePtr->vkDevice, imageView, nullptr);
     }
 }
 
@@ -273,13 +276,13 @@ void VktCore::draw() {
     // Updates relevant scene rendering data buffers
     updateScene();
 
-    VK_CHECK(vkWaitForFences(VktCache::vkDevice, 1, &getCurrentFrame().renderFence, true, 1000000000))
-    VK_CHECK(vkResetFences(VktCache::vkDevice, 1, &getCurrentFrame().renderFence))
+    VK_CHECK(vkWaitForFences(VktCachePtr->vkDevice, 1, &getCurrentFrame().renderFence, true, 1000000000))
+    VK_CHECK(vkResetFences(VktCachePtr->vkDevice, 1, &getCurrentFrame().renderFence))
     getCurrentFrame().deletionQueue.flush();
     getCurrentFrame().descriptors.clearPools();
 
     uint32_t swapchainIndex;
-    VkResult error = vkAcquireNextImageKHR(VktCache::vkDevice,
+    VkResult error = vkAcquireNextImageKHR(VktCachePtr->vkDevice,
                                            m_swapchain,
                                            1000000000,
                                            getCurrentFrame().swapchainSemaphore,
@@ -288,7 +291,8 @@ void VktCore::draw() {
     if(error == VK_ERROR_OUT_OF_DATE_KHR) {
         m_resizeSwapchain = true;
         return;
-    } else if(error) {
+    }
+    if(error) {
         throw vulkanException("Failed to acquire next image from swapchain, error code ", string_VkResult(error));
     }
 
@@ -298,19 +302,22 @@ void VktCore::draw() {
     VkCommandBufferBeginInfo cmdBeginInfo = VktStructs::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo))
 
-    VktCache::drawExtent.width = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.width, m_swapchainExtent.width)) * m_renderScale);
-    VktCache::drawExtent.height = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.height, m_swapchainExtent.height)) * m_renderScale);
+    VktCachePtr->drawExtent.width = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.width, m_swapchainExtent.width)) * m_renderScale);
+    VktCachePtr->drawExtent.height = static_cast<uint32_t>(static_cast<float>(std::min(m_drawImage.extent.height, m_swapchainExtent.height)) * m_renderScale);
 
     // Transition color and depth image into correct layouts
     VktUtils::transitionImage(cmd, m_drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     VktUtils::transitionImage(cmd, m_depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(m_drawImage.view, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+    VkClearValue clrValue {
+        .color = VkClearColorValue{0.0f, 0.0f, 0.0f, 1.0f}
+    };
+    VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(m_drawImage.view, &clrValue, VK_IMAGE_LAYOUT_GENERAL);
     VkRenderingAttachmentInfo depthAttachment = VktStructs::depthAttachmentInfo(m_depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-    VkRenderingInfo renderingInfo = VktStructs::renderingInfo(VktCache::drawExtent, &colorAttachment, &depthAttachment);
+    VkRenderingInfo renderingInfo = VktStructs::renderingInfo(VktCachePtr->drawExtent, &colorAttachment, &depthAttachment);
 
-    m_stats.drawCallCount = 0;
-    m_stats.trigDrawCount = 0;
+    stats.drawCallCount = 0;
+    stats.trigDrawCount = 0;
     auto startTime = std::chrono::system_clock::now();
 
     vkCmdBeginRendering(cmd, &renderingInfo);
@@ -319,9 +326,9 @@ void VktCore::draw() {
     VktTypes::Resources::Buffer &gpuSceneDataBuffer = getCurrentFrame().sceneUniformBuffer;
 
     // Copy scene data to buffer
-    memcpy(gpuSceneDataBuffer.info.pMappedData, &m_sceneData, sizeof(VktTypes::GPU::SceneData));
+    memcpy(gpuSceneDataBuffer.info.pMappedData, &TecCorePtr->world->sceneData, sizeof(VktTypes::GPU::SceneData));
 
-    VkDescriptorSet sceneDescriptorSet = getCurrentFrame().descriptors.allocate(VktCache::getLayout(VktCache::Layout::SCENE));
+    VkDescriptorSet sceneDescriptorSet = getCurrentFrame().descriptors.allocate(VktCachePtr->getLayout(VktCache::Layout::SCENE));
 
     // Write scene data to uniforms
     {
@@ -330,30 +337,32 @@ void VktCore::draw() {
                            sizeof(VktTypes::GPU::SceneData),
                            0,
                            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        m_skybox.writeIBLSets(writer);
+        TecCorePtr->world->skybox->writeIBLSets(writer);
         /*
         writer.writeImage(1, m_skyboxIBLDiffuse.view,
-                          VktCache::getSampler(VktCache::Sampler::LINEAR),
+                          VktCachePtr->getSampler(VktCachePtr->Sampler::LINEAR),
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.writeImage(2, m_skyboxIBLSpecular.view,
-                          VktCache::getSampler(VktCache::Sampler::LINEAR),
+                          VktCachePtr->getSampler(VktCachePtr->Sampler::LINEAR),
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.writeImage(3, m_skyboxBRDF.view,
-                          VktCache::getSampler(VktCache::Sampler::LINEAR),
+                          VktCachePtr->getSampler(VktCachePtr->Sampler::LINEAR),
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);*/
         writer.updateSet(sceneDescriptorSet);
     }
 
-    VktSkybox::draw(cmd, sceneDescriptorSet);
+    VktUtils::CmdSetPolygonModeEXT(cmd,polygonMode);
+
+    Skybox::draw(cmd, sceneDescriptorSet);
     //drawSkybox(cmd, sceneDescriptorSet);
     drawGeometry(cmd, sceneDescriptorSet);
-    if(m_debugConf.enableDebugNormals) {
+    if(debugConf.enableDebugNormals) {
         drawDebugNormals(cmd, sceneDescriptorSet);
     }
-    if(m_debugConf.enableDebugVectors) {
+    if(debugConf.enableDebugVectors) {
         drawDebugLines(cmd, sceneDescriptorSet);
     }
 
@@ -362,7 +371,7 @@ void VktCore::draw() {
 
     auto endTime = std::chrono::system_clock::now();
     auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    m_stats.meshDrawTime = static_cast<float>(drawDuration.count()) / 1000.0f;
+    stats.meshDrawTime = static_cast<float>(drawDuration.count()) / 1000.0f;
 
     m_mainDrawContext.opaqueSurfaces.clear();
     m_mainDrawContext.transparentSurfaces.clear();
@@ -372,7 +381,7 @@ void VktCore::draw() {
     VktUtils::transitionImage(cmd, m_swapchainImages[swapchainIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     // Copy main image into swapchain
-    VktUtils::copyImgToImg(cmd, m_drawImage.image, m_swapchainImages[swapchainIndex], VktCache::drawExtent, m_swapchainExtent);
+    VktUtils::copyImgToImg(cmd, m_drawImage.image, m_swapchainImages[swapchainIndex], VktCachePtr->drawExtent, m_swapchainExtent);
 
     VktUtils::transitionImage(cmd, m_swapchainImages[swapchainIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
@@ -413,8 +422,8 @@ void VktCore::draw() {
 void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
 
     auto draw = [&](const VktTypes::RenderObject &renderObject) {
-        m_stats.drawCallCount++;
-        m_stats.trigDrawCount += renderObject.indexCount / 3;
+        stats.drawCallCount++;
+        stats.trigDrawCount += renderObject.indexCount / 3;
 
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderObject.material->pipeline->pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -423,8 +432,8 @@ void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorS
                                 &sceneDescriptorSet, 0,
                                 nullptr);
 
-        VkViewport viewport = VktStructs::viewport(VktCache::drawExtent);
-        VkRect2D scissors = VktStructs::scissors(VktCache::drawExtent);
+        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdSetScissor(cmd, 0, 1, &scissors);
 
@@ -451,7 +460,7 @@ void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorS
                                sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
         }
 
-        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, renderObject.vertexOffset, 0);
     };
 
     for(const VktTypes::RenderObject &renderObject: m_mainDrawContext.opaqueSurfaces) {
@@ -465,8 +474,8 @@ void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorS
 
 void VktCore::drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
     auto draw = [&](const VktTypes::RenderObject &renderObject) {
-        m_stats.drawCallCount++;
-        m_stats.trigDrawCount += renderObject.indexCount / 3;
+        stats.drawCallCount++;
+        stats.trigDrawCount += renderObject.indexCount / 3;
 
         if(renderObject.isSkinned) {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_normalsDebugSkinnedPipeline.pipeline);
@@ -484,8 +493,8 @@ void VktCore::drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescrip
                                     nullptr);
         }
 
-        VkViewport viewport = VktStructs::viewport(VktCache::drawExtent);
-        VkRect2D scissors = VktStructs::scissors(VktCache::drawExtent);
+        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdSetScissor(cmd, 0, 1, &scissors);
 
@@ -520,21 +529,21 @@ void VktCore::drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescrip
 
 void VktCore::drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
 
-    for(auto &[id, line]: debugLines) {
+    for(auto &[id, line]: m_debugLines) {
         if(line->meshBuffers.vertexBufferAddress == 0) {
             line->meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(line->indices, line->vertices);
-        }else{
+        } else {
             uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(line->meshBuffers, line->indices, line->vertices);
         }
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_lineStripDebugPipeline.pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            m_lineStripDebugPipeline.layout,
-                            0, 1,
-                            &sceneDescriptorSet, 0,
-                            nullptr);
+                                m_lineStripDebugPipeline.layout,
+                                0, 1,
+                                &sceneDescriptorSet, 0,
+                                nullptr);
 
-        VkViewport viewport = VktStructs::viewport(VktCache::drawExtent);
-        VkRect2D scissors = VktStructs::scissors(VktCache::drawExtent);
+        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
         vkCmdSetViewport(cmd, 0, 1, &viewport);
         vkCmdSetScissor(cmd, 0, 1, &scissors);
 
@@ -550,6 +559,12 @@ void VktCore::drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescripto
     }
 }
 
+uint32_t VktCore::addDebugPointMesh(VktTypes::PointMesh *pointMesh) {
+    while(m_debugLines.contains(m_lastPointMeshIndex)) m_lastPointMeshIndex++;
+    m_debugLines[m_lastPointMeshIndex] = pointMesh;
+    return m_lastPointMeshIndex;
+}
+
 void VktCore::initDescriptors() {
     std::vector<DescriptorAllocatorDynamic::PoolSizeRatio> sizes = {
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
@@ -557,18 +572,18 @@ void VktCore::initDescriptors() {
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
 
-    VktCache::descriptorAllocator.initPool(5, sizes);
-    //VktCache::descriptorAllocator.initPool(m_device, 5, sizes);
+    VktCachePtr->descriptorAllocator.initPool(5, sizes);
+    //VktCachePtr->descriptorAllocator.initPool(m_device, 5, sizes);
 
     // Build draw image descriptor layout
     {
         DescriptorLayoutBuilder builder;
         builder.addBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-        VktCache::storeLayout(VktCache::Layout::DRAW_IMAGE, builder.build(VK_SHADER_STAGE_COMPUTE_BIT));
+        VktCachePtr->storeLayout(VktCache::Layout::DRAW_IMAGE, builder.build(VK_SHADER_STAGE_COMPUTE_BIT));
     }
 
     // Allocate draw image
-    m_drawImageDescriptors = VktCache::descriptorAllocator.allocate(VktCache::getLayout(VktCache::Layout::DRAW_IMAGE));
+    m_drawImageDescriptors = VktCachePtr->descriptorAllocator.allocate(VktCachePtr->getLayout(VktCache::Layout::DRAW_IMAGE));
 
     // Write draw image
     {
@@ -586,7 +601,7 @@ void VktCore::initDescriptors() {
         builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// IBLCube
         builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// Specular cube
         builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// BRDF texture
-        VktCache::storeLayout(VktCache::Layout::SCENE, builder.build(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT));
+        VktCachePtr->storeLayout(VktCache::Layout::SCENE, builder.build(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT));
     }
 
     for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
@@ -609,7 +624,7 @@ void VktCore::initDescriptors() {
 void VktCore::initPipelines() {
     initMaterialPipelines();
     initDebugPipeline();
-    m_logger(Logger::INFO) << "Finished initializing graphics pipelines\n";
+    LOG(LOG_INFO, "Finished initializing graphics pipelines");
 }
 
 void VktCore::initMaterialPipelines() {
@@ -631,16 +646,16 @@ void VktCore::initMaterialPipelines() {
         layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// ColorTexture
         layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// MetalRoughnessTexture
 
-        VktCache::storeLayout(VktCache::Layout::MAT_METAL_ROUGHNESS, layoutBuilder.build(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT));
+        VktCachePtr->storeLayout(VktCache::Layout::MAT_METAL_ROUGHNESS, layoutBuilder.build(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT));
     }
 
-    auto layouts = VktCache::getLayouts(VktCache::Layout::SCENE, VktCache::Layout::MAT_METAL_ROUGHNESS);
+    auto layouts = VktCachePtr->getLayouts(VktCache::Layout::SCENE, VktCache::Layout::MAT_METAL_ROUGHNESS);
 
     // Create pipeline layout with provided descriptors and push constants
     VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
 
     VkPipelineLayout staticLayout;
-    VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
                                     &staticLayout))
@@ -649,7 +664,7 @@ void VktCore::initMaterialPipelines() {
     meshLayoutInfo.pPushConstantRanges = &skinnedMatrixRange;
 
     VkPipelineLayout skinnedLayout;
-    VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
                                     &skinnedLayout))
@@ -719,12 +734,12 @@ void VktCore::initDebugPipeline() {
     linesPushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     // Debug pipeline use scene data for mesh transformations
-    const auto layouts = VktCache::getLayouts(VktCache::Layout::SCENE);
+    const auto layouts = VktCachePtr->getLayouts(VktCache::Layout::SCENE);
 
     VkPipelineLayoutCreateInfo meshLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, normalStaticPushConstants);
 
     VkPipelineLayout normalStaticLayout;
-    VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
                                     &normalStaticLayout))
@@ -733,7 +748,7 @@ void VktCore::initDebugPipeline() {
     meshLayoutInfo.pPushConstantRanges = &normalSkinnedPushConstants;
 
     VkPipelineLayout normalSkinnedLayout;
-    VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
                                     &normalSkinnedLayout))
@@ -742,7 +757,7 @@ void VktCore::initDebugPipeline() {
     meshLayoutInfo.pPushConstantRanges = &linesPushConstants;
 
     VkPipelineLayout linesLayout;
-    VK_CHECK(vkCreatePipelineLayout(VktCache::vkDevice,
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
                                     &meshLayoutInfo,
                                     nullptr,
                                     &linesLayout))
@@ -818,38 +833,64 @@ void VktCore::initImGui() {
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     VkDescriptorPool imguiPool;
-    VK_CHECK(vkCreateDescriptorPool(VktCache::vkDevice, &poolInfo, nullptr, &imguiPool))
+    VK_CHECK(vkCreateDescriptorPool(VktCachePtr->vkDevice, &poolInfo, nullptr, &imguiPool))
 
-    ImGui::CreateContext();
-    m_window->initImGuiVulkan();
+    ImGuiContext* ctx = ImGui::CreateContext();
+    WindowPtr->initImGuiVulkan();
+
+    ImGuiIO &io = ImGui::GetIO();
 
     // Enable keyboard controls
-    ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
+    // Enable docking
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    ImGui::StyleColorsDark();
+
     ImGui_ImplVulkan_InitInfo initInfo{};
-    initInfo.Instance = VktCache::vkInstance;
-    initInfo.PhysicalDevice = m_physicalDevice;
-    initInfo.Device = VktCache::vkDevice;
+    initInfo.Instance = VktCachePtr->vkInstance;
+    initInfo.PhysicalDevice = VktCachePtr->vkPhysicalDevice;
+    initInfo.Device = VktCachePtr->vkDevice;
     initInfo.Queue = m_graphicsQueue;
     initInfo.QueueFamily = m_graphicsQueueFamily;
     initInfo.DescriptorPool = imguiPool;
-    initInfo.MinImageCount = 3;
-    initInfo.ImageCount = 3;
+    initInfo.MinImageCount = m_swapchainImages.size();
+    initInfo.ImageCount = m_swapchainImages.size();
     initInfo.UseDynamicRendering = true;
     initInfo.PipelineRenderingCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-        .pNext = VK_NULL_HANDLE,
-        .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &m_drawImage.format,
-        .depthAttachmentFormat = m_depthImage.format
-    };
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .pNext = VK_NULL_HANDLE,
+            .colorAttachmentCount = 1,
+            .pColorAttachmentFormats = &m_drawImage.format,
+            .depthAttachmentFormat = m_depthImage.format};
     initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    initInfo.CheckVkResultFn = &ImGuiHandler::vkDebugCallback;
 
     ImGui_ImplVulkan_Init(&initInfo);
     ImGui_ImplVulkan_CreateFontsTexture();
-
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_POOL, imguiPool);
+
+    ImGuiHandler::initMenus();
+    ImGuiHandler::mainWindow.Surface = m_surface;
+
+    const VkFormat requestSurfaceImageFormat[] = {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM};
+    const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    ImGuiHandler::mainWindow.SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(VktCachePtr->vkPhysicalDevice, m_surface, requestSurfaceImageFormat, ARRAY_SIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    VkPresentModeKHR present_modes[] = {VK_PRESENT_MODE_FIFO_KHR};
+
+    ImGuiHandler::mainWindow.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(VktCachePtr->vkPhysicalDevice, m_surface, &present_modes[0], ARRAY_SIZE(present_modes));
+
+    // Create SwapChain, RenderPass, Framebuffer, etc.
+    /*ImGui_ImplVulkanH_CreateOrResizeWindow(VktCachePtr->vkInstance,
+                                           VktCachePtr->vkPhysicalDevice,
+                                           VktCachePtr->vkDevice,
+                                           &ImGuiHandler::mainWindow,
+                                           m_graphicsQueueFamily,
+                                           nullptr,
+                                           m_swapchainExtent.width,
+                                           m_swapchainExtent.height,
+                                           m_swapchainImages.size());*/
 }
 
 void VktCore::drawImGui(VkCommandBuffer cmd, VkImageView targetView) {
@@ -862,7 +903,7 @@ void VktCore::drawImGui(VkCommandBuffer cmd, VkImageView targetView) {
 }
 
 bool VktCore::shouldClose() {
-    return m_window->shouldClose();
+    return WindowPtr->shouldClose();
 }
 
 void VktCore::run() {
@@ -871,105 +912,17 @@ void VktCore::run() {
 
     if(m_resizeSwapchain) {
         resizeSwapchain();
+        ImGui_ImplVulkan_SetMinImageCount(m_swapchainImages.size());
     }
 
-    runImGui();
+    ImGuiHandler::run();
+    //runImGui();
 
     draw();
 
     auto endTime = std::chrono::system_clock::now();
     auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    m_stats.frametime = static_cast<float>(drawDuration.count()) / 1000.0f;
-}
-
-void VktCore::runImGui() {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    for(const auto& [id,func] : imguiProcedures) {
-        func();
-    }
-
-    if(ImGui::Begin("Scene")) {
-        ImGui::InputFloat3("Ambient color: ", (float *) &m_sceneData.ambientColor);
-        ImGui::InputFloat3("Sunlight direction: ", (float *) &m_sceneData.sunlightDirection);
-        ImGui::InputFloat3("Sunlight color: ", (float *) &m_sceneData.sunlightColor);
-        ImGui::InputFloat3("Camera position: ", (float *) &m_sceneData.cameraPosition);
-        ImGui::InputFloat3("Camera direction: ", (float *) &m_sceneData.cameraDirection);
-        ImGui::InputFloat("Time: ", &m_sceneData.time);
-        ImGui::End();
-    }
-
-    if(ImGui::Begin("Performance")) {
-        uint32_t frames = 1000 / m_stats.frametime;
-        ImGui::Text("Frames %u", frames);
-        ImGui::Text("Frametime %f ms", m_stats.frametime);
-        ImGui::Text("Drawtime %f ms", m_stats.meshDrawTime);
-        ImGui::Text("Update time %f ms", m_stats.sceneUpdateTime);
-        ImGui::Text("Triangles %u", m_stats.trigDrawCount);
-        ImGui::Text("Draws: %u", m_stats.drawCallCount);
-        ImGui::End();
-    }
-
-    if(ImGui::Begin("Models")) {
-        for(auto &[mID, object]: loadedObjects) {
-            if(ImGui::TreeNode(object.name.c_str())) {
-                ImGui::Text("ID: %u", mID);
-                ImGui::Text("Name: %s", object.name.c_str());
-                if(ImGui::TreeNode("Transformation")) {
-
-                    // Change position
-                    glm::vec3 pos = object.model->transformation.getTranslation();
-                    if(ImGui::DragFloat3("Pos", (float *) &(pos))) {
-                        object.model->transformation.setTranslation(pos.x, pos.y, pos.z);
-                    }
-
-                    // Change rotation
-                    glm::vec3 rotation = object.model->transformation.getRotation();
-                    if(ImGui::DragFloat3("Rotation", (float *) &(rotation))) {
-                        object.model->transformation.setRotation(rotation.x, rotation.y, rotation.z);
-                    }
-
-                    // Change scale
-                    float scale = object.model->transformation.getScale();
-                    if(ImGui::DragFloat("Scale", &scale)) {
-                        object.model->transformation.setScale(scale);
-                    }
-                    ImGui::TreePop();
-                }
-
-                if(object.model->isSkinned() && ImGui::TreeNode("Animation")) {
-                    static std::size_t currentAnimation = object.model->currentAnimation();
-                    if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN, 5 * ImGui::GetTextLineHeightWithSpacing()))) {
-                        uint32_t animCount = object.model->animationCount();
-                        for(std::size_t animID = 0; animID < animCount; animID++) {
-                            const bool isActive = (currentAnimation == animID);
-                            if(ImGui::Selectable(object.model->animationName(animID).data(), isActive)) {
-                                object.model->setAnimation(animID);
-                                currentAnimation = animID;
-                            }
-                            if(isActive) {
-                                ImGui::SetItemDefaultFocus();
-                            }
-                        }
-                        ImGui::EndListBox();
-                    }
-                    ImGui::TreePop();
-                }
-                ImGui::TreePop();
-            }
-        }
-        ImGui::End();
-    }
-
-    if(ImGui::Begin("Debug")) {
-        ImGui::Checkbox("Debug normals", &m_debugConf.enableDebugNormals);
-        ImGui::Checkbox("Debug vectors", &m_debugConf.enableDebugVectors);
-        ImGui::End();
-    }
-
-    ImGui::Render();
+    stats.frametime = static_cast<float>(drawDuration.count()) / 1000.0f;
 }
 
 template VktTypes::GPU::MeshBuffers VktCore::createPrimitivesDeviceMemory<VktTypes::GPU::VertexType::SKINNED>(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::SKINNED>> &vertices);
@@ -987,7 +940,7 @@ VktTypes::GPU::MeshBuffers VktCore::createPrimitivesDeviceMemory(const std::span
 
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
     deviceAddressInfo.buffer = newBuffers.vertexBuffer.buffer;
-    newBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(VktCache::vkDevice, &deviceAddressInfo);
+    newBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(VktCachePtr->vkDevice, &deviceAddressInfo);
 
     newBuffers.indexBuffer = VktBuffers::create(indexBufferSize,
                                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -1033,7 +986,7 @@ VktTypes::GPU::MeshBuffers VktCore::createPrimitivesHostVisible(const std::span<
 
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
     deviceAddressInfo.buffer = newBuffers.vertexBuffer.buffer;
-    newBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(VktCache::vkDevice, &deviceAddressInfo);
+    newBuffers.vertexBufferAddress = vkGetBufferDeviceAddress(VktCachePtr->vkDevice, &deviceAddressInfo);
 
     newBuffers.indexBuffer = VktBuffers::create(indexBufferSize,
                                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -1053,7 +1006,7 @@ template void VktCore::uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::
                                                                                        std::span<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::POINT>> vertices);
 
 template<VktTypes::GPU::VertexType vType>
-void VktCore::uploadPrimitivesToHostVisible(const VktTypes::GPU::MeshBuffers& meshBuffers, std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<vType>> vertices) {
+void VktCore::uploadPrimitivesToHostVisible(const VktTypes::GPU::MeshBuffers &meshBuffers, std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<vType>> vertices) {
     const size_t vertexBufferSize = vertices.size() * sizeof(VktTypes::GPU::Vertex<vType>);
     const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
@@ -1074,7 +1027,7 @@ VktTypes::GPU::JointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &j
 
     VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
     deviceAddressInfo.buffer = newJoints.jointsBuffer.buffer;
-    newJoints.jointsBufferAddress = vkGetBufferDeviceAddress(VktCache::vkDevice, &deviceAddressInfo);
+    newJoints.jointsBufferAddress = vkGetBufferDeviceAddress(VktCachePtr->vkDevice, &deviceAddressInfo);
 
     memcpy(newJoints.jointsBuffer.info.pMappedData, jointMatrices.data(), jointsBufferSize);
 
@@ -1109,19 +1062,15 @@ void VktCore::initDefaultData() {
 
     samplerInfo.magFilter = VK_FILTER_NEAREST;
     samplerInfo.minFilter = VK_FILTER_NEAREST;
-    vkCreateSampler(VktCache::vkDevice, &samplerInfo, nullptr, &tmpSamplerHandle);
-    VktCache::storeSampler(VktCache::Sampler::NEAREST, tmpSamplerHandle);
+    vkCreateSampler(VktCachePtr->vkDevice, &samplerInfo, nullptr, &tmpSamplerHandle);
+    VktCachePtr->storeSampler(VktCache::Sampler::NEAREST, tmpSamplerHandle);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_SAMPLER, tmpSamplerHandle);
 
     samplerInfo.magFilter = VK_FILTER_LINEAR;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
-    vkCreateSampler(VktCache::vkDevice, &samplerInfo, nullptr, &tmpSamplerHandle);
-    VktCache::storeSampler(VktCache::Sampler::LINEAR, tmpSamplerHandle);
+    vkCreateSampler(VktCachePtr->vkDevice, &samplerInfo, nullptr, &tmpSamplerHandle);
+    VktCachePtr->storeSampler(VktCache::Sampler::LINEAR, tmpSamplerHandle);
     m_coreDeletionQueue.pushDeletable(DeletableType::VK_SAMPLER, tmpSamplerHandle);
-
-    std::string tmp_cubemapDir = "terrain/skyboxtex/sea-panorama";
-    m_skybox.load(tmp_cubemapDir.c_str());
-    m_skybox.writeColorSet();
 }
 
 VkBool32 VktCore::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type,
@@ -1132,44 +1081,23 @@ VkBool32 VktCore::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
     return VK_FALSE;
 }
 
+
 void VktCore::resizeSwapchain() {
-    vkDeviceWaitIdle(VktCache::vkDevice);
+    vkDeviceWaitIdle(VktCachePtr->vkDevice);
     destroySwapchain();
-
-    Utils::WindowDimension dimensions = m_window->getSize();
-    m_windowExtent.width = dimensions.width;
-    m_windowExtent.height = dimensions.height;
-
+    setExtentDimensions();
     createSwapchain(m_windowExtent.width, m_windowExtent.height);
     m_resizeSwapchain = false;
 }
 
-void VktCore::setWindow(Window *window) {
-    assert(window != nullptr);
-    m_window = window;
-
-    Utils::WindowDimension winDimensions = m_window->getSize();
+void VktCore::setExtentDimensions() {
+    Utils::WindowDimension winDimensions = WindowPtr->getSize();
     m_windowExtent.width = winDimensions.width;
     m_windowExtent.height = winDimensions.height;
 }
 
 void VktCore::updateScene() {
-    double currTime = glfwGetTime();
-    static double prevTime = currTime;
-
     m_mainDrawContext.opaqueSurfaces.clear();
-    m_sceneData.view = m_viewMatrix;
-    m_sceneData.proj = m_projMatrix;
-
-    m_sceneData.proj[1][1] *= -1;
-    m_sceneData.viewproj = m_sceneData.proj * m_sceneData.view;
-    m_sceneData.ambientColor = glm::vec3(0.1f);
-    m_sceneData.sunlightColor = glm::vec3(1.0f);
-    glm::vec4 sunPos = glm::rotate(glm::identity<glm::mat4>(), static_cast<float>(glm::radians(currTime * 50.f)), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    m_sceneData.sunlightDirection = glm::vec3(sunPos - glm::vec4(0.0f));
-    m_sceneData.cameraPosition = cameraPosition;
-    m_sceneData.cameraDirection = cameraDirection;
-    m_sceneData.time = currTime;
 
     for(auto &[oID, object]: loadedObjects) {
         if(object.model->isSkinned() && object.model->currentAnimation() != ModelTypes::NULL_ID) {
@@ -1178,14 +1106,7 @@ void VktCore::updateScene() {
         }
         object.model->gatherDrawContext(m_mainDrawContext);
     }
-}
-
-void VktCore::setViewMatrix(const glm::mat4 &viewMatrix) {
-    m_viewMatrix = viewMatrix;
-}
-
-void VktCore::setProjMatrix(const glm::mat4 &projMatrix) {
-    m_projMatrix = projMatrix;
+    TecCorePtr->world->gatherDrawContext(m_mainDrawContext);
 }
 
 /**
@@ -1210,7 +1131,7 @@ VktCore::EngineObject *VktCore::createObject(const std::string &name, const std:
         loadedObjects[freeID].model->updateJoints();
     }
 
-    m_logger(Logger::INFO) << "Created an object " << name << " with ID " << freeID << '\n';
+    LOG(LOG_INFO, "Created an object " << name << " with ID " << freeID);
     return &loadedObjects[freeID];
 }
 
@@ -1230,7 +1151,7 @@ VktCore::EngineObject *VktCore::createObject(const std::string &name, Model *mod
         loadedObjects[freeID].model->updateJoints();
     }
 
-    m_logger(Logger::INFO) << "Created an object " << name << " with ID " << freeID << '\n';
+    LOG(LOG_INFO, "Created an object " << name << " with ID " << freeID);
     return &loadedObjects[freeID];
 }
 
@@ -1251,7 +1172,7 @@ VktTypes::MaterialInstance VktCore::writeMaterial(VktTypes::MaterialPass pass,
             break;
     }
 
-    matData.materialSet = descriptorAllocator.allocate(VktCache::getLayout(VktCache::Layout::MAT_METAL_ROUGHNESS));
+    matData.materialSet = descriptorAllocator.allocate(VktCachePtr->getLayout(VktCache::Layout::MAT_METAL_ROUGHNESS));
 
     metalRoughMaterial.writer.clear();
     metalRoughMaterial.writer.writeBuffer(0, resources.dataBuffer,

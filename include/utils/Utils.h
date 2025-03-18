@@ -68,19 +68,18 @@ namespace Utils {
      * @return underlying_type_t<T>
      */
     template<Enumerated E>
-    auto enumVal(E const val) -> typename std::underlying_type_t<E> {
+    constexpr auto enumVal(E const val) -> typename std::underlying_type_t<E> {
         return static_cast<typename std::underlying_type_t<E>>(val);
     }
 
-    /*
-    template<typename E>
-    E enumVal(E const val) {
-        return val;
-    }
-    */
 
     template<typename E>
-    E enumFromVal(E const val) {
+    constexpr E enumVal(E const val) {
+        return val;
+    }
+
+    template<typename E>
+    constexpr E enumFromVal(E const val) {
         return val;
     }
 
@@ -92,14 +91,14 @@ namespace Utils {
      * @param bits Bits to add
      */
     template<typename T1>
-    void enumSetBits(T1 current, T1 bits) {
-        current = enumVal(bits) | enumVal(current);
+    void enumSetBits(T1& current, T1 bits) {
+        current = static_cast<T1>(enumVal<T1>(bits) | enumVal<T1>(current));
     }
 
     /** Checks whether a bit of underlying enum value in comp is present in val */
     template<typename T1, typename T2>
     bool enumCheckBit(const T1 val, const T2 comp) {
-        return (enumVal(val) & enumVal(comp)) == enumVal(comp);
+        return (enumVal<T1>(val) & enumVal(comp)) == enumVal(comp);
     }
 
     /**
@@ -169,35 +168,32 @@ namespace Utils {
         glm::vec4 farBottomLeft;
         glm::vec4 farBottomRight;
     };
-
-    class FrustumCulling{
-    public:
-        FrustumCulling(float bias) : m_bias(-bias){}
-
+*/
+    struct FrustumCulling{
         void update(const glm::mat4& VP);
         [[nodiscard]] bool isPointInside(const glm::vec3& point) const;
 
         Slot<const glm::mat4&> slt_updateVP{[this](const glm::mat4& VP) { update(VP); }};
-    private:
 
-        float m_bias = 0.0;
+        float bias = 0.0;
 
-        glm::vec4 m_leftClipPlane{};
-        glm::vec4 m_rightClipPlane{};
-        glm::vec4 m_bottomClipPlane{};
-        glm::vec4 m_topClipPlane{};
-        glm::vec4 m_nearClipPlane{};
-        glm::vec4 m_farClipPlane{};
+        glm::vec4 leftClipPlane{};
+        glm::vec4 rightClipPlane{};
+        glm::vec4 bottomClipPlane{};
+        glm::vec4 topClipPlane{};
+        glm::vec4 nearClipPlane{};
+        glm::vec4 farClipPlane{};
     };
 
-
+/*
     OrthoProjInfo createTightOrthographicInfo(Camera &lightCamera, const Camera &gameCamera);
+*/
     uint32_t nextPowerOf(uint32_t in, uint32_t power);
 
     int64_t binPow(int32_t exp);
 
     void barycentric(glm::vec2 p, glm::vec2 a, glm::vec2 b, glm::vec2 c, float &u, float &v, float &w);
-    */
+
 }// namespace Utils
 
 #endif//TECTONIC_UTILS_H

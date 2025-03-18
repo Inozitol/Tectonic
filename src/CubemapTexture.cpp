@@ -15,7 +15,7 @@ CubemapTexture::CubemapTexture(const std::array<std::string, CUBEMAP_SIDE_COUNT>
 
         u_char* imageData = stbi_load(m_filenames.at(i).c_str(), &width, &height, &bpp, 0);
         if(!imageData){
-            m_logger(Logger::ERROR) << "Couldn't load cubemap side texture " << m_filenames.at(i) << '\n';
+            LOG(LOG_ERROR, "Couldn't load cubemap side texture " << m_filenames.at(i));
             throw textureException("Cannot load ", m_filenames.at(i));
         }
 
@@ -30,7 +30,7 @@ CubemapTexture::CubemapTexture(const std::array<std::string, CUBEMAP_SIDE_COUNT>
 
         stbi_image_free(imageData);
 
-        m_logger(Logger::INFO) << "Loaded cubemap side texture " << filenames.at(i) << '\n';
+        LOG(LOG_INFO, "Loaded cubemap side texture " << filenames.at(i));
     }
 
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);

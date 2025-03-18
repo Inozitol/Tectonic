@@ -359,7 +359,7 @@ namespace Serial {
     }
 
     /**
-     * Creates a span of plain types/structs from data vector at a given offset and increments offset by size of vector
+     * Creates a span of plain types/structs from data vector at a given offset
      * @tparam T Type of data
      * @param data Source
      * @param offset Offset

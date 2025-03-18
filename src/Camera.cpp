@@ -3,63 +3,55 @@
 #include "camera/Camera.h"
 #include "exceptions.h"
 
-const glm::mat4x4& Camera::getViewMatrix() const {
-    return m_viewMatrix;
-}
-
-const glm::mat4x4& Camera::getProjectionMatrix() const {
-    return m_projectionMatrix;
-}
-
 void Camera::createProjectionMatrix() {
     if(isPerspective){
-        if(m_perspProjInfo){
-            m_projectionMatrix = glm::perspective(glm::radians(m_perspProjInfo->fov),
-                                                  m_perspProjInfo->aspect,
-                                                  m_perspProjInfo->zNear,
-                                                  m_perspProjInfo->zFar);
+        if(perspProjInfo){
+            projectionMatrix = glm::perspective(glm::radians(perspProjInfo->fov),
+                                                  perspProjInfo->aspect,
+                                                  perspProjInfo->zNear,
+                                                  perspProjInfo->zFar);
         }else{
             throw cameraException("Camera doesn't contain perspective projection info.");
         }
     }else{
-        if(m_orthoProjInfo){
-            m_projectionMatrix = glm::ortho(m_orthoProjInfo->left,
-                                            m_orthoProjInfo->right,
-                                            m_orthoProjInfo->bottom,
-                                            m_orthoProjInfo->top,
-                                            m_orthoProjInfo->zNear,
-                                            m_orthoProjInfo->zFar);
+        if(orthoProjInfo){
+            projectionMatrix = glm::ortho(orthoProjInfo->left,
+                                            orthoProjInfo->right,
+                                            orthoProjInfo->bottom,
+                                            orthoProjInfo->top,
+                                            orthoProjInfo->zNear,
+                                            orthoProjInfo->zFar);
         }else{
             throw cameraException("Camera doesn't contain orthographic projection info.");
         }
     }
 }
 
-glm::mat4 Camera::getWVP(const glm::mat4& world) {
+glm::mat4 Camera::genWVP(const glm::mat4& world) const {
     return m_VP * world;
 }
 
-glm::mat4 Camera::getVP(){
+glm::mat4 Camera::genVP() const{
     return m_VP;
 }
 
 void Camera::createView() {
-    m_viewMatrix = rotationMatrix() * translationMatrix();
+    viewMatrix = rotationMatrix() * translationMatrix();
 }
 
 void Camera::createVP() {
     createView();
-    m_VP = m_projectionMatrix * m_viewMatrix;
+    m_VP = projectionMatrix * viewMatrix;
 
     sig_VPMatrix.emit(m_VP);
 }
 
-glm::mat4 Camera::getVPNoTranslate() {
-    return m_projectionMatrix * rotationMatrix();
+glm::mat4 Camera::getVPNoTranslate() const {
+    return projectionMatrix * rotationMatrix();
 }
 
-const glm::vec3 & Camera::getPosition() const {
-    return m_position;
+glm::vec3 * Camera::getPosition() {
+    return &position;
 }
 
 glm::vec3 Camera::getDirection() const {
@@ -67,23 +59,23 @@ glm::vec3 Camera::getDirection() const {
 }
 
 void Camera::setDirection(glm::vec3 direction, glm::vec3 up) {
-    m_orientation = glm::conjugate(glm::quatLookAt(direction, up));
-    sig_orientation.emit(m_orientation);
+    orientation = glm::conjugate(glm::quatLookAt(direction, up));
+    sig_orientation.emit(orientation);
     createVP();
 }
 
-void Camera::setPosition(glm::vec3 position) {
-    m_position = position;
-    sig_position.emit(m_position);
+void Camera::setPosition(glm::vec3 p) {
+    position = p;
+    sig_position.emit(p);
     createVP();
 }
 
 void Camera::setPerspectiveInfo(const PerspProjInfo &info) {
-    m_perspProjInfo = std::make_unique<PerspProjInfo>(info);
+    perspProjInfo = std::make_unique<PerspProjInfo>(info);
 }
 
 void Camera::setOrthographicInfo(const OrthoProjInfo &info) {
-    m_orthoProjInfo = std::make_unique<OrthoProjInfo>(info);
+    orthoProjInfo = std::make_unique<OrthoProjInfo>(info);
 }
 
 void Camera::switchPerspective() {
@@ -99,19 +91,19 @@ void Camera::toggleProjection() {
 }
 
 Camera::~Camera() {
-    m_perspProjInfo.reset(nullptr);
-    m_orthoProjInfo.reset(nullptr);
+    perspProjInfo.reset(nullptr);
+    orthoProjInfo.reset(nullptr);
 }
 
 Camera::Camera(const Camera& camera)
-    :m_perspProjInfo(new PerspProjInfo(*camera.m_perspProjInfo)),
-     m_orthoProjInfo(new OrthoProjInfo(*camera.m_orthoProjInfo)){}
+    :perspProjInfo(new PerspProjInfo(*camera.perspProjInfo)),
+     orthoProjInfo(new OrthoProjInfo(*camera.orthoProjInfo)){}
 
 const PerspProjInfo &Camera::getPerspectiveInfo() const{
-    return *m_perspProjInfo;
+    return *perspProjInfo;
 }
 
 const OrthoProjInfo &Camera::getOrthographicInfo() const{
-    return *m_orthoProjInfo;
+    return *orthoProjInfo;
 }
 

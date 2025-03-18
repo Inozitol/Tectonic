@@ -1,5 +1,6 @@
 #include "engine/vulkan/VktDescriptorUtils.h"
 
+#include "engine/GlobalMemory.h"
 #include "engine/vulkan/VktCache.h"
 
 void DescriptorLayoutBuilder::addBinding(uint32_t binding, VkDescriptorType type) {
@@ -26,7 +27,7 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkShaderStageFlags shaderSt
     info.flags = 0;
 
     VkDescriptorSetLayout set;
-    VK_CHECK(vkCreateDescriptorSetLayout(VktCache::vkDevice, &info, nullptr, &set));
+    VK_CHECK(vkCreateDescriptorSetLayout(VktCachePtr->vkDevice, &info, nullptr, &set));
 
     return set;
 }
@@ -46,15 +47,15 @@ void DescriptorAllocator::initPool(uint32_t maxSets, std::span<PoolSizeRatio> po
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
 
-    vkCreateDescriptorPool(VktCache::vkDevice, &poolInfo, nullptr, &pool);
+    vkCreateDescriptorPool(VktCachePtr->vkDevice, &poolInfo, nullptr, &pool);
 }
 
 void DescriptorAllocator::clearDescriptors() {
-    vkResetDescriptorPool(VktCache::vkDevice, pool, 0);
+    vkResetDescriptorPool(VktCachePtr->vkDevice, pool, 0);
 }
 
 void DescriptorAllocator::destroyPool() {
-    vkDestroyDescriptorPool(VktCache::vkDevice, pool, nullptr);
+    vkDestroyDescriptorPool(VktCachePtr->vkDevice, pool, nullptr);
 }
 
 VkDescriptorSet DescriptorAllocator::allocate(VkDescriptorSetLayout layout) {
@@ -64,7 +65,7 @@ VkDescriptorSet DescriptorAllocator::allocate(VkDescriptorSetLayout layout) {
     allocInfo.pSetLayouts = &layout;
 
     VkDescriptorSet set;
-    VK_CHECK(vkAllocateDescriptorSets(VktCache::vkDevice, &allocInfo, &set));
+    VK_CHECK(vkAllocateDescriptorSets(VktCachePtr->vkDevice, &allocInfo, &set));
     return set;
 }
 
@@ -82,10 +83,10 @@ void DescriptorAllocatorDynamic::initPool(uint32_t initSets, std::span<PoolSizeR
 
 void DescriptorAllocatorDynamic::clearPools() {
     for(VkDescriptorPool pool : m_readyPools){
-        vkResetDescriptorPool(VktCache::vkDevice, pool, 0);
+        vkResetDescriptorPool(VktCachePtr->vkDevice, pool, 0);
     }
     for(VkDescriptorPool pool : m_fullPools){
-        vkResetDescriptorPool(VktCache::vkDevice, pool, 0);
+        vkResetDescriptorPool(VktCachePtr->vkDevice, pool, 0);
         m_readyPools.push_back(pool);
     }
     m_fullPools.clear();
@@ -93,11 +94,11 @@ void DescriptorAllocatorDynamic::clearPools() {
 
 void DescriptorAllocatorDynamic::destroyPool() {
     for(VkDescriptorPool pool : m_readyPools){
-        vkDestroyDescriptorPool(VktCache::vkDevice, pool, nullptr);
+        vkDestroyDescriptorPool(VktCachePtr->vkDevice, pool, nullptr);
     }
     m_readyPools.clear();
     for(VkDescriptorPool pool : m_fullPools){
-        vkDestroyDescriptorPool(VktCache::vkDevice, pool, nullptr);
+        vkDestroyDescriptorPool(VktCachePtr->vkDevice, pool, nullptr);
     }
     m_fullPools.clear();
 }
@@ -111,13 +112,13 @@ VkDescriptorSet DescriptorAllocatorDynamic::allocate(VkDescriptorSetLayout layou
     allocInfo.pSetLayouts = &layout;
 
     VkDescriptorSet descSet;
-    VkResult result = vkAllocateDescriptorSets(VktCache::vkDevice, &allocInfo, &descSet);
+    VkResult result = vkAllocateDescriptorSets(VktCachePtr->vkDevice, &allocInfo, &descSet);
 
     if(result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL){
         m_fullPools.push_back(poolToUse);
         poolToUse = getPool();
         allocInfo.descriptorPool = poolToUse;
-        VK_CHECK(vkAllocateDescriptorSets(VktCache::vkDevice, &allocInfo, &descSet));
+        VK_CHECK(vkAllocateDescriptorSets(VktCachePtr->vkDevice, &allocInfo, &descSet));
     }
     m_readyPools.push_back(poolToUse);
     return descSet;
@@ -153,7 +154,7 @@ VkDescriptorPool DescriptorAllocatorDynamic::createPool(uint32_t setCount, std::
     poolInfo.pPoolSizes = poolSizes.data();
 
     VkDescriptorPool newPool;
-    VK_CHECK(vkCreateDescriptorPool(VktCache::vkDevice, &poolInfo, nullptr, &newPool));
+    VK_CHECK(vkCreateDescriptorPool(VktCachePtr->vkDevice, &poolInfo, nullptr, &newPool));
     return newPool;
 }
 
@@ -199,5 +200,5 @@ void DescriptorWriter::updateSet(VkDescriptorSet set) {
     for(VkWriteDescriptorSet& write: writes){
         write.dstSet = set;
     }
-    vkUpdateDescriptorSets(VktCache::vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(VktCachePtr->vkDevice, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }

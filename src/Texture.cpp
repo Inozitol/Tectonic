@@ -12,10 +12,10 @@ Texture::Texture(GLenum tex_target, const std::string& fileName)
     int width = 0, height = 0, bpp = 0;
     u_char* image_data = stbi_load(m_fileName.c_str(), &width, &height, &bpp, 0);
     if(!image_data){
-        m_logger(Logger::ERROR) << "Unable to load texture [" << m_fileName << "]" << '\n';
+        LOG(LOG_ERROR, "Unable to load texture [" << m_fileName << "]" << '\n');
         throw textureException();
     }
-    m_logger(Logger::INFO) << "Loaded texture [" << m_fileName << "]" << '\n';
+    LOG(LOG_INFO, "Loaded texture [" << m_fileName << "]" << '\n');
     loadData(image_data, width, height, bpp);
     stbi_image_free(image_data);
 }
@@ -26,13 +26,13 @@ Texture::Texture(GLenum tex_target, u_char *data, int32_t length, uint8_t channe
     int x=0,y=0,bpp=0;
     u_char* image_data = stbi_load_from_memory(data, length, &x, &y, &bpp, channels);
     if(!image_data){
-        m_logger(Logger::ERROR) << "Unable to load texture [" << m_fileName << "] from memory" << '\n';
+        LOG(LOG_ERROR, "Unable to load texture [" << m_fileName << "] from memory" << '\n');
         throw textureException();
     }
     if(!fileName.empty()){
-        m_logger(Logger::INFO) << "Loaded embedded texture [" << m_fileName << "]" << '\n';
+        LOG(LOG_INFO, "Loaded embedded texture [" << m_fileName << "]" << '\n');
     }else{
-        m_logger(Logger::INFO) << "Loaded embedded texture" << '\n';
+        LOG(LOG_INFO, "Loaded embedded texture");
     }
     loadData(image_data, x, y, bpp);
     stbi_image_free(image_data);
@@ -57,11 +57,11 @@ void Texture::loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp)
                 glTextureSubImage2D(m_texObject, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data);
                 break;
             default:
-                m_logger(Logger::ERROR) << "Unable to load texture [" << m_fileName << "] with " << "[" << bpp << "] channels" << '\n';
+                LOG(LOG_ERROR, "Unable to load texture [" << m_fileName << "] with " << "[" << bpp << "] channels" << '\n');
                 throw textureException();
         }
     }else{
-        m_logger(Logger::ERROR) << "Unable to load texture [" << m_fileName << "] with texture target " << "[" << m_texTarget << "]" << '\n';
+        LOG(LOG_ERROR, "Unable to load texture [" << m_fileName << "] with texture target " << "[" << m_texTarget << "]" << '\n');
         throw textureException();
     }
 
@@ -74,7 +74,7 @@ void Texture::loadData(u_char* data, int32_t width, int32_t height, uint8_t bpp)
 
     m_bindlessHandle = glGetTextureHandleARB(m_texObject);
     if(m_bindlessHandle == 0){
-        m_logger(Logger::ERROR) << "Unable to retrieve texture handle for texture [" << m_fileName << "]" << '\n';
+        LOG(LOG_ERROR, "Unable to retrieve texture handle for texture [" << m_fileName << "]" << '\n');
         throw textureException();
     }
 
@@ -94,7 +94,7 @@ void Texture::unbind(GLenum tex_unit) const {
 std::shared_ptr<Texture>
 Texture::createTexture(GLenum tex_target, u_char *data, int32_t length, uint8_t channels, const std::string &fileName) {
     if(!fileName.empty() && m_loadedTextures.contains(fileName)){
-        m_logger(Logger::DEBUG) << "Texture [" << fileName << "] already loaded" << '\n';
+        LOG(LOG_DEBUG, "Texture [" << fileName << "] already loaded" << '\n');
         return m_loadedTextures.at(fileName);
     }
 
@@ -106,7 +106,7 @@ Texture::createTexture(GLenum tex_target, u_char *data, int32_t length, uint8_t 
 
 std::shared_ptr<Texture> Texture::createTexture(GLenum tex_target, const std::string &fileName) {
     if(m_loadedTextures.contains(fileName)){
-        m_logger(Logger::DEBUG) << "Texture [" << fileName << "] already loaded" << '\n';
+        LOG(LOG_DEBUG, "Texture [" << fileName << "] already loaded" << '\n');
         return m_loadedTextures.at(fileName);
     }
 

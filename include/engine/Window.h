@@ -7,70 +7,18 @@
 #include <functional>
 #include <vulkan/vulkan.h>
 
-#include "utils/Utils.h"
-#include "connector/Signal.h"
 #include "Cursor.h"
 #include "Keyboard.h"
+#include "connector/Signal.h"
+#include "utils/Utils.h"
 
 /**
  * Application m_window abstraction. Implemented with GLFW m_window.
  */
-class Window {
-public:
+struct Window {
     Window();
-    explicit Window(const char* name);
+    explicit Window(const char *name);
     ~Window();
-
-    /**
-     * @brief Emitted on every mouse button press.
-     */
-    Signal<mouseButtonInfo> sig_updateMouseButtonInfo;
-
-    /**
-     * @brief Emitted on every keyboard button press.
-     */
-    Signal<keyboardButtonInfo> sig_updateKeyboardButtonInfo;
-
-    /**
-     * @brief Emitted with every new mouse position.
-     */
-    Signal<double, double> sig_updateMousePos;
-
-    /**
-     * @brief Emitted when cursor becomes enabled/disabled.
-     */
-    Signal<bool> sig_cursorEnabled;
-
-    /**
-     * @brief Emitted when m_window dimensions is resized.
-     * Returns new width and height.
-     */
-    Signal<int32_t, int32_t> sig_widowDimensions;
-
-    /**
-     * @brief Emitted when m_window framebuffer is resized.
-     * Returns new width and height.
-     */
-    Signal<int32_t, int32_t> sig_framebufferResize;
-
-    /**
-     * @brief Emitted when m_window should close.
-     */
-    Signal<> sig_shouldClose;
-
-    /**
-     * @brief Closes the m_window.
-     */
-    Slot<> slt_setClose{[this](){
-        close();
-    }};
-
-    /**
-     * @brief Toggles between cursor being enabled/disabled.
-     */
-    Slot<> slt_toggleCursor{[this](){
-        toggleCursor();
-    }};
 
     /**
      * @brief Makes the m_window as the current context.
@@ -125,26 +73,77 @@ public:
      * @brief Connects the appropriate signals and slots between this Window and provided Cursor.
      * @param cursor Cursor object.
      */
-    void connectCursor(Cursor& cursor);
+    void connectCursor(Cursor &cursor);
 
     /**
      * @brief Connects the appropriate signals and slots between this Window and provided Keyboard.
      * @param keyboard Keyboard object.
      */
-    void connectKeyboard(Keyboard& keyboard);
+    void connectKeyboard(Keyboard &keyboard);
 
-    static Window* getContextFromWindow(GLFWwindow* window);
+    static Window *getContextFromWindow(GLFWwindow *window);
 
-    [[ nodiscard ]] VkSurfaceKHR createWindowSurface(VkInstance instance);
+    [[nodiscard]] VkSurfaceKHR createWindowSurface(VkInstance instance);
     void initImGuiVulkan();
     void clean();
 
-    static constexpr const char* DEFAULT_WINDOW_NAME = "Tectonic";
+    static constexpr const char *DEFAULT_WINDOW_NAME = "Tectonic";
 
-private:
     void initSignals();
+    static void initGLFW();
 
-    GLFWwindow* m_window;
+    GLFWwindow *glfwWindow;
+
+    /**
+     * @brief Emitted on every mouse button press.
+     */
+    Signal<mouseButtonInfo> sig_updateMouseButtonInfo;
+
+    /**
+     * @brief Emitted on every keyboard button press.
+     */
+    Signal<keyboardButtonInfo> sig_updateKeyboardButtonInfo;
+
+    /**
+     * @brief Emitted with every new mouse position.
+     */
+    Signal<double, double> sig_updateMousePos;
+
+    /**
+     * @brief Emitted when cursor becomes enabled/disabled.
+     */
+    Signal<bool> sig_cursorEnabled;
+
+    /**
+     * @brief Emitted when m_window dimensions is resized.
+     * Returns new width and height.
+     */
+    Signal<int32_t, int32_t> sig_widowDimensions;
+
+    /**
+     * @brief Emitted when m_window framebuffer is resized.
+     * Returns new width and height.
+     */
+    Signal<int32_t, int32_t> sig_framebufferResize;
+
+    /**
+     * @brief Emitted when m_window should close.
+     */
+    Signal<> sig_shouldClose;
+
+    /**
+     * @brief Closes the m_window.
+     */
+    Slot<> slt_setClose{[this]() {
+        close();
+    }};
+
+    /**
+     * @brief Toggles between cursor being enabled/disabled.
+     */
+    Slot<> slt_toggleCursor{[this]() {
+        toggleCursor();
+    }};
 };
 
-#endif //TECTONIC_WINDOW_H
+#endif//TECTONIC_WINDOW_H

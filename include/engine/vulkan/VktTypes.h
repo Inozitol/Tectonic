@@ -144,7 +144,6 @@ namespace VktTypes{
         struct ResolutionBuffer {
             glm::vec2 data;
         };
-
     }
 
     struct PointMesh {
@@ -267,6 +266,7 @@ namespace VktTypes{
     struct RenderObject{
         uint32_t indexCount = 0;
         uint32_t firstIndex = 0;
+        int32_t vertexOffset = 0;
         VkBuffer indexBuffer = VK_NULL_HANDLE;
 
         bool isSkinned = false;

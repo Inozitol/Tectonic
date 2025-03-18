@@ -1,5 +1,4 @@
-#ifndef TECTONIC_TRANSFORMATION_H
-#define TECTONIC_TRANSFORMATION_H
+#pragma once
 
 #include <glm/mat4x4.hpp>
 #include <glm/ext/matrix_transform.hpp>
@@ -88,5 +87,3 @@ private:
     mutable bool worldCurrent = false;
     mutable glm::mat4 m_worldMatrix{};
 };
-
-#endif //TECTONIC_TRANSFORMATION_H

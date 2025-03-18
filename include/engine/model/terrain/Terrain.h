@@ -1,23 +1,25 @@
 #ifndef TECTONIC_TERRAIN_H
 #define TECTONIC_TERRAIN_H
 
-#include "extern/stb/stb_image.h"
 #include <random>
 #include <limits>
 #include <utility>
 
-#include "engine/model/Model.h"
-#include "Transformation.h"
-#include "Logger.h"
 #include "LODManager.h"
+#include "engine/model/Model.h"
+#include "utils/Utils.h"
 
-class Terrain : public Model {
-    friend class EngineCore;
-public:
+#define MAX_TERRAIN_HEIGHT_TEXTURE 4
+
+struct Terrain {
+    using Vertex_t = VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::STATIC>;
+
     Terrain();
-    ~Terrain() = default;
+    ~Terrain();
 
-    void initMeta();
+    void clear();
+
+    void initSignals();
 
     /**
      * @brief Generates a flat terrain with given dimensions.
@@ -43,45 +45,36 @@ public:
      */
     void generateMidpoint(uint32_t size, float roughness, const std::vector<std::string>& textureFiles);
 
-    void setMaxRange(float maxRange);
-    void setMinRange(float minRange);
-
     /**
      * @brief Sets a maximum amount of LOD levels per patch. Adjusts the patch size accordingly.
      * @param maxLOD Maximum amount of levels of details per one patch (results in patch size of 2^maxLOD + 1)
      */
     void setMaxLOD(uint32_t maxLOD);
-    void setCamera(Camera& camera);
-    void setScale(float scale);
-    float getScale();
+
+    void connectCamera(Camera& camera);
 
     [[nodiscard]] std::pair<float, float> getMinMaxHeight();
     [[nodiscard]] std::pair<uint32_t, uint32_t> getCenterCoords() const;
+
     float hMapLCoord(uint32_t x, uint32_t y);
     float hMapLCoord(std::pair<uint32_t, uint32_t> coords);
-
     const glm::vec3& pMapWCoord(int32_t x, int32_t y);
     float hMapWCoord(int32_t x, int32_t y);
-
     float hMapBaryWCoord(float x, float y);
 
-    void clear() override;
+    using blendingTexturesArray_t = std::array<std::pair<float, VktTypes::Resources::Image>, MAX_TERRAIN_HEIGHT_TEXTURE>;
 
-    void bindBlendingTextures();
-
-    using blendingTexturesArray_t = std::array<std::pair<float, std::shared_ptr<Texture>>, MAX_TERRAIN_HEIGHT_TEXTURE>;
-
-    class meshIterator {
+    class renderIterator {
     public:
         using iterator_category = std::input_iterator_tag;
         using difference_type   = std::ptrdiff_t;
-        using value_type        = MeshInfo;
-        using pointer           = MeshInfo const*;
-        using reference         = MeshInfo const&;
+        using value_type        = VktTypes::RenderObject;
+        using pointer           = VktTypes::RenderObject const*;
+        using reference         = VktTypes::RenderObject const&;
 
         std::function<value_type(uint32_t&, uint32_t&)> nextMesh;
 
-        explicit meshIterator(std::function<value_type(uint32_t&, uint32_t&)> func) : m_done(false), nextMesh(std::move(func)){
+        explicit renderIterator(std::function<value_type(uint32_t&, uint32_t&)> func) : m_done(false), nextMesh(std::move(func)){
             m_mesh = nextMesh(m_patchX, m_patchY);
             if(m_patchX == 0 && m_patchY == 0)
                 m_done = true;
@@ -92,32 +85,32 @@ public:
         reference operator*() const { return m_mesh; }
         pointer operator->() const { return &m_mesh; }
 
-        meshIterator& operator++(){
+        renderIterator& operator++(){
             m_mesh = nextMesh(m_patchX, m_patchY);
             if(m_patchX == 0 && m_patchY == 0)
                 m_done = true;
             return *this;
         }
 
-        meshIterator operator++(int){
+        renderIterator operator++(int){
             auto tmp = *this;
             ++(*this);
             return tmp;
         }
 
-        friend bool operator==(meshIterator const& lhs, meshIterator const& rhs){
+        friend bool operator==(renderIterator const& lhs, renderIterator const& rhs){
             return (lhs.m_done && rhs.m_done);
         }
 
-        friend bool operator!=(meshIterator const& lhs, meshIterator const& rhs){
+        friend bool operator!=(renderIterator const& lhs, renderIterator const& rhs){
             return (!lhs.m_done || !rhs.m_done);
         }
 
-        meshIterator(meshIterator&&) = default;
-        meshIterator(meshIterator const&) = default;
-        meshIterator& operator=(meshIterator &&) = default;
-        meshIterator& operator=(meshIterator const&) = default;
-        meshIterator() = delete;
+        renderIterator(renderIterator&&) = default;
+        renderIterator(renderIterator const&) = default;
+        renderIterator& operator=(renderIterator &&) = default;
+        renderIterator& operator=(renderIterator const&) = default;
+        renderIterator() = delete;
 
     private:
         bool m_done;
@@ -126,7 +119,7 @@ public:
         uint32_t m_patchY = 0;
     };
 
-    meshIterator meshIter();
+    renderIterator renderIter() const;
 
     enum class Flags : std::uint8_t{
         SET_NEAREST_SIZE,
@@ -136,10 +129,9 @@ public:
 
     Utils::Flags<Flags> flags;
 
-private:
     void generateFlatPlane();
-    [[nodiscard]] inline std::pair<uint32_t,uint32_t> i2xy(uint32_t i) const { return {i % m_dimX, i / m_dimY}; }
-    [[nodiscard]] inline uint32_t xy2i(uint32_t x, uint32_t y) const { return (y*m_dimX)+x; }
+    [[nodiscard]] inline std::pair<uint32_t,uint32_t> i2xy(uint32_t i) const { return {i % dimX, i / dimY}; }
+    [[nodiscard]] inline uint32_t xy2i(uint32_t x, uint32_t y) const { return (y*dimX)+x; }
 
     float& hMapAt(uint32_t x, uint32_t y);
     float& hMapAt(uint32_t i);
@@ -155,32 +147,42 @@ private:
     void calcMinMax();
     void calcNormals();
 
-    void addBlendTexture(float height, const std::shared_ptr<Texture>& texture);
+    void addBlendTexture(float height, const VktTypes::Resources::Image& texture);
+    void createMaterial();
 
     void diamondStep(uint32_t rectSize, float currHeight);
     void squareStep(uint32_t rectSize, float currHeight);
 
     bool isPatchInsideFrustum(uint32_t x, uint32_t y);
 
-    float m_worldScale = 1.0f;
+    float worldScale = 1.0f;
 
-    uint32_t m_dimX = 0;
-    uint32_t m_dimY = 0;
+    uint32_t dimX = 0;
+    uint32_t dimY = 0;
 
-    uint32_t m_patchesX = 0;
-    uint32_t m_patchesY = 0;
+    uint32_t patchesX = 0;
+    uint32_t patchesY = 0;
 
-    float m_minHeight = std::numeric_limits<float>::infinity();
-    float m_maxHeight = -std::numeric_limits<float>::infinity();
+    float minHeight = std::numeric_limits<float>::infinity();
+    float maxHeight = -std::numeric_limits<float>::infinity();
 
-    float m_minRange = 0.0f;
-    float m_maxRange = 50.0f;
+    float minRange = 0.0f;
+    float maxRange = 50.0f;
 
-    blendingTexturesArray_t m_blendingTextures;
-    decltype(MAX_TERRAIN_HEIGHT_TEXTURE) m_blendingTexturesCount = 0;
+    blendingTexturesArray_t blendingTextures;
+    uint8_t blendingTexturesCount = 0;
 
-    uint32_t m_maxLOD = 0;
-    uint32_t m_patchSize = 0;
+    std::vector<VktTypes::MaterialInstance> materials;
+
+    DescriptorAllocatorDynamic descriptorPool;
+    VktTypes::Resources::Buffer materialBuffer;
+
+    uint32_t maxLOD = 0;
+    uint32_t patchSize = 0;
+
+    std::vector<VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::STATIC>> vertices;
+    std::vector<uint32_t> indices;
+    VktTypes::GPU::MeshBuffers meshBuffers;
 
     constexpr static uint8_t LEFT = 2;
     constexpr static uint8_t RIGHT = 2;
@@ -194,103 +196,113 @@ private:
     struct LODInfo {
         singleLODInfo info[LEFT][RIGHT][TOP][BOTTOM];
     };
-    std::vector<LODInfo> m_lodInfo;
-    LODManager m_lodManager;
+    std::vector<LODInfo> lodInfo;
+    LODManager lodManager;
 
-    std::function<MeshInfo(uint32_t&, uint32_t&)> m_meshFunc = {[this](uint32_t& patchX, uint32_t& patchY){
+    VktTypes::DrawContext drawContext;
 
-        if (patchY >= m_patchesY) {
+    std::function<VktTypes::RenderObject(uint32_t&, uint32_t&)> meshFunc = {[this](uint32_t& patchX, uint32_t& patchY){
+
+        if (patchY >= patchesY) {
             patchX = 0;
             patchY = 0;
-            return MeshInfo();
+            return VktTypes::RenderObject();
         }
 
-        const LODManager::patchLOD& pLOD = m_lodManager.getPatchLOD(patchX, patchY);
+        const LODManager::patchLOD& pLOD = lodManager.getPatchLOD(patchX, patchY);
         uint32_t C = pLOD.core;
         uint32_t L = pLOD.left;
         uint32_t R = pLOD.right;
         uint32_t T = pLOD.top;
         uint32_t B = pLOD.bottom;
 
-        uint32_t baseIndex = m_lodInfo.at(C).info[L][R][T][B].start;
+        uint32_t baseIndex = lodInfo.at(C).info[L][R][T][B].start;
 
-        uint32_t x = patchX * (m_patchSize-1);
-        uint32_t y = patchY * (m_patchSize-1);
-        uint32_t baseVertex = y * m_dimX + x;
+        uint32_t x = patchX * (patchSize-1);
+        uint32_t y = patchY * (patchSize-1);
+        uint32_t baseVertex = y * dimX + x;
 
-        MeshInfo meshInfo;
-        meshInfo.indicesCount = m_lodInfo.at(C).info[L][R][T][B].count;
-        meshInfo.verticesOffset = baseVertex;
-        meshInfo.indicesOffset = baseIndex;
-        meshInfo.matIndex = 0;
+        VktTypes::RenderObject renderObject;
+        renderObject.indexCount = lodInfo.at(C).info[L][R][T][B].count;
+        renderObject.vertexOffset = baseVertex;
+        renderObject.firstIndex = baseIndex;
+        renderObject.material = &materials.at(0);
+        renderObject.indexBuffer = meshBuffers.indexBuffer.buffer;
+        renderObject.vertexBufferAddress = meshBuffers.vertexBufferAddress;
 
         patchX++;
-        if (patchX == m_patchesX) {
+        if (patchX == patchesX) {
             patchY++;
             patchX = 0;
         }
 
-        return meshInfo;
+        return renderObject;
     }};
 
-    Utils::FrustumCulling m_frustumCulling = Utils::FrustumCulling(0.1);
+    Utils::FrustumCulling frustumCulling = Utils::FrustumCulling{.bias = -0.1 };
 
     Slot<Flags, bool> slt_flagChange {[this](Flags flag, bool state){
         switch(flag){
             case Flags::CULL_PATCHES:
                 if(state){
-                    m_meshFunc = {[this](uint32_t& patchX, uint32_t& patchY){
-                        if (patchY >= m_patchesY) {
+                    meshFunc = {[this](uint32_t& patchX, uint32_t& patchY){
+                        if (patchY >= patchesY) {
                             patchX = 0;
                             patchY = 0;
-                            return MeshInfo();
+                            return VktTypes::RenderObject();
                         }
-                        const LODManager::patchLOD& pLOD = m_lodManager.getPatchLOD(patchX, patchY);
+                        const LODManager::patchLOD& pLOD = lodManager.getPatchLOD(patchX, patchY);
                         uint32_t C = pLOD.core;
                         uint32_t L = pLOD.left;
                         uint32_t R = pLOD.right;
                         uint32_t T = pLOD.top;
                         uint32_t B = pLOD.bottom;
-                        MeshInfo meshInfo;
-                        meshInfo.indicesCount = m_lodInfo.at(C).info[L][R][T][B].count;
-                        meshInfo.verticesOffset = (patchY * (m_patchSize-1)) * m_dimX + (patchX * (m_patchSize-1));
-                        meshInfo.indicesOffset = m_lodInfo.at(C).info[L][R][T][B].start;
-                        meshInfo.matIndex = 0;
+                        VktTypes::RenderObject renderObject;
+                        renderObject.indexCount = lodInfo.at(C).info[L][R][T][B].count;
+                        renderObject.vertexOffset = (patchY * (patchSize-1)) * dimX + (patchX * (patchSize-1));
+                        renderObject.firstIndex = lodInfo.at(C).info[L][R][T][B].start;
+                        renderObject.material = &materials.at(0);
+                        renderObject.indexBuffer = meshBuffers.indexBuffer.buffer;
+                        renderObject.vertexBufferAddress = meshBuffers.vertexBufferAddress;
+
                         do {
                             patchX++;
-                            if (patchX == m_patchesX) {
+                            if (patchX == patchesX) {
                                 patchY++;
                                 patchX = 0;
                             }
-                            if (patchY == m_patchesY) break;
+                            if (patchY == patchesY) break;
 
                         }while(!isPatchInsideFrustum(patchX, patchY));
-                        return meshInfo;
+                        return renderObject;
                     }};
                 }else{
-                    m_meshFunc = {[this](uint32_t& patchX, uint32_t& patchY){
-                        if (patchY >= m_patchesY) {
+                    meshFunc = {[this](uint32_t& patchX, uint32_t& patchY){
+                        if (patchY >= patchesY) {
                             patchX = 0;
                             patchY = 0;
-                            return MeshInfo();
+                            return VktTypes::RenderObject();
                         }
-                        const LODManager::patchLOD& pLOD = m_lodManager.getPatchLOD(patchX, patchY);
+                        const LODManager::patchLOD& pLOD = lodManager.getPatchLOD(patchX, patchY);
                         uint32_t C = pLOD.core;
                         uint32_t L = pLOD.left;
                         uint32_t R = pLOD.right;
                         uint32_t T = pLOD.top;
                         uint32_t B = pLOD.bottom;
-                        MeshInfo meshInfo;
-                        meshInfo.indicesCount = m_lodInfo.at(C).info[L][R][T][B].count;
-                        meshInfo.verticesOffset = (patchY * (m_patchSize-1)) * m_dimX + (patchX * (m_patchSize-1));
-                        meshInfo.indicesOffset = m_lodInfo.at(C).info[L][R][T][B].start;
-                        meshInfo.matIndex = 0;
+                        VktTypes::RenderObject renderObject;
+                        renderObject.indexCount = lodInfo.at(C).info[L][R][T][B].count;
+                        renderObject.vertexOffset = (patchY * (patchSize-1)) * dimX + (patchX * (patchSize-1));
+                        renderObject.firstIndex = lodInfo.at(C).info[L][R][T][B].start;
+                        renderObject.material = &materials.at(0);
+                        renderObject.indexBuffer = meshBuffers.indexBuffer.buffer;
+                        renderObject.vertexBufferAddress = meshBuffers.vertexBufferAddress;
+
                         patchX++;
-                        if (patchX == m_patchesX) {
+                        if (patchX == patchesX) {
                             patchY++;
                             patchX = 0;
                         }
-                        return meshInfo;
+                        return renderObject;
                     }};
                 }
                 break;
@@ -298,8 +310,7 @@ private:
         }
     }};
 
-    std::random_device m_randDevice;
-    static Logger m_logger;
+    std::random_device randDevice;
 };
 
 #endif //TECTONIC_TERRAIN_H

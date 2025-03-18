@@ -1,4 +1,6 @@
 #include "engine/vulkan/VktImages.h"
+
+#include "engine/GlobalMemory.h"
 #include "engine/vulkan/VktBuffers.h"
 #include "engine/vulkan/VktCache.h"
 #include "engine/vulkan/VktInstantCommands.h"
@@ -7,8 +9,6 @@
 #include <vulkan/utility/vk_format_utils.h>
 
 namespace VktImages {
-    static Logger logger("VktImages");
-
     std::optional<VktTypes::Resources::Image> create(const VktImageCreateInfo &info) {
         VktTypes::Resources::Image newImage{
                 .extent = info.extent,
@@ -27,7 +27,7 @@ namespace VktImages {
         allocInfo.usage = info.memoryUsage;
         allocInfo.requiredFlags = info.memoryProperties;
 
-        VK_CHECK(vmaCreateImage(VktCache::vmaAllocator, &imgInfo, &allocInfo, &newImage.image, &newImage.allocation, &newImage.info))
+        VK_CHECK(vmaCreateImage(VktCachePtr->vmaAllocator, &imgInfo, &allocInfo, &newImage.image, &newImage.allocation, &newImage.info))
 
         VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
         if(info.format == VK_FORMAT_D32_SFLOAT) {
@@ -40,7 +40,7 @@ namespace VktImages {
             viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
         }
 
-        VK_CHECK(vkCreateImageView(VktCache::vkDevice, &viewInfo, nullptr, &newImage.view))
+        VK_CHECK(vkCreateImageView(VktCachePtr->vkDevice, &viewInfo, nullptr, &newImage.view))
         return newImage;
     }
 
@@ -107,14 +107,14 @@ namespace VktImages {
     std::optional<VktTypes::Resources::Image> createFromFileKtx(const char *path, bool isCubemap) {
         auto imagePath = std::filesystem::path(path);
         if(!exists(imagePath)) {
-            logger(Logger::ERROR) << "Failed to create image. Cannot find ktx file " << imagePath << '\n';
+            LOG(LOG_ERROR,"Failed to create image. Cannot find ktx file " << imagePath);
             return {};
         }
 
         ktxTexture2 *ktxImage;
         ktxResult result = ktxTexture2_CreateFromNamedFile(imagePath.c_str(), KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT, &ktxImage);
         if(result != KTX_SUCCESS) {
-            logger(Logger::ERROR) << "Failed to create image. ktxTexture_CreateFromNamedFile returned " << ktxErrorString(result) << '\n';
+            LOG(LOG_ERROR,"Failed to create image. ktxTexture_CreateFromNamedFile returned " << ktxErrorString(result));
             return {};
         }
 
@@ -131,7 +131,7 @@ namespace VktImages {
         }
 
         if(isCubemap && ktxImage->numLayers != 6) {
-            logger(Logger::WARNING) << "Loaded ktx " << path << " file with " << ktxImage->numLayers << " layers but expected 6 because isCubemap set to true. Are you sure this is a cubemap?\n";
+            LOG(LOG_WARNING, "Loaded ktx " << path << " file with " << ktxImage->numLayers << " layers but expected 6 because isCubemap set to true. Are you sure this is a cubemap?");
         }
 
         const char *ktxImageData = reinterpret_cast<char *>(ktxImage->pData);
@@ -164,7 +164,7 @@ namespace VktImages {
 
         ktxResult = ktxTexture2_Create(&ktxCreateInfo, KTX_TEXTURE_CREATE_ALLOC_STORAGE, &texture);
         if(ktxResult != KTX_SUCCESS) {
-            logger(Logger::ERROR) << "Failed to create ktxTexture2. ktxTexture2_Create returned [" << ktxErrorString(ktxResult) << "]\n";
+            LOG(LOG_ERROR,"Failed to create ktxTexture2. ktxTexture2_Create returned [" << ktxErrorString(ktxResult) << ']');
             return false;
         }
         VktInstantCommands::submitCommands([&](VkCommandBuffer cmd) {
@@ -197,7 +197,7 @@ namespace VktImages {
 
                 ktxResult = ktxTexture_SetImageFromMemory(ktxTexture(texture), mipLevel, layer, 0, static_cast<ktx_uint8_t *>(copyBuffer.info.pMappedData), layerSize);
                 if(ktxResult != KTX_SUCCESS) {
-                    logger(Logger::ERROR) << "Failed to set ktx image memory. ktxTexture_SetImageFromMemory returned [" << ktxErrorString(ktxResult) << "]\n";
+                    LOG(LOG_ERROR,"Failed to set ktx image memory. ktxTexture_SetImageFromMemory returned [" << ktxErrorString(ktxResult) << ']');
                     VktInstantCommands::submitCommands([&](VkCommandBuffer cmd) {
                         VktUtils::transitionImage(cmd, image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
                     });
@@ -212,7 +212,7 @@ namespace VktImages {
 
         ktxResult = ktxTexture_WriteToNamedFile(ktxTexture(texture), path);
         if(ktxResult != KTX_SUCCESS) {
-            logger(Logger::ERROR) << "Failed to create ktx file. ktxTexture_WriteToNamedFile returned [" << ktxErrorString(ktxResult) << "]\n";
+            LOG(LOG_ERROR,"Failed to create ktx file. ktxTexture_WriteToNamedFile returned [" << ktxErrorString(ktxResult) << ']');
             return false;
         }
 
@@ -222,8 +222,8 @@ namespace VktImages {
     }
 
     void destroy(const VktTypes::Resources::Image &image) {
-        vkDestroyImageView(VktCache::vkDevice, image.view, nullptr);
-        vmaDestroyImage(VktCache::vmaAllocator, image.image, image.allocation);
+        vkDestroyImageView(VktCachePtr->vkDevice, image.view, nullptr);
+        vmaDestroyImage(VktCachePtr->vmaAllocator, image.image, image.allocation);
     }
 
 }// namespace VktImages

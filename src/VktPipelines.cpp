@@ -1,5 +1,6 @@
 #include "engine/vulkan/VktPipelines.h"
 
+#include "engine/GlobalMemory.h"
 #include "engine/vulkan/VktCache.h"
 
 
@@ -9,7 +10,7 @@ VktPipelineBuilder::VktPipelineBuilder() {
 
 VktPipelineBuilder::~VktPipelineBuilder() {
     for(const auto &[stage, module]: shaderStages) {
-        vkDestroyShaderModule(VktCache::vkDevice, module, nullptr);
+        vkDestroyShaderModule(VktCachePtr->vkDevice, module, nullptr);
     }
 }
 
@@ -56,7 +57,11 @@ VkPipeline VktPipelineBuilder::buildPipeline() {
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.layout = layout;
 
-    std::array<VkDynamicState, 2> state = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    std::array state = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+        VK_DYNAMIC_STATE_POLYGON_MODE_EXT
+    };
 
     VkPipelineDynamicStateCreateInfo dynamicInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, .pNext = nullptr};
     dynamicInfo.pDynamicStates = state.data();
@@ -65,7 +70,7 @@ VkPipeline VktPipelineBuilder::buildPipeline() {
     pipelineInfo.pDynamicState = &dynamicInfo;
 
     VkPipeline graphicsPipeline;
-    VK_CHECK(vkCreateGraphicsPipelines(VktCache::vkDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
+    VK_CHECK(vkCreateGraphicsPipelines(VktCachePtr->vkDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline));
     return graphicsPipeline;
 }
 
@@ -96,7 +101,7 @@ void VktPipelineBuilder::setShaders(const char *vertexShaderPath, const char *fr
 void VktPipelineBuilder::setShader(VkShaderStageFlagBits stageBit, const char *path) {
     // Delete old shader in case its still cached
     if(shaderStages.contains(stageBit)) {
-        vkDestroyShaderModule(VktCache::vkDevice, shaderStages.at(stageBit), nullptr);
+        vkDestroyShaderModule(VktCachePtr->vkDevice, shaderStages.at(stageBit), nullptr);
     }
     shaderStages[stageBit] = VktUtils::loadShaderModule(path);
 }

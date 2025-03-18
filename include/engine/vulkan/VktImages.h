@@ -91,7 +91,7 @@ namespace VktImages {
     /**
      * @brief Creates an image from ktx file
      * @param path Path to ktx file
-     * @param isCubemap If true the loader will check if the image contains 6 layers and gives a warning if not.
+     * @param isCubemap If true the loader will check if the image contains 6 layers and gives a warning if it doesn't have them.
      * @return GPU allocated filled image
      */
     std::optional<VktTypes::Resources::Image> createFromFileKtx(const char *path, bool isCubemap = false);
