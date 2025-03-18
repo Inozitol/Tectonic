@@ -1,6 +1,7 @@
 
 #include "engine/vulkan/VktInstantCommands.h"
 
+#include "engine/GlobalMemory.h"
 #include "engine/vulkan/VktStructs.h"
 #include "engine/vulkan/VktUtils.h"
 
@@ -21,15 +22,15 @@ void VktInstantCommands::init(uint32_t queueIndex, VkQueue queue) {
 
     // Create VkFence
     const VkFenceCreateInfo fenceCreateInfo = VktStructs::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    VK_CHECK(vkCreateFence(VktCache::vkDevice, &fenceCreateInfo, nullptr, &vkFence));
+    VK_CHECK(vkCreateFence(VktCachePtr->vkDevice, &fenceCreateInfo, nullptr, &vkFence));
 
     // Create command pool
     VkCommandPoolCreateInfo commandPoolCreateInfo = VktStructs::commandPoolCreateInfo(queueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-    VK_CHECK(vkCreateCommandPool(VktCache::vkDevice, &commandPoolCreateInfo, nullptr, &vkCmdPool));
+    VK_CHECK(vkCreateCommandPool(VktCachePtr->vkDevice, &commandPoolCreateInfo, nullptr, &vkCmdPool));
 
     // Create command buffer
     VkCommandBufferAllocateInfo cmdAllocInfo = VktStructs::commandBufferAllocateInfo(vkCmdPool, 1);
-    VK_CHECK(vkAllocateCommandBuffers(VktCache::vkDevice, &cmdAllocInfo, &vkCmdBuffer))
+    VK_CHECK(vkAllocateCommandBuffers(VktCachePtr->vkDevice, &cmdAllocInfo, &vkCmdBuffer))
 
     instance.isInitialized = true;
 }
@@ -38,7 +39,7 @@ void VktInstantCommands::submitCommands(std::function<void(VkCommandBuffer cmd)>
     VktInstantCommands &instance = getInstance();
     assert(instance.isInitialized);
 
-    VK_CHECK(vkResetFences(VktCache::vkDevice, 1, &instance.vkFence))
+    VK_CHECK(vkResetFences(VktCachePtr->vkDevice, 1, &instance.vkFence))
     VK_CHECK(vkResetCommandBuffer(instance.vkCmdBuffer, 0))
 
     VkCommandBuffer cmd = vkCmdBuffer;
@@ -52,14 +53,14 @@ void VktInstantCommands::submitCommands(std::function<void(VkCommandBuffer cmd)>
     VkSubmitInfo2 submitInfo = VktStructs::submitInfo(&cmdInfo, nullptr, nullptr);
 
     VK_CHECK(vkQueueSubmit2(instance.vkQueue, 1, &submitInfo, instance.vkFence))
-    VK_CHECK(vkWaitForFences(VktCache::vkDevice, 1, &instance.vkFence, VK_TRUE, 9999999999))
+    VK_CHECK(vkWaitForFences(VktCachePtr->vkDevice, 1, &instance.vkFence, VK_TRUE, 9999999999))
 }
 
 void VktInstantCommands::clear() {
     VktInstantCommands &instance = getInstance();
     assert(instance.isInitialized);
 
-    vkDestroyFence(VktCache::vkDevice, vkFence, nullptr);
-    vkDestroyCommandPool(VktCache::vkDevice, vkCmdPool, nullptr);
+    vkDestroyFence(VktCachePtr->vkDevice, vkFence, nullptr);
+    vkDestroyCommandPool(VktCachePtr->vkDevice, vkCmdPool, nullptr);
     instance.isInitialized = false;
 }

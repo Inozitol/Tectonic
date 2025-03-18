@@ -189,7 +189,7 @@ namespace Utils{
 
         return OrthoProjInfo{min.x, max.x, min.y, max.y, min.z, max.z};
     }
-
+*/
     uint32_t nextPowerOf(uint32_t in, uint32_t power){
         double l = log(in)/log(power);
         return static_cast<uint32_t>(std::pow(power,static_cast<uint32_t>(std::ceil(l))));
@@ -202,23 +202,23 @@ namespace Utils{
     void FrustumCulling::update(const glm::mat4 &VP) {
         glm::mat4 tVP = glm::transpose(VP);
 
-        m_leftClipPlane     = tVP[3] + tVP[0];
-        m_rightClipPlane    = tVP[3] - tVP[0];
-        m_bottomClipPlane   = tVP[3] + tVP[1];
-        m_topClipPlane      = tVP[3] - tVP[1];
-        m_nearClipPlane     = tVP[3] + tVP[2];
-        m_farClipPlane      = tVP[3] - tVP[2];
+        leftClipPlane     = tVP[3] + tVP[0];
+        rightClipPlane    = tVP[3] - tVP[0];
+        bottomClipPlane   = tVP[3] + tVP[1];
+        topClipPlane      = tVP[3] - tVP[1];
+        nearClipPlane     = tVP[3] + tVP[2];
+        farClipPlane      = tVP[3] - tVP[2];
     }
 
     bool FrustumCulling::isPointInside(const glm::vec3 &point) const {
         glm::vec4 point4D(point,1.0f);
 
-        return  (glm::dot(m_leftClipPlane,point4D) >= m_bias) &&
-                (glm::dot(m_rightClipPlane, point4D) >= m_bias) &&
-                (glm::dot(m_bottomClipPlane, point4D) >= m_bias) &&
-                (glm::dot(m_topClipPlane, point4D) >= m_bias) &&
-                (glm::dot(m_nearClipPlane, point4D) >= m_bias) &&
-                (glm::dot(m_farClipPlane, point4D) >= m_bias);
+        return  (glm::dot(leftClipPlane,point4D) >= bias) &&
+                (glm::dot(rightClipPlane, point4D) >= bias) &&
+                (glm::dot(bottomClipPlane, point4D) >= bias) &&
+                (glm::dot(topClipPlane, point4D) >= bias) &&
+                (glm::dot(nearClipPlane, point4D) >= bias) &&
+                (glm::dot(farClipPlane, point4D) >= bias);
     }
 
     void barycentric(glm::vec2 p, glm::vec2 a, glm::vec2 b, glm::vec2 c, float &u, float &v, float &w){
@@ -233,5 +233,5 @@ namespace Utils{
         w = (d00*d21 - d01*d20) / denom;
         u = 1.0f-v-w;
     }
-    */
+
 }

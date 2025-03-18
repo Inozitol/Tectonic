@@ -7,9 +7,6 @@
 #include <fstream>
 #include <vector>
 
-#include "VktStructs.h"
-#include "exceptions.h"
-
 #define VK_CHECK(x)                                                             \
     do{                                                                         \
         VkResult err = x;                                                       \
@@ -25,6 +22,7 @@ namespace VktUtils{
     void copyImgToImg(VkCommandBuffer cmd, VkImage src, VkImage dst, VkExtent2D srcExtent, VkExtent2D dstExtent);
     VkShaderModule loadShaderModule(const char* path);
     void DestroyDebugUtilsMessengerEXT(VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator);
+    void CmdSetPolygonModeEXT(VkCommandBuffer cmd, VkPolygonMode polygonMode);
     std::vector<VkImageView> createImageMipViews(VkImage image, VkFormat format, uint32_t mipLevels);
     std::vector<VkImageView> createCubemapMipViews(VkImage cubemapImage, VkFormat format, uint32_t mipLevels);
 }

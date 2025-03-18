@@ -3,8 +3,8 @@
 
 #include <set>
 
-#include "camera/Camera.h"
 #include "Keyboard.h"
+#include "camera/Camera.h"
 #include "connector/Slot.h"
 
 /**
@@ -13,15 +13,14 @@
  *
  * @brief Controllable camera.
  */
-class GameCamera : public Camera {
-public:
+struct GameCamera : Camera {
     GameCamera() = default;
 
     /**
      * @brief Handles an incoming key event and moves the camera accordingly.
      * @param buttonInfo Info about a keyboard button event.
      */
-    void handleKeyboardEvent(const keyboardButtonInfo& buttonInfo);
+    void handleKeyboardEvent(const keyboardButtonInfo &buttonInfo);
 
     /**
      * Calculates a new angle for the camera to rotate to.
@@ -49,48 +48,47 @@ public:
      * @brief Updates the world space of the camera.
      */
     void updatePosition();
-    
+
+    /// Contains the set of all currently holding buttons.
+    std::set<int32_t> m_holdingButtons;
+
+    /// Sum of holding key destination vectors, calculated on every button press/release event.
+    glm::vec3 destinationSumVec = {0.0f, 0.0f, 0.0f};
+
+    /// Unit vector pointing to the current destination, calculated on every button press/release event.
+    glm::vec3 destinationNormVec = {0.0f, 0.0f, 0.0f};
+
+    float speed = 1.0f;
+    float sensitivity = 0.001f;
+
+    bool firstMouse = true;
+    glm::vec2 lastMousePos = glm::vec2(0.0f, 0.0f);
+
+    bool cursorEnabled = false;
+
     /**
      * Handles incoming keyboard presses.
      */
-    Slot<keyboardButtonInfo> slt_keyEvent{[this](keyboardButtonInfo buttonInfo){
+    Slot<keyboardButtonInfo> slt_keyEvent{[this](keyboardButtonInfo buttonInfo) {
         handleKeyboardEvent(buttonInfo);
     }};
 
     /**
      * Handles new mouse positions.
      */
-    Slot<double, double> slt_mouseMovement{[this](double x, double y){
-        handleMouseEvent(x,y);
+    Slot<double, double> slt_mouseMovement{[this](double x, double y) {
+        handleMouseEvent(x, y);
     }};
 
     /**
      * Enables or disables cursor for the camera.
      * It needs to set m_firstMouse to true so that camera wont snap between previous positions.
      */
-    Slot<bool> slt_cursorEnabled{[this](bool isEnabled){
-        m_cursorEnabled = isEnabled;
-        m_firstMouse = true;
+    Slot<bool> slt_cursorEnabled{[this](bool isEnabled) {
+        cursorEnabled = isEnabled;
+        firstMouse = true;
     }};
-
-private:
-    /// Contains the set of all currently holding buttons.
-    std::set<int32_t> m_holdingButtons;
-
-    /// Sum of holding key destination vectors, calculated on every button press/release event.
-    glm::vec3 m_destinationSumVec = {0.0f, 0.0f, 0.0f};
-
-    /// Unit vector pointing to the current destination, calculated on every button press/release event.
-    glm::vec3 m_destinationNormVec = {0.0f, 0.0f, 0.0f};
-
-    float m_speed = 1.0f;
-    float m_sensitivity = 0.001f;
-
-    bool m_firstMouse = true;
-    glm::vec2 m_lastMousePos = glm::vec2(0.0f, 0.0f);
-
-    bool m_cursorEnabled = false;
 };
 
 
-#endif //TECTONIC_GAMECAMERA_H
+#endif//TECTONIC_GAMECAMERA_H

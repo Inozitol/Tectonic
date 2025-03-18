@@ -1,6 +1,4 @@
-#include "model/terrain/LODManager.h"
-
-Logger LODManager::m_logger = Logger("LOD Manager");
+#include "engine/model/terrain/LODManager.h"
 
 void LODManager::init(uint32_t maxLOD, uint32_t patchesX, uint32_t patchesY, float scale) {
     m_worldScale = scale;
@@ -25,7 +23,7 @@ void LODManager::calcLODRegions() {
     uint32_t sum = 0;
 
     for(uint32_t i = 0; i <= m_maxLOD; i++){
-        sum += (i + 1);
+        sum += i + 1;
     }
 
     float X = CAMERA_PPROJ_FAR / static_cast<float>(sum);
@@ -36,7 +34,7 @@ void LODManager::calcLODRegions() {
         auto currRange = X * static_cast<float>(i+1);
         m_regions.at(i) = temp + currRange;
         temp += currRange;
-        m_logger(Logger::DEBUG) << "Regions with LOD " << i << " set to range " << currRange << '\n';
+        LOG(LOG_DEBUG, "Regions with LOD " << i << " set to range " << currRange);
     }
 }
 

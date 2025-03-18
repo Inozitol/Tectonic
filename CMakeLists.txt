@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 project(Tectonic)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -rdynamic")
 
 add_definitions(-DGLM_FORCE_INTRINSICS)
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
@@ -22,12 +23,11 @@ add_executable(Tectonic
         src/VktPipelines.cpp
         src/VktDeletableQueue.cpp
         src/VktTypes.cpp
-        src/Logger.cpp
         src/Window.cpp
         src/Utils.cpp
         src/GameCamera.cpp
         src/Camera.cpp
-        src/EngineCore.cpp
+        src/TecCore.cpp
         src/Keyboard.cpp
         src/Cursor.cpp
         src/Transformation.cpp
@@ -36,12 +36,17 @@ add_executable(Tectonic
         src/VktBuffers.cpp
         src/VktInstantCommands.cpp
         src/VktImages.cpp
-        src/VktSkybox.cpp
+        src/Skybox.cpp
         src/VktCache.cpp
         src/Animatrix.cpp
         include/engine/Animatrix.h
-        src/TecCache.cpp
-        include/engine/TecCache.h
+        include/engine/ImGuiHandler.h
+        src/ImGuiHandler.cpp
+        include/utils/ImGuiUtils.h
+        include/engine/GlobalMemory.h
+        src/Terrain.cpp
+        src/LODManager.cpp
+        src/World.cpp
 )
 
 #find_library(KTX_LIB ktx)
@@ -82,9 +87,8 @@ add_dependencies(${PROJECT_NAME} Shaders)
 
 add_executable(gltf2tec
         src/gltf2tec.cpp
-        src/Logger.cpp)
+)
 
 target_link_libraries(gltf2tec stb)
 target_link_libraries(gltf2tec fastgltf)
 target_link_libraries(gltf2tec GPUOpen::VulkanMemoryAllocator)
-

@@ -3,6 +3,7 @@
 Window::Window() : Window(DEFAULT_WINDOW_NAME){}
 
 Window::Window(const char* name){
+    initGLFW();
     GLFWmonitor* primary = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primary);
 
@@ -13,40 +14,58 @@ Window::Window(const char* name){
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    m_window = glfwCreateWindow(mode->width-75, mode->height-75, name, nullptr, nullptr);
-    if(!m_window){
+    glfwWindow = glfwCreateWindow(mode->width-75, mode->height-75, name, nullptr, nullptr);
+    if(!glfwWindow){
         throw windowException("Unable to create Window");
     }
 
-    glfwSetWindowUserPointer(m_window, this);
+    glfwSetWindowUserPointer(glfwWindow, this);
     if(glfwRawMouseMotionSupported()) {
-        glfwSetInputMode(m_window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+        glfwSetInputMode(glfwWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     }
     initSignals();
 }
+
+void glfwErrorCallback(int, const char *msg) {
+    fprintf(stderr, "Error: %s\n", msg);
+}
+
+void Window::initGLFW() {
+    glfwSetErrorCallback(glfwErrorCallback);
+
+    if(!glfwInit()) {
+        throw engineException("Engine couldn't initialize GLFW");
+    }
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
+}
+
 
 Window::~Window() {
     clean();
 }
 
 void Window::clean() {
-    glfwDestroyWindow(m_window);
+    glfwDestroyWindow(glfwWindow);
 }
 
 void Window::makeCurrentContext() {
-    glfwMakeContextCurrent(m_window);
+    glfwMakeContextCurrent(glfwWindow);
 }
 
 void Window::swapBuffers() {
-    glfwSwapBuffers(m_window);
+    glfwSwapBuffers(glfwWindow);
 }
 bool Window::shouldClose() {
-    return glfwWindowShouldClose(m_window);
+    return glfwWindowShouldClose(glfwWindow);
 }
 
 Utils::WindowDimension Window::getSize() {
     int32_t winWidth, winHeight;
-    glfwGetWindowSize(m_window, &winWidth, &winHeight);
+    glfwGetWindowSize(glfwWindow, &winWidth, &winHeight);
     return {winWidth, winHeight};
 }
 
@@ -55,17 +74,17 @@ float Window::getRatio(){
 }
 
 void Window::disableCursor() {
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(glfwWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     sig_cursorEnabled.emit(false);
 }
 
 void Window::enableCursor() {
-    glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    glfwSetInputMode(glfwWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     sig_cursorEnabled.emit(true);
 }
 
 void Window::toggleCursor() {
-    int mode = glfwGetInputMode(m_window, GLFW_CURSOR);
+    int mode = glfwGetInputMode(glfwWindow, GLFW_CURSOR);
     if(mode == GLFW_CURSOR_NORMAL){
         disableCursor();
     }else{
@@ -74,32 +93,32 @@ void Window::toggleCursor() {
 }
 
 void Window::initSignals() {
-    glfwSetCursorPosCallback(m_window, [](GLFWwindow* win, double x, double y){
+    glfwSetCursorPosCallback(glfwWindow, [](GLFWwindow* win, double x, double y){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_updateMousePos.emit(x,y);
     });
 
-    glfwSetMouseButtonCallback(m_window, [](GLFWwindow* win, int32_t button, int32_t action, int32_t mods){
+    glfwSetMouseButtonCallback(glfwWindow, [](GLFWwindow* win, int32_t button, int32_t action, int32_t mods){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_updateMouseButtonInfo.emit({button, action, mods});
     });
 
-    glfwSetKeyCallback(m_window, [](GLFWwindow* win, int button, int scancode, int action, int mods){
+    glfwSetKeyCallback(glfwWindow, [](GLFWwindow* win, int button, int scancode, int action, int mods){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_updateKeyboardButtonInfo.emit({button, scancode, action, mods});
     });
 
-    glfwSetWindowSizeCallback(m_window, [](GLFWwindow* win, int width, int height){
+    glfwSetWindowSizeCallback(glfwWindow, [](GLFWwindow* win, int width, int height){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_widowDimensions.emit(width, height);
     });
 
-    glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow* win, int width, int height){
+    glfwSetFramebufferSizeCallback(glfwWindow, [](GLFWwindow* win, int width, int height){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_framebufferResize.emit(width, height);
     });
 
-    glfwSetWindowCloseCallback(m_window, [](GLFWwindow* win){
+    glfwSetWindowCloseCallback(glfwWindow, [](GLFWwindow* win){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_shouldClose.emit();
     });
@@ -110,7 +129,7 @@ Window *Window::getContextFromWindow(GLFWwindow *window) {
 }
 
 void Window::close() {
-    glfwSetWindowShouldClose(m_window, GLFW_TRUE);
+    glfwSetWindowShouldClose(glfwWindow, GLFW_TRUE);
 }
 
 void Window::connectCursor(Cursor &cursor) {
@@ -128,14 +147,14 @@ VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
         throw windowException("Attempted to create VkSurfaceKHR on Window with previously created surface");
     }
     VkSurfaceKHR surface;
-    if(glfwCreateWindowSurface(instance, m_window, nullptr, &surface) != VK_SUCCESS){
-        throw windowException("Failed to create m_window KHR surface");
+    if(glfwCreateWindowSurface(instance, glfwWindow, nullptr, &surface) != VK_SUCCESS){
+        throw windowException("Failed to create glfwWindow KHR surface");
     }
     surfaceCreated = true;
     return surface;
 }
 
 void Window::initImGuiVulkan() {
-    ImGui_ImplGlfw_InitForVulkan(m_window, true);
+    ImGui_ImplGlfw_InitForVulkan(glfwWindow, true);
 }
 

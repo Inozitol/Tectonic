@@ -1,5 +1,6 @@
 #include "engine/vulkan/VktUtils.h"
 
+#include "engine/GlobalMemory.h"
 #include "engine/vulkan/VktCache.h"
 
 void VktUtils::transitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout, uint32_t mipLevels){
@@ -115,7 +116,7 @@ VkShaderModule VktUtils::loadShaderModule(const char* path){
 
     // Create shader module from shader SpirV code
     VkShaderModule shaderModule;
-    if(vkCreateShaderModule(VktCache::vkDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS){
+    if(vkCreateShaderModule(VktCachePtr->vkDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS){
         throw vulkanException("Failed to create shader module from shader file ", path);
     }
 
@@ -123,9 +124,16 @@ VkShaderModule VktUtils::loadShaderModule(const char* path){
 }
 
 void VktUtils::DestroyDebugUtilsMessengerEXT(VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator){
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(VktCache::vkInstance, "vkDestroyDebugUtilsMessengerEXT");
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(VktCachePtr->vkInstance, "vkDestroyDebugUtilsMessengerEXT");
     if(func != nullptr){
-        func(VktCache::vkInstance, debugMessenger, pAllocator);
+        func(VktCachePtr->vkInstance, debugMessenger, pAllocator);
+    }
+}
+
+void VktUtils::CmdSetPolygonModeEXT(VkCommandBuffer cmd, VkPolygonMode polygonMode) {
+    auto func = (PFN_vkCmdSetPolygonModeEXT) vkGetInstanceProcAddr(VktCachePtr->vkInstance, "vkCmdSetPolygonModeEXT");
+    if(func != nullptr) {
+        func(cmd, polygonMode);
     }
 }
 
@@ -143,7 +151,7 @@ std::vector<VkImageView> VktUtils::createImageMipViews(VkImage image, VkFormat f
         viewInfo.subresourceRange.baseArrayLayer = 0;
         viewInfo.subresourceRange.layerCount = 1;
 
-        VK_CHECK(vkCreateImageView(VktCache::vkDevice, &viewInfo, nullptr, &views[level]))
+        VK_CHECK(vkCreateImageView(VktCachePtr->vkDevice, &viewInfo, nullptr, &views[level]))
     }
     return views;
 }
@@ -163,7 +171,7 @@ std::vector<VkImageView> VktUtils::createCubemapMipViews(VkImage image, VkFormat
         viewInfo.subresourceRange.layerCount = 6;
         viewInfo.subresourceRange.baseArrayLayer = 0;
 
-        VK_CHECK(vkCreateImageView(VktCache::vkDevice, &viewInfo, nullptr, &views[level]))
+        VK_CHECK(vkCreateImageView(VktCachePtr->vkDevice, &viewInfo, nullptr, &views[level]))
     }
     return views;
 }

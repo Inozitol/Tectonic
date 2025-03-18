@@ -1,48 +1,63 @@
-#ifndef TECTONIC_LOGGER_H
-#define TECTONIC_LOGGER_H
+#pragma once
 
-#undef DEBUG
-
-#include <string>
 #include <iostream>
-#include <chrono>
 
-class Logger {
-public:
-    explicit Logger(std::string identifier);
+#define LOG_DEBUG "Debug"
+#define LOG_INFO "Info"
+#define LOG_WARNING "Warning"
+#define LOG_ERROR "Error"
 
+// Implementation from https://stackoverflow.com/questions/19415845/a-better-log-macro-using-template-metaprogramming
 
-    enum LogLevel : uint8_t{
-        DEBUG = 0,
-        INFO = 1,
-        WARNING = 2,
-        ERROR = 3,
-    };
+#define LOG(lvl, msg) (Log(lvl, __FILE__, __LINE__, LogData<None>() << msg))
 
-    Logger& operator()(LogLevel level);
-    friend Logger& operator<<(Logger& l, const std::string& str);
-    friend Logger& operator<<(Logger& l, const char* str);
-    friend Logger& operator<<(Logger& l, char ch);
-    friend Logger& operator<<(Logger& l, uint64_t num);
-    friend Logger& operator<<(Logger& l, uint32_t num);
-    friend Logger& operator<<(Logger& l, uint8_t num);
-    friend Logger& operator<<(Logger& l, float num);
-    friend Logger& operator<<(Logger& l, int num);
+#ifndef NOINLINE_ATTRIBUTE
+  #ifdef __ICC
+    #define NOINLINE_ATTRIBUTE __attribute__(( noinline ))
+  #else
+    #define NOINLINE_ATTRIBUTE
+  #endif // __ICC
+#endif // NOINLINE_ATTRIBUTE
 
-    static void setOutputLevel(LogLevel level);
-
-private:
-
-    std::string getLevel();
-    std::string getTime();
-
-    const std::string m_identity;
-    LogLevel m_messageLevel;
-
-    std::ostream& m_outStream;
-    static std::string m_timeFormat;
-    static LogLevel m_logLevel;
-
+template<typename L>
+struct LogData {
+  L list;
 };
 
-#endif //TECTONIC_LOGGER_H
+struct None {};
+
+template<typename Begin, typename Value>
+constexpr LogData<std::pair<Begin&&, Value&&>> operator<<(LogData<Begin>&& begin,
+                                                          Value&& value) noexcept{
+  return {{ std::forward<Begin>(begin.list), std::forward<Value>(value) }};
+}
+
+template<typename Begin, size_t n>
+constexpr LogData<std::pair<Begin&&, const char*>> operator<<(LogData<Begin>&& begin,
+                                                              const char (&value)[n]) noexcept{
+  return {{ std::forward<Begin>(begin.list), value }};
+}
+
+typedef std::ostream& (*PfnManipulator)(std::ostream&);
+
+template<typename Begin>
+constexpr LogData<std::pair<Begin&&, PfnManipulator>> operator<<(LogData<Begin>&& begin,
+                                                                 PfnManipulator value) noexcept{
+  return {{ std::forward<Begin>(begin.list), value }};
+}
+
+template <typename Begin, typename Last>
+void output(std::ostream& os, std::pair<Begin, Last>&& data){
+  output(os, std::move(data.first));
+  os << data.second;
+}
+
+inline void output(std::ostream& os, None)
+{ }
+
+template<typename L>
+void Log(const char* lvl, const char* file, uint32_t line, LogData<L>&& data) {
+  std::cout << '[' << lvl << "] " << file << ":" << line << ": ";
+  output(std::cout, std::move(data.list));
+  std::cout << std::endl;
+}

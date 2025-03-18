@@ -5,9 +5,9 @@
 
 class VktInstantCommands {
 public:
-    VktInstantCommands(VktInstantCommands const &) = delete;
-    void operator=(VktInstantCommands const &) = delete;
-    static VktInstantCommands &getInstance();
+    VktInstantCommands(VktInstantCommands const&) = delete;
+    void operator=(VktInstantCommands const&) = delete;
+    static VktInstantCommands& getInstance();
 
     static void submitCommands(std::function<void(VkCommandBuffer cmd)>&& func);
 

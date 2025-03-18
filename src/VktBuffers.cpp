@@ -1,4 +1,6 @@
 #include "engine/vulkan/VktBuffers.h"
+
+#include "engine/GlobalMemory.h"
 #include "engine/vulkan/VktCache.h"
 
 namespace VktBuffers {
@@ -15,7 +17,7 @@ namespace VktBuffers {
         vmaAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
         VktTypes::Resources::Buffer newBuffer{};
-        VK_CHECK(vmaCreateBuffer(VktCache::vmaAllocator,
+        VK_CHECK(vmaCreateBuffer(VktCachePtr->vmaAllocator,
                                  &bufferInfo,
                                  &vmaAllocInfo,
                                  &newBuffer.buffer,
@@ -25,7 +27,7 @@ namespace VktBuffers {
     }
 
     void destroy(VktTypes::Resources::Buffer buffer) {
-        vmaDestroyBuffer(VktCache::vmaAllocator, buffer.buffer, buffer.allocation);
+        vmaDestroyBuffer(VktCachePtr->vmaAllocator, buffer.buffer, buffer.allocation);
     }
 
 

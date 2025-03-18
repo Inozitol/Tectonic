@@ -237,17 +237,17 @@ namespace SerialTypes{
         /** @brief Serializable mesh */
         template<VktTypes::GPU::VertexType vType>
         struct MeshAsset{
-            SerialTypes::Span<uint32_t,MeshSurface,true> surfaces;
-            SerialTypes::Span<uint32_t,uint32_t,true> indices;
-            SerialTypes::Span<uint32_t,VktTypes::GPU::Vertex<vType>,true> vertices;
+            Span<uint32_t,MeshSurface,true> surfaces;
+            Span<uint32_t,uint32_t,true> indices;
+            Span<uint32_t,VktTypes::GPU::Vertex<vType>,true> vertices;
         };
 
         /** @brief Serializable image */
         struct Image{
-            SerialTypes::Span<uint32_t,char,true> name;
+            Span<uint32_t,char,true> name;
             VkExtent3D extent {.width = 0, .height = 0, .depth = 0};
             VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-            SerialTypes::Span<uint32_t,std::byte,true> data;
+            Span<uint32_t,std::byte,true> data;
         };
 
         /** @brief Serializable material resource */
@@ -269,10 +269,10 @@ namespace SerialTypes{
 
         /** @brief Serializable node */
         struct Node {
-            SerialTypes::Span<uint32_t,char,true> name;
+            Span<uint32_t,char,true> name;
 
             NodeID_t parent = NULL_ID;
-            SerialTypes::Span<uint32_t,NodeID_t,true> children;
+            Span<uint32_t,NodeID_t,true> children;
 
             MeshID_t mesh = NULL_ID;
 
@@ -296,8 +296,8 @@ namespace SerialTypes{
         /** @brief Serializable animation sampler */
         struct AnimationSampler {
             Interpolation interpolation;
-            SerialTypes::Span<uint32_t,float,true> inputs;
-            SerialTypes::Span<uint32_t,glm::vec4,true> outputsVec4;
+            Span<uint32_t,float,true> inputs;
+            Span<uint32_t,glm::vec4,true> outputsVec4;
         };
 
         /** @brief Serializable animation channel */
@@ -311,21 +311,49 @@ namespace SerialTypes{
 
         /** @brief Serializable animation */
         struct Animation {
-            SerialTypes::Span<uint32_t,char,true> name;
+            Span<uint32_t,char,true> name;
             float start = std::numeric_limits<float>::max();
             float end = std::numeric_limits<float>::min();
             std::vector<AnimationSampler> samplers;
-            SerialTypes::Span<uint32_t,AnimationChannel,true> channels;
-            SerialTypes::Span<uint32_t,std::pair<uint32_t, uint32_t>,true> animatedNodes;
+            Span<uint32_t,AnimationChannel,true> channels;
+            Span<uint32_t,std::pair<uint32_t, uint32_t>,true> animatedNodes;
         };
 
         /** @brief Serializable skin */
         struct Skin {
-            SerialTypes::Span<uint32_t,char,true> name;
+            Span<uint32_t,char,true> name;
             NodeID_t skeletonRoot = NULL_ID;
-            SerialTypes::Span<uint32_t,NodeID_t,true> skinNodes;
-            SerialTypes::Span<uint32_t,glm::mat4,true> inverseBindMatrices;
-            SerialTypes::Span<uint32_t,NodeID_t,true> joints;
+            Span<uint32_t,NodeID_t,true> skinNodes;
+            Span<uint32_t,glm::mat4,true> inverseBindMatrices;
+            Span<uint32_t,NodeID_t,true> joints;
         };
+    }
+
+    namespace Animatrix {
+        constexpr uint32_t NULL_ID = UINT32_MAX;
+
+        constexpr std::size_t VERSION_OFFSET    = 0;
+
+        using BodyPart_t = uint8_t;
+
+        struct Action {
+            BodyPart_t bodyPart = 0;
+            uint8_t bodyPartID = 0;
+            glm::vec3 target = glm::vec3(0.0f);
+            float destinationTime = 1.0f;
+        };
+
+        struct ActionGroup {
+            Span<uint32_t,char,true> name;
+            Span<uint32_t,Action,true> actions;
+            float destinationTime = 1.0f;
+        };
+
+
+        struct ActionSequence {
+            Span<uint32_t,char,true> name;
+            Span<uint32_t,ActionGroup,true> groups;
+        };
+
     }
 }

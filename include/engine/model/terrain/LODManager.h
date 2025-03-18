@@ -3,12 +3,11 @@
 
 #include <vector>
 
-#include "utils/utils.h"
+#include "utils/Utils.h"
 #include "camera/Camera.h"
 #include "Logger.h"
 #include "defs/ConfigDefs.h"
 #include "Transformation.h"
-#include "meta/meta.h"
 
 
 class LODManager {
@@ -51,10 +50,7 @@ private:
     std::vector<std::vector<float>> m_heights;
     std::vector<float> m_regions;
 
-    float m_worldScale;
-
-    static Logger m_logger;
-
+    float m_worldScale = 1.0f;
 };
 
 

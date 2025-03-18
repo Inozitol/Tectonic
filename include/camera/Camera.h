@@ -50,8 +50,7 @@ struct OrthoProjInfo{
  * Provides a view and projection matrix.
  * Can be used as a view point from a spot light for shader mapping.
  */
-class Camera {
-public:
+struct Camera {
     Camera() = default;
 
     Camera(const Camera& camera);
@@ -64,29 +63,11 @@ public:
     [[nodiscard]] const PerspProjInfo& getPerspectiveInfo() const;
     [[nodiscard]] const OrthoProjInfo& getOrthographicInfo() const;
 
-    /**
-     * Projection matrix is unchanged until the change of parameters in PerspProjInfo.
-     * In case of change in those parameters, it is necessary to call createProjectionMatrix before this method.
-     *
-     * @brief Returns a reference to projection matrix.
-     * @return Reference to generated projection matrix.
-     */
-    [[nodiscard]] const glm::mat4x4& getProjectionMatrix() const;
+    [[nodiscard]] glm::mat4 genWVP(const glm::mat4& world) const;
 
-    /**
-     * View matrix is changed with every change in orientation or getPosition.
-     * In case of change in those parameters, it is necessary to call createView before this method.
-     *
-     * @brief Returns a reference to previously created view matrix.
-     * @return Reference to generated projection matrix.
-     */
-    [[nodiscard]] const glm::mat4x4& getViewMatrix() const;
+    [[nodiscard]] glm::mat4 genVP() const;
 
-    glm::mat4 getWVP(const glm::mat4& world);
-
-    glm::mat4 getVP();
-
-    glm::mat4 getVPNoTranslate();
+    [[nodiscard]] glm::mat4 getVPNoTranslate() const;
 
     /**
      * Creates a projection matrix and stores it.
@@ -108,9 +89,9 @@ public:
 
     /**
      * @brief Returns a local_position of the camera in world space.
-     * @return Reference to a position in worlds space.
+     * @return Pointer  to a position vector in world space.
      */
-    [[nodiscard]] const glm::vec3& getPosition() const;
+    [[nodiscard]] glm::vec3 * getPosition();
 
     /**
      * @brief Creates a normalized vector with the getDirection of the camera.
@@ -135,40 +116,38 @@ public:
     void switchOrthographic();
     void toggleProjection();
 
-    [[nodiscard]] glm::vec3 forward() const {return Axis::NEG_Z * m_orientation;}
-    [[nodiscard]] glm::vec3 back()    const {return Axis::POS_Z * m_orientation;}
-    [[nodiscard]] glm::vec3 left()    const {return Axis::NEG_X * m_orientation;}
-    [[nodiscard]] glm::vec3 right()   const {return Axis::POS_X * m_orientation;}
-    [[nodiscard]] glm::vec3 down()    const {return Axis::NEG_Y * m_orientation;}
-    [[nodiscard]] glm::vec3 up()      const {return Axis::POS_Y * m_orientation;}
+    [[nodiscard]] glm::vec3 forward() const {return Axis::NEG_Z * orientation;}
+    [[nodiscard]] glm::vec3 back()    const {return Axis::POS_Z * orientation;}
+    [[nodiscard]] glm::vec3 left()    const {return Axis::NEG_X * orientation;}
+    [[nodiscard]] glm::vec3 right()   const {return Axis::POS_X * orientation;}
+    [[nodiscard]] glm::vec3 down()    const {return Axis::NEG_Y * orientation;}
+    [[nodiscard]] glm::vec3 up()      const {return Axis::POS_Y * orientation;}
 
     Signal<const glm::vec3&> sig_position;
     Signal<const glm::quat&> sig_orientation;
     Signal<const glm::mat4&> sig_VPMatrix;
 
-protected:
-    glm::vec3 m_position = {0.0f, 0.0f, 0.0f};
-    glm::quat m_orientation = glm::quatLookAt(Axis::NEG_Z, Axis::POS_Y);
-    glm::mat4 m_projectionMatrix = glm::identity<glm::mat4x4>();
+    glm::vec3 position = {0.0f, 0.0f, 0.0f};
+    glm::quat orientation = glm::quatLookAt(Axis::NEG_Z, Axis::POS_Y);
+    glm::mat4 projectionMatrix = glm::identity<glm::mat4x4>();
 
-private:
     [[nodiscard]] glm::mat4x4 rotationMatrix() const{
-        return glm::toMat4(m_orientation);
+        return glm::toMat4(orientation);
     }
 
     [[nodiscard]] glm::mat4x4 translationMatrix() const{
-        return glm::translate(glm::identity<glm::mat4>(), -m_position);
+        return glm::translate(glm::identity<glm::mat4>(), -position);
     }
 
-    std::unique_ptr<PerspProjInfo> m_perspProjInfo;
-    std::unique_ptr<OrthoProjInfo> m_orthoProjInfo;
+    std::unique_ptr<PerspProjInfo> perspProjInfo;
+    std::unique_ptr<OrthoProjInfo> orthoProjInfo;
 
     /**
      * Set to true if camera is in perspective projection and false if it's in orthographic projection.
      */
     bool isPerspective = true;
 
-    glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
+    glm::mat4 viewMatrix = glm::identity<glm::mat4>();
     glm::mat4 m_VP = glm::identity<glm::mat4>();
 };
 

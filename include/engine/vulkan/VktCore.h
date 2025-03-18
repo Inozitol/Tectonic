@@ -27,7 +27,6 @@
 #include "VktImages.h"
 #include "VktInstantCommands.h"
 #include "VktPipelines.h"
-#include "VktSkybox.h"
 #include "VktStructs.h"
 #include "VktTypes.h"
 #include "VktUtils.h"
@@ -36,11 +35,9 @@
 #include "engine/model/ModelTypes.h"
 #include "exceptions.h"
 
-class VktCore {
-public:
-    VktCore(VktCore const &) = delete;
-    void operator=(VktCore const &) = delete;
-    static VktCore &getInstance();
+struct VktCore {
+    VktCore() = default;
+    ~VktCore();
 
     /**
      * @brief Initializes Vulkan.
@@ -53,25 +50,25 @@ public:
      */
     void clear();
 
-    /** @brief Inserts initialized Window. */
-    void setWindow(Window *window);
+    /** @brief Initialized window dimensions from existing Window struct in memory. */
+    void setExtentDimensions();
 
     /** @brief Creates MeshBuffers for the provided mesh data, uploads the primitives and returns created buffers. */
-    template<VktTypes::GPU::VertexType vType>
-    static VktTypes::GPU::MeshBuffers createPrimitivesDeviceMemory(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<vType>> &vertices);
+    template <VktTypes::GPU::VertexType vType>
+    static VktTypes::GPU::MeshBuffers createPrimitivesDeviceMemory(const std::span<uint32_t>& indices, const std::span<VktTypes::GPU::Vertex<vType>>& vertices);
 
     /** @brief Creates MeshBuffers for the provided mesh data, uploads the primitives and returns created host-visible buffers. */
-    template<VktTypes::GPU::VertexType vType>
-    static VktTypes::GPU::MeshBuffers createPrimitivesHostVisible(const std::span<uint32_t> &indices, const std::span<VktTypes::GPU::Vertex<vType>> &vertices);
+    template <VktTypes::GPU::VertexType vType>
+    static VktTypes::GPU::MeshBuffers createPrimitivesHostVisible(const std::span<uint32_t>& indices, const std::span<VktTypes::GPU::Vertex<vType>>& vertices);
 
 
     /** @brief Uploads a primitives into the provided host-visible buffers. */
-    template<VktTypes::GPU::VertexType vType>
-    static void uploadPrimitivesToHostVisible(const VktTypes::GPU::MeshBuffers &meshBuffers, std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<vType>> vertices);
+    template <VktTypes::GPU::VertexType vType>
+    static void uploadPrimitivesToHostVisible(const VktTypes::GPU::MeshBuffers& meshBuffers, std::span<uint32_t> indices, std::span<VktTypes::GPU::Vertex<vType>> vertices);
 
 
     /** @brief Uploads joint matrices */
-    static VktTypes::GPU::JointsBuffers uploadJoints(const std::span<glm::mat4> &jointMatrices);
+    static VktTypes::GPU::JointsBuffers uploadJoints(const std::span<glm::mat4>& jointMatrices);
 
     /**
      * @brief Checks if the Window inside should close.
@@ -86,9 +83,6 @@ public:
      * @brief Main run function that should be called every frame.
      */
     void run();
-
-    void setViewMatrix(const glm::mat4 &viewMatrix);
-    void setProjMatrix(const glm::mat4 &projMatrix);
 
     /**
      * @brief Returns current VkDevice (if initialized).
@@ -105,10 +99,7 @@ public:
     /** Number of in-flight frames being generated in parallel */
     static constexpr uint8_t FRAMES_OVERLAP = 2;
 
-    VktTypes::MaterialInstance writeMaterial(VktTypes::MaterialPass pass,
-                                             const VktTypes::GLTFMetallicRoughness::MaterialResources &resources,
-                                             DescriptorAllocatorDynamic &descriptorAllocator,
-                                             bool isSkinned);
+    VktTypes::MaterialInstance writeMaterial(VktTypes::MaterialPass pass, const VktTypes::GLTFMetallicRoughness::MaterialResources& resources, DescriptorAllocatorDynamic& descriptorAllocator, bool isSkinned);
 
 
     using objectID_t = uint32_t;
@@ -121,11 +112,11 @@ public:
         static objectID_t lastID;
 
         std::string name;
-        Model *model;
+        Model* model;
     };
 
-    VktCore::EngineObject *createObject(const std::string &name, const std::filesystem::path &filePath);
-    VktCore::EngineObject *createObject(const std::string &name, Model *model);
+    VktCore::EngineObject* createObject(const std::string& name, const std::filesystem::path& filePath);
+    VktCore::EngineObject* createObject(const std::string& name, Model* model);
 
     /**
      * @brief Stores performance measurements
@@ -143,8 +134,10 @@ public:
      */
     struct DebugConfig {
         bool enableDebugNormals = false;
-        bool enableDebugVectors = false;
+        bool enableDebugVectors = true;
     };
+
+    uint32_t addDebugPointMesh(VktTypes::PointMesh* pointMesh);
 
     // TODO REMOVE LATER
     VktTypes::Resources::Image m_errorCheckboardImage{};
@@ -153,18 +146,7 @@ public:
     VktTypes::Resources::Image m_greyImage{};
     VktTypes::GLTFMetallicRoughness metalRoughMaterial;
 
-    glm::vec3 cameraPosition;
-    glm::vec3 cameraDirection;
-
     std::unordered_map<objectID_t, EngineObject> loadedObjects;
-
-    std::unordered_map<uint32_t, VktTypes::PointMesh *> debugLines;
-
-    std::unordered_map<uint32_t, std::function<void()>> imguiProcedures;
-
-private:
-    VktCore() = default;
-    ~VktCore();
 
     void initVulkan();
     void initSwapchain();
@@ -180,9 +162,7 @@ private:
     void createSwapchain(uint32_t width, uint32_t height);
     void destroySwapchain();
 
-    VktTypes::FrameData &getCurrentFrame();
-
-    void runImGui();
+    VktTypes::FrameData& getCurrentFrame();
 
     void draw();
 
@@ -191,10 +171,7 @@ private:
     void drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
     void drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
 
-    static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                  VkDebugUtilsMessageTypeFlagsEXT type,
-                                  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                  void *pUserData);
+    static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 
     void resizeSwapchain();
     void updateScene();
@@ -202,11 +179,8 @@ private:
     bool m_isInitialized = false;
     uint32_t m_frameNumber = 0;
 
-    VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
-
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
     VkExtent2D m_windowExtent = {.width = 0, .height = 0};
-    Window *m_window = nullptr;
 
     VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
     VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
@@ -227,24 +201,39 @@ private:
 
     VkDescriptorSet m_drawImageDescriptors = VK_NULL_HANDLE;
 
-    VktTypes::GPU::SceneData m_sceneData;
-
     VktTypes::DrawContext m_mainDrawContext;
-
-    VktSkybox m_skybox;
 
     VktTypes::ModelPipeline m_normalsDebugStaticPipeline;
     VktTypes::ModelPipeline m_normalsDebugSkinnedPipeline;
     VktTypes::ModelPipeline m_lineStripDebugPipeline;
 
+    PerfStats stats;
+    DebugConfig debugConf;
 
-    glm::mat4 m_viewMatrix = glm::identity<glm::mat4>();
-    glm::mat4 m_projMatrix = glm::identity<glm::mat4>();
+    uint32_t m_lastPointMeshIndex = 0;
+    std::unordered_map<uint32_t, VktTypes::PointMesh*> m_debugLines;
 
-    PerfStats m_stats;
-    DebugConfig m_debugConf;
+    VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
 
-    Logger m_logger = Logger("VktCore");
+    Slot<int32_t, int32_t> slt_windowResize{
+        [this](int32_t, int32_t) {
+            m_resizeSwapchain = true;
+        }
+    };
+
+    Slot<> slt_polygonModeToggle{
+        [this]() {
+            if (polygonMode == VK_POLYGON_MODE_FILL) {
+                polygonMode = VK_POLYGON_MODE_LINE;
+            } else {
+                polygonMode = VK_POLYGON_MODE_FILL;
+            }
+
+            /*VktInstantCommands::submitCommands([this](VkCommandBuffer cmd) {
+                VktUtils::CmdSetPolygonModeEXT(cmd,polygonMode);
+            });*/
+        }
+    };
 };
 
 #endif//TECTONIC_VKTCORE_H

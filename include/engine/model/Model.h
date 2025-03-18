@@ -20,8 +20,7 @@
  * Used to load a model from file into the scene.
  * Handles loading of vertices, indices and textures.
  */
-class Model {
-public:
+struct Model {
     Model() = default;
     ~Model();
     Model& operator=(Model const&);
@@ -48,9 +47,8 @@ public:
     bool isLoaded() const;
     const std::string& path() const;
 
-    Transformation transformation;
+    Transformation transformation{};
 
-private:
     struct Resources {
         SerialTypes::BinDataVec_t data;
         bool isSkinned;
@@ -80,7 +78,7 @@ private:
     std::vector<VktTypes::Resources::Image> *m_images = nullptr;
     std::vector<VkSampler> *m_samplers = nullptr;
     std::vector<ModelTypes::GLTFMaterial> *m_materials = nullptr;
-    std::vector<ModelTypes::Node> m_nodes;
+    std::vector<ModelTypes::Node> m_nodes{};
     ModelTypes::Skin m_skin;
     std::vector<ModelTypes::Animation> m_animations;
     uint32_t m_rootNode = ModelTypes::NULL_ID;
@@ -96,7 +94,7 @@ private:
     static void readSkin(ModelTypes::Skin &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset);
     static void readAnimation(ModelTypes::Animation &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset);
     static void readAnimationSampler(ModelTypes::AnimationSampler &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset);
-    void readMaterial(ModelTypes::GLTFMaterial &dst,
+    static void readMaterial(ModelTypes::GLTFMaterial &dst,
                       SerialTypes::BinDataVec_t &src,
                       std::size_t &offset,
                       uint32_t mIndex,
@@ -104,8 +102,6 @@ private:
 
     VktTypes::GPU::JointsBuffers m_jointsBuffer;
 
-    void loadModelData(const std::filesystem::path &path);
+    static void loadModelData(const std::filesystem::path &path);
     static std::unordered_map<std::string, Resources> m_loadedModels;
-
-    static Logger m_logger;
 };

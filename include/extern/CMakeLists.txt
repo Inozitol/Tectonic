@@ -32,7 +32,10 @@ target_sources(imgui PRIVATE
         imgui/imgui_impl_vulkan.h
         imgui/imgui_impl_vulkan.cpp
         imgui/imgui_impl_glfw.h
-        imgui/imgui_impl_glfw.cpp)
+        imgui/imgui_impl_glfw.cpp
+        imgui/imnodes.cpp
+        imgui/imnodes.h
+        imgui/imnodes_internal.h)
 target_include_directories(imgui INTERFACE imgui)
 
 add_subdirectory(KTX-Software)

@@ -4,19 +4,17 @@
 #include "VktDescriptorUtils.h"
 #include "utils/Utils.h"
 
+#include <ktxvulkan.h>
 #include <unordered_map>
 #include <vk_mem_alloc.h>
-#include <ktxvulkan.h>
 #include <vulkan/vulkan_core.h>
 
 /**
  * Singleton class for caching various resources. \n
  * This class will not maintain the lifetime of these resources.
  */
-class VktCache {
-public:
-    VktCache(VktCache const &) = delete;
-    void operator=(VktCache const &) = delete;
+struct VktCache {
+    VktCache() = default;
 
     enum class Layout : uint8_t {
         DRAW_IMAGE = 0,
@@ -38,14 +36,14 @@ public:
      * @param layout Descriptor Layout
      * @return True if succesfull
      */
-    static bool storeLayout(Layout id, VkDescriptorSetLayout layout);
+    bool storeLayout(Layout id, VkDescriptorSetLayout layout);
 
     /**
      * @brief Returns a handle for a descriptor layout
      * @param id ID of layout
      * @return Descriptor Layout
      */
-    static VkDescriptorSetLayout getLayout(Layout id);
+    VkDescriptorSetLayout getLayout(Layout id);
 
     /**
      * @brief Deletes a handle for a descriptor layout.
@@ -53,13 +51,13 @@ public:
      * @param id ID of layout
      * @return True if succesfull
      */
-    static bool deleteLayout(Layout id);
+    bool deleteLayout(Layout id);
 
     /**
      * @brief Returns the map with stored layouts
      * @return Map of all layouts
      */
-    static std::unordered_map<Layout, VkDescriptorSetLayout> &getAllLayouts();
+    std::unordered_map<Layout, VkDescriptorSetLayout> &getAllLayouts();
 
     /**
      * @brief Constructs and returns an array of specified layouts.
@@ -69,18 +67,16 @@ public:
      * @return Array of layouts
      */
     template<typename... Args>
-    static auto getLayouts(Layout id, Args... args) {
-        auto &instance = getInstance();
-
+    auto getLayouts(Layout id, Args... args) {
         constexpr size_t N = sizeof...(Args) + 1;
         Layout ids[N] = {id, args...};
         std::array<VkDescriptorSetLayout, N> output;
         for(size_t i = 0; i < N; i++) {
-            if(!instance.m_layouts.contains(ids[i])) {
-                instance.m_logger(Logger::WARNING) << "Trying to get a layout with ID " << Utils::enumVal(ids[i]) << ", but it's not cached\n";
+            if(!m_layouts.contains(ids[i])) {
+                LOG(LOG_WARNING, "Trying to get a layout with ID " << Utils::enumVal(ids[i]) << ", but it's not cached");
                 output[i] = VK_NULL_HANDLE;
             } else {
-                output[i] = instance.m_layouts[ids[i]];
+                output[i] = m_layouts[ids[i]];
             }
         }
         return output;
@@ -93,14 +89,14 @@ public:
      * @param sampler Sampler
      * @return True if succesfull
      */
-    static bool storeSampler(Sampler id, VkSampler sampler);
+    bool storeSampler(Sampler id, VkSampler sampler);
 
     /**
      * @brief Returns a handle for an image sampler
      * @param id ID of an image sampler
      * @return Image sampler
      */
-    static VkSampler getSampler(Sampler id);
+    VkSampler getSampler(Sampler id);
 
     /**
      * @brief Deletes an image sampler.
@@ -108,20 +104,16 @@ public:
      * @param id ID of an image sampler
      * @return True if succesfull
      */
-    static bool deleteSampler(Sampler id);
+    bool deleteSampler(Sampler id);
 
-    inline static VkInstance vkInstance = VK_NULL_HANDLE;
-    inline static VkDevice vkDevice = VK_NULL_HANDLE;
-    inline static VmaAllocator vmaAllocator = VK_NULL_HANDLE;
-    inline static DescriptorAllocatorDynamic descriptorAllocator{};
-    inline static VkExtent2D drawExtent{};
-    inline static ktxVulkanDeviceInfo ktxInfo;
-
-private:
-    static VktCache &getInstance();
-    VktCache() = default;
+    VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
+    VkInstance vkInstance = VK_NULL_HANDLE;
+    VkDevice vkDevice = VK_NULL_HANDLE;
+    VmaAllocator vmaAllocator = VK_NULL_HANDLE;
+    DescriptorAllocatorDynamic descriptorAllocator{};
+    VkExtent2D drawExtent{};
+    ktxVulkanDeviceInfo ktxInfo;
 
     std::unordered_map<Layout, VkDescriptorSetLayout> m_layouts;
     std::unordered_map<Sampler, VkSampler> m_samplers;
-    Logger m_logger = Logger("VktCache");
 };
