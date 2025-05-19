@@ -2,3 +2,5 @@
 /cmake-build-*
 *.spv
 AssimpLog.txt
+imgui.ini
+.idea
