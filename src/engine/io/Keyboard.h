@@ -29,8 +29,8 @@ struct Keyboard {
     void connectKeyGroup(const std::string &name, Slot<> &slot);
 
     struct KeySignals {
-        mutable Signal<keyboardButtonInfo> buttonInfoSignal;
-        mutable Signal<> buttonEmptySignal;
+        mutable Signal<keyboardButtonInfo> buttonInfoSignal{};
+        mutable Signal<> buttonEmptySignal{};
 
         void handleButtonInfo(const keyboardButtonInfo& buttonInfo, KeyboardGroupFlags flags) const {
             switch(buttonInfo.action) {

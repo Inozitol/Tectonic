@@ -11,6 +11,8 @@
 #include <memory>
 #include <vk_mem_alloc.h>
 
+#include "VktConstraints.h"
+
 namespace VktTypes{
     namespace Resources {
         /** @brief Abstraction over Vma buffer allocation. */
@@ -79,13 +81,13 @@ namespace VktTypes{
         };
 
         /**
-         * @brief GPU format of vertex data.
+         * GPU format of vertex data.
          * @tparam vType Type of vertex data.
          */
         template<VertexType vType>
         struct Vertex;
 
-        /** @brief Graphics pipeline vertex */
+        /** Graphics pipeline vertex */
         template<>
         struct Vertex<VertexType::STATIC>{
             alignas(16) glm::vec3 position = {0.0f, 0.0f, 0.0f};
@@ -95,7 +97,7 @@ namespace VktTypes{
             alignas(16) glm::vec3 color = {1.0f, 1.0f, 1.0f};
         };
 
-        /** @brief Graphics pipeline vertex with joints data. */
+        /** Graphics pipeline vertex with joints data. */
         template<>
         struct Vertex<VertexType::SKINNED>{
             alignas(16) glm::vec3 position = {0.0f, 0.0f, 0.0f};
@@ -108,7 +110,7 @@ namespace VktTypes{
             alignas(16) glm::vec4 jointWeights = {0.0f, 0.0f, 0.0f, 0.0f};
         };
 
-        /** @brief Graphics pipeline vertex for colored point */
+        /** Graphics pipeline vertex for colored point */
         template<>
         struct Vertex<VertexType::POINT>{
             alignas(16) glm::vec3 position = {0.0f, 0.0f, 0.0f};
@@ -116,13 +118,13 @@ namespace VktTypes{
         };
 
 
-        /** @brief Buffer on GPU holding joints data */
+        /** Buffer on GPU holding joints data */
         struct JointsBuffers{
             Resources::Buffer jointsBuffer{};
             VkDeviceAddress jointsBufferAddress = 0;
         };
 
-        /** @brief Environmental scene data. */
+        /** Environmental scene data. */
         struct SceneData {
             alignas(16) glm::mat4 view = glm::identity<glm::mat4>();
             alignas(16) glm::mat4 proj  = glm::identity<glm::mat4>();
@@ -135,14 +137,19 @@ namespace VktTypes{
             alignas(4) float time = 0.0f;
         };
 
-        /** @brief Buffer with roughness value used in IBL specular rendering */
+        /** Buffer with roughness value used in IBL specular rendering */
         struct RoughnessBuffer {
             float roughness;
         };
 
-        /** @brief Buffer with resolution data */
+        /** Buffer with resolution data */
         struct ResolutionBuffer {
             glm::vec2 data;
+        };
+
+        /** Buffer with object identifier */
+        struct PickingBuffer {
+            uint32_t id;
         };
     }
 
@@ -190,12 +197,15 @@ namespace VktTypes{
         VkCommandBuffer mainCommandBuffer{};
 
         VkSemaphore swapchainSemaphore{};
-        VkSemaphore renderSemaphore{};
         VkFence renderFence{};
 
         VktDeletableQueue deletionQueue;
         DescriptorAllocatorDynamic descriptors;
         Resources::Buffer sceneUniformBuffer{};
+    };
+
+    struct SwapchainSync {
+        VkSemaphore renderSemaphore{};
     };
 
     /** @brief Holds index, size and material index to buffers inside GPU */
@@ -268,28 +278,44 @@ namespace VktTypes{
         const ModelPipeline* pipeline = nullptr;
     };
 
-    /** @brief Structure that contains all the necessary data to render a mesh. */
-    struct RenderObject{
+    struct TerrainRenderObject {
         uint32_t indexCount = 0;
         uint32_t firstIndex = 0;
         int32_t vertexOffset = 0;
         VkBuffer indexBuffer = VK_NULL_HANDLE;
-
-        bool isSkinned = false;
         const MaterialInstance* material = nullptr;
+        bool culled = false;
+        VkDeviceAddress vertexBufferAddress = 0;
+    };
 
+    struct RigidRenderObject {
+        uint32_t indexCount = 0;
+        uint32_t firstIndex = 0;
+        int32_t vertexOffset = 0;
+        VkBuffer indexBuffer = VK_NULL_HANDLE;
+        const MaterialInstance* material = nullptr;
         glm::mat4 transform = glm::identity<glm::mat4>();
+        uint32_t objectID = 0;
+        VkDeviceAddress vertexBufferAddress = 0;
+    };
 
+    struct SkinnedRenderObject {
+        uint32_t indexCount = 0;
+        uint32_t firstIndex = 0;
+        int32_t vertexOffset = 0;
+        VkBuffer indexBuffer = VK_NULL_HANDLE;
+        const MaterialInstance* material = nullptr;
+        glm::mat4 transform = glm::identity<glm::mat4>();
+        uint32_t objectID = 0;
         VkDeviceAddress vertexBufferAddress = 0;
         VkDeviceAddress jointsBufferAddress = 0;
     };
 
-    /** @brief Separates various kinds of material passes to separate vectors for optimized drawing. */
+    template<typename RenderType> requires VktConstraints::IsRenderable<RenderType>
     struct DrawContext{
-        std::vector<RenderObject> opaqueSurfaces;
-        std::vector<RenderObject> transparentSurfaces;
+        std::vector<RenderType> opaqueRenderable;
+        std::vector<RenderType> transparentRenderable;
     };
-
 }
 
 #endif //TECTONIC_VKTTYPES_H

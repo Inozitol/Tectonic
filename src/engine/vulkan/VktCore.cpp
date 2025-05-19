@@ -1,5 +1,10 @@
-
 #include "engine/vulkan/VktCore.h"
+
+#define VMA_LEAK_LOG_FORMAT(format, ...) do { \
+    printf((format), __VA_ARGS__); \
+    printf("\n"); \
+    } while(false)
+
 #define VMA_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
 #include "engine/GlobalMemory.h"
@@ -9,6 +14,7 @@
 #include <functional>
 #include <vk_mem_alloc.h>
 #include "engine/scene/World.h"
+#include <ranges>
 
 void VktCore::init() {
 
@@ -25,32 +31,35 @@ void VktCore::init() {
     VktInstantCommands::init(graphicsQueueFamily, graphicsQueue);
     ktxVulkanDeviceInfo_Construct(&VktCachePtr->ktxInfo, VktCachePtr->vkPhysicalDevice, VktCachePtr->vkDevice, graphicsQueue, VktInstantCommands::vkCmdPool, nullptr);
     initDefaultData();
+    //initPickingBuffer();
 
     isInitialized = true;
 }
 
 void VktCore::clear() {
     if(isInitialized) {
-        for(auto &[id, object]: loadedObjects) {
-            delete(object.model);
-        }
+        for(const auto &layout: VktCachePtr->getAllLayouts() | std::views::values) { vkDestroyDescriptorSetLayout(VktCachePtr->vkDevice, layout, nullptr); }
 
-        for(auto &[id, layout]: VktCachePtr->getAllLayouts()) {
-            vkDestroyDescriptorSetLayout(VktCachePtr->vkDevice, layout, nullptr);
-        }
-
-        // TODO This should have the possiblity to be cleared by engine at runtime
-        for(auto &[id, line]: debugGeometry.lines) {
+        // TODO This should have the possibility to be cleared by engine at runtime
+        for(const auto &line: debugGeometry.lines | std::views::values) {
             VktBuffers::destroy(line->meshBuffers.indexBuffer);
             VktBuffers::destroy(line->meshBuffers.vertexBuffer);
         }
-        for(auto &[id, line]: debugGeometry.infLines) {
+        for(const auto &line: debugGeometry.infLines | std::views::values) {
             VktBuffers::destroy(line->meshBuffers.indexBuffer);
             VktBuffers::destroy(line->meshBuffers.vertexBuffer);
         }
-        for(auto &[id, box]: debugGeometry.SAABBs) {
-            VktBuffers::destroy(box.mesh.meshBuffers.indexBuffer);
-            VktBuffers::destroy(box.mesh.meshBuffers.vertexBuffer);
+        for(const auto &[object, mesh]: debugGeometry.OBBs | std::views::values) {
+            VktBuffers::destroy(mesh.meshBuffers.indexBuffer);
+            VktBuffers::destroy(mesh.meshBuffers.vertexBuffer);
+        }
+        for(const auto &[object, mesh]: debugGeometry.AABBs | std::views::values) {
+            VktBuffers::destroy(mesh.meshBuffers.indexBuffer);
+            VktBuffers::destroy(mesh.meshBuffers.vertexBuffer);
+        }
+        for(const auto &[object, mesh]: debugGeometry.SAABBs | std::views::values) {
+            VktBuffers::destroy(mesh.meshBuffers.indexBuffer);
+            VktBuffers::destroy(mesh.meshBuffers.vertexBuffer);
         }
 
         VktImages::destroy(m_whiteImage);
@@ -70,7 +79,7 @@ void VktCore::clear() {
         for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
             vkDestroyCommandPool(VktCachePtr->vkDevice, frames[i].commandPool, nullptr);
             vkDestroyFence(VktCachePtr->vkDevice, frames[i].renderFence, nullptr);
-            vkDestroySemaphore(VktCachePtr->vkDevice, frames[i].renderSemaphore, nullptr);
+            //vkDestroySemaphore(VktCachePtr->vkDevice, frames[i].renderSemaphore, nullptr);
             vkDestroySemaphore(VktCachePtr->vkDevice, frames[i].swapchainSemaphore, nullptr);
         }
 
@@ -85,17 +94,15 @@ void VktCore::clear() {
     }
 }
 
-VktCore::~VktCore() {
-    clear();
-}
+VktCore::~VktCore() { clear(); }
 
 void VktCore::initVulkan() {
     vkb::InstanceBuilder vkBuilder;
     auto instance = vkBuilder.set_app_name("Tectonic")
-                            .request_validation_layers(true)
-                            .set_debug_callback(VktCore::debugCallback)
-                            .require_api_version(1, 3, 0)
-                            .build();
+                             .request_validation_layers(true)
+                             .set_debug_callback(VktCore::debugCallback)
+                             .require_api_version(1, 3, 0)
+                             .build();
 
     LOG(LOG_INFO, "Finished building vkbInstance");
 
@@ -143,23 +150,23 @@ void VktCore::initVulkan() {
 
     vkb::PhysicalDeviceSelector vkbSelector{vkbInstance};
     vkb::PhysicalDevice vkbPhysicalDevice =
-        vkbSelector.set_minimum_version(1, 3)
-                    .add_required_extension_features(dynamicFeatures3)
-                    .add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME)
-                    .add_required_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME)
-                    .set_required_features_13(features13)
-                    .set_required_features_12(features12)
-                    .set_required_features(features)
-                    .set_surface(surface)
-                    .select()
-                    .value();
+            vkbSelector.set_minimum_version(1, 3)
+                       .add_required_extension_features(dynamicFeatures3)
+                       .add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME)
+                       .add_required_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME)
+                       .set_required_features_13(features13)
+                       .set_required_features_12(features12)
+                       .set_required_features(features)
+                       .set_surface(surface)
+                       .select()
+                       .value();
 
     vkb::DeviceBuilder vkbDeviceBuilder{vkbPhysicalDevice};
     vkb::Device vkbDevice = vkbDeviceBuilder.build().value();
 
     LOG(LOG_INFO, "Found physical device: " << vkbDevice.physical_device.name);
 
-    VktCachePtr->vkDevice = vkbDevice.device;// Caching device to be used globablly
+    VktCachePtr->vkDevice = vkbDevice.device;// Caching device to be used globally
     VktCachePtr->vkPhysicalDevice = vkbPhysicalDevice.physical_device;
 
     graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
@@ -190,30 +197,40 @@ void VktCore::initSwapchain() {
             windowExtent.height,
             1};
 
+    // Create draw image
     constexpr VkImageUsageFlags drawImageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                  VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                                                  VK_IMAGE_USAGE_STORAGE_BIT |
                                                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    constexpr VkImageUsageFlags depthImageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    // Create draw image
     drawImage = VktImages::createDeviceMemory(drawImageExtent, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageFlags).value();
     coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &drawImage);
 
     LOG(LOG_INFO, "Finished creating draw image with format: "
-                          << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
-                          << " and extent dimensions: "
-                          << drawImageExtent.width << 'x' << drawImageExtent.height);
+        << string_VkFormat(VK_FORMAT_R16G16B16A16_SFLOAT)
+        << " and extent dimensions: "
+        << drawImageExtent.width << 'x' << drawImageExtent.height);
 
     // Create depth image
+    constexpr VkImageUsageFlags depthImageFlags = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
     depthImage = VktImages::createDeviceMemory(drawImageExtent, VK_FORMAT_D32_SFLOAT, depthImageFlags).value();
     coreDeletionQueue.pushDeletable(DeletableType::TEC_RESOURCE_IMAGE, &depthImage);
 
     LOG(LOG_INFO, "Finished creating depth image with format: "
-                          << string_VkFormat(VK_FORMAT_D32_SFLOAT)
-                          << " and extent dimensions: "
-                          << drawImageExtent.width << 'x' << drawImageExtent.height);
+        << string_VkFormat(VK_FORMAT_D32_SFLOAT)
+        << " and extent dimensions: "
+        << drawImageExtent.width << 'x' << drawImageExtent.height);
+
+
+    // Create picking image
+    constexpr VkImageUsageFlags pickingImageFlags = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    //pickingImage = VktImages::createDeviceMemory(drawImageExtent, VK_FORMAT_R32_UINT, pickingImageFlags).value();
+
+    /*LOG(LOG_INFO, "Finished creating picking image with format: "
+        << string_VkFormat(VK_FORMAT_R32_UINT)
+        << " and extent dimensions: "
+        << drawImageExtent.width << 'x' << drawImageExtent.height);*/
 }
 
 void VktCore::initCommands() {
@@ -221,26 +238,25 @@ void VktCore::initCommands() {
 
     for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
         VK_CHECK(vkCreateCommandPool(VktCachePtr->vkDevice,
-                                     &commandPoolCreateInfo,
-                                     nullptr,
-                                     &frames[i].commandPool))
+            &commandPoolCreateInfo,
+            nullptr,
+            &frames[i].commandPool))
 
         VkCommandBufferAllocateInfo cmdAllocInfo = VktStructs::commandBufferAllocateInfo(frames[i].commandPool, 1);
 
         VK_CHECK(vkAllocateCommandBuffers(VktCachePtr->vkDevice,
-                                          &cmdAllocInfo,
-                                          &frames[i].mainCommandBuffer))
+            &cmdAllocInfo,
+            &frames[i].mainCommandBuffer))
     }
 }
 
 void VktCore::initSyncStructs() {
-    VkFenceCreateInfo fenceCreateInfo = VktStructs::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    VkSemaphoreCreateInfo semaphoreCreateInfo = VktStructs::semaphoreCreateInfo();
+    const VkFenceCreateInfo fenceCreateInfo = VktStructs::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    const VkSemaphoreCreateInfo semaphoreCreateInfo = VktStructs::semaphoreCreateInfo();
 
     for(uint8_t i = 0; i < FRAMES_OVERLAP; i++) {
         VK_CHECK(vkCreateFence(VktCachePtr->vkDevice, &fenceCreateInfo, nullptr, &frames[i].renderFence))
         VK_CHECK(vkCreateSemaphore(VktCachePtr->vkDevice, &semaphoreCreateInfo, nullptr, &frames[i].swapchainSemaphore))
-        VK_CHECK(vkCreateSemaphore(VktCachePtr->vkDevice, &semaphoreCreateInfo, nullptr, &frames[i].renderSemaphore))
     }
 }
 
@@ -251,41 +267,54 @@ void VktCore::createSwapchain(uint32_t width, uint32_t height) {
     swapchainImageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
     vkb::Swapchain vkbSwapchain = vkbSwapchainBuilder
-                                          .set_desired_format(VkSurfaceFormatKHR{
-                                                  .format = swapchainImageFormat,
-                                                  .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-                                          .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-                                          .set_desired_extent(width, height)
-                                          .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-                                          .build()
-                                          .value();
+                                  .set_desired_format(VkSurfaceFormatKHR{
+                                          .format = swapchainImageFormat,
+                                          .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+                                  .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                                  .set_desired_extent(width, height)
+                                  .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                  .build()
+                                  .value();
 
     swapchainExtent = vkbSwapchain.extent;
     swapchain = vkbSwapchain.swapchain;
     swapchainImages = vkbSwapchain.get_images().value();
     swapchainImageViews = vkbSwapchain.get_image_views().value();
     swapchainImageFormat = vkbSwapchain.image_format;// Builder might choose different format
+    swapchainSyncs.resize(vkbSwapchain.image_count);
+
+    const VkSemaphoreCreateInfo semaphoreCreateInfo = VktStructs::semaphoreCreateInfo();
+    for(auto &[renderSemaphore] : swapchainSyncs) {
+        VK_CHECK(vkCreateSemaphore(VktCachePtr->vkDevice, &semaphoreCreateInfo, nullptr, &renderSemaphore))
+    }
     LOG(LOG_INFO, "Finished building swapchain with format: " << string_VkFormat(vkbSwapchain.image_format));
 }
 
 void VktCore::destroySwapchain() {
     vkDestroySwapchainKHR(VktCachePtr->vkDevice, swapchain, nullptr);
 
-    for(auto &imageView: swapchainImageViews) {
-        vkDestroyImageView(VktCachePtr->vkDevice, imageView, nullptr);
+    for(const auto &imageView: swapchainImageViews) { vkDestroyImageView(VktCachePtr->vkDevice, imageView, nullptr); }
+    for(auto &[renderSemaphore] : swapchainSyncs) {
+        vkDestroySemaphore(VktCachePtr->vkDevice, renderSemaphore, nullptr);
     }
+
 }
 
-VktTypes::FrameData &VktCore::getCurrentFrame() {
-    return frames[frameNumber % FRAMES_OVERLAP];
+VktTypes::FrameData &VktCore::getCurrentFrame() { return frames[frameNumber % FRAMES_OVERLAP]; }
+
+void VktCore::waitForRenderFence() {
+    VK_CHECK(vkWaitForFences(VktCachePtr->vkDevice, 1, &getCurrentFrame().renderFence, true, 1000000000));
+    VK_CHECK(vkResetFences(VktCachePtr->vkDevice, 1, &getCurrentFrame().renderFence));
 }
+
 
 void VktCore::draw() {
     // Updates relevant scene rendering data buffers
     updateScene();
 
-    VK_CHECK(vkWaitForFences(VktCachePtr->vkDevice, 1, &getCurrentFrame().renderFence, true, 1000000000))
-    VK_CHECK(vkResetFences(VktCachePtr->vkDevice, 1, &getCurrentFrame().renderFence))
+    // The current frame on the render might still be rendering, so wait for it to finish
+    waitForRenderFence();
+
     getCurrentFrame().deletionQueue.flush();
     getCurrentFrame().descriptors.clearPools();
 
@@ -301,14 +330,14 @@ void VktCore::draw() {
         return;
     }
     if(error) {
-        throw vulkanException("Failed to acquire next image from swapchain, error code ", string_VkResult(error));
+        LOG(LOG_ERROR,"Failed to acquire next image from swapchain, error code " << string_VkResult(error));
     }
 
+    // Each frame has its own command buffer
     VkCommandBuffer cmd = getCurrentFrame().mainCommandBuffer;
 
-    VK_CHECK(vkResetCommandBuffer(cmd, 0))
-    VkCommandBufferBeginInfo cmdBeginInfo = VktStructs::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo))
+    // Resets the frame's command buffer begins a new command sequence
+    VktUtils::reinitCommandBuffer(cmd, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     VktCachePtr->drawExtent.width = static_cast<uint32_t>(static_cast<float>(std::min(drawImage.extent.width, swapchainExtent.width)) * renderScale);
     VktCachePtr->drawExtent.height = static_cast<uint32_t>(static_cast<float>(std::min(drawImage.extent.height, swapchainExtent.height)) * renderScale);
@@ -317,8 +346,8 @@ void VktCore::draw() {
     VktUtils::transitionImage(cmd, drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     VktUtils::transitionImage(cmd, depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-    VkClearValue clrValue {
-        .color = VkClearColorValue{0.0f, 0.0f, 0.0f, 1.0f}
+    VkClearValue clrValue{
+            .color = VkClearColorValue{0.0f, 0.0f, 0.0f, 1.0f}
     };
     VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(drawImage.view, &clrValue, VK_IMAGE_LAYOUT_GENERAL);
     VkRenderingAttachmentInfo depthAttachment = VktStructs::depthAttachmentInfo(depthImage.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -345,31 +374,27 @@ void VktCore::draw() {
                            sizeof(VktTypes::GPU::SceneData),
                            0,
                            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        TecCorePtr->world->skybox->writeIBLSets(writer);
-        /*
-        writer.writeImage(1, m_skyboxIBLDiffuse.view,
-                          VktCachePtr->getSampler(VktCachePtr->Sampler::LINEAR),
+        writer.writeImage(1, TecCorePtr->world->skybox->IBLDiffuseCubemap.view,
+                          VktCachePtr->getSampler(VktCache::Sampler::LINEAR),
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        writer.writeImage(2, m_skyboxIBLSpecular.view,
-                          VktCachePtr->getSampler(VktCachePtr->Sampler::LINEAR),
+        writer.writeImage(2, TecCorePtr->world->skybox->IBLSpecularCubemap.view,
+                          VktCachePtr->getSampler(VktCache::Sampler::LINEAR),
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        writer.writeImage(3, m_skyboxBRDF.view,
-                          VktCachePtr->getSampler(VktCachePtr->Sampler::LINEAR),
+        writer.writeImage(3, TecCorePtr->world->skybox->BRDFImage.view,
+                          VktCachePtr->getSampler(VktCache::Sampler::LINEAR),
                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);*/
+                          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         writer.updateSet(sceneDescriptorSet);
     }
 
-    VktUtils::CmdSetPolygonModeEXT(cmd,polygonMode);
+    VktUtils::CmdSetPolygonModeEXT(cmd, polygonMode);
 
     Skybox::draw(cmd, sceneDescriptorSet);
-    //drawSkybox(cmd, sceneDescriptorSet);
-    drawGeometry(cmd, sceneDescriptorSet);
-    if(debugConfig.enableDebugNormals) {
-        drawDebugNormals(cmd, sceneDescriptorSet);
-    }
+    drawModels(cmd, sceneDescriptorSet);
+    drawTerrain(cmd, sceneDescriptorSet);
+    if(debugConfig.enableDebugNormals) { drawDebugNormals(cmd, sceneDescriptorSet); }
     if(debugConfig.enableDebugVectors) {
         drawDebugLines(cmd, sceneDescriptorSet);
         drawDebugBoxes(cmd, sceneDescriptorSet);
@@ -381,14 +406,11 @@ void VktCore::draw() {
     auto drawDuration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     perfStats.meshDrawTime = static_cast<float>(drawDuration.count()) / 1000.0f;
 
-    mainDrawContext.opaqueSurfaces.clear();
-    mainDrawContext.transparentSurfaces.clear();
-
     // Transition draw image and swap chain into correct transfer layouts
     VktUtils::transitionImage(cmd, drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     VktUtils::transitionImage(cmd, swapchainImages[swapchainIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    // Copy main image into swapchain
+    // Copy draw image into swapchain
     VktUtils::copyImgToImg(cmd, drawImage.image, swapchainImages[swapchainIndex], VktCachePtr->drawExtent, swapchainExtent);
 
     VktUtils::transitionImage(cmd, swapchainImages[swapchainIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -404,145 +426,160 @@ void VktCore::draw() {
     VkCommandBufferSubmitInfo cmdInfo = VktStructs::commandBufferSubmitInfo(cmd);
 
     VkSemaphoreSubmitInfo waitInfo = VktStructs::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, getCurrentFrame().swapchainSemaphore);
-    VkSemaphoreSubmitInfo signalInfo = VktStructs::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, getCurrentFrame().renderSemaphore);
+    VkSemaphoreSubmitInfo signalInfo = VktStructs::semaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, swapchainSyncs[swapchainIndex].renderSemaphore);
 
     VkSubmitInfo2 submit = VktStructs::submitInfo(&cmdInfo, &signalInfo, &waitInfo);
 
     VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, getCurrentFrame().renderFence))
 
-    VkPresentInfoKHR presentInfo{.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, .pNext = nullptr};
-    presentInfo.pSwapchains = &swapchain;
-    presentInfo.swapchainCount = 1;
-    presentInfo.pWaitSemaphores = &getCurrentFrame().renderSemaphore;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pImageIndices = &swapchainIndex;
+    VkPresentInfoKHR presentInfo{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .pNext = nullptr,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &swapchainSyncs[swapchainIndex].renderSemaphore,
+            .swapchainCount = 1,
+            .pSwapchains = &swapchain,
+            .pImageIndices = &swapchainIndex,
+            .pResults = nullptr
+    };
 
     error = vkQueuePresentKHR(graphicsQueue, &presentInfo);
     if(error == VK_ERROR_OUT_OF_DATE_KHR) {
         m_resizeSwapchain = true;
     } else if(error) {
-        throw vulkanException("Failed to queue swapchain image for present, error code ", string_VkResult(error));
+        LOG(LOG_ERROR, "Failed to queue swapchain image for presenting, error code " << string_VkResult(error));
     }
 
     frameNumber++;
 }
 
-void VktCore::drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
+template<typename RenderType>
+    requires VktConstraints::IsRenderable<RenderType>
+void VktCore::drawMesh(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet, const RenderType &renderable) {
+    perfStats.drawCallCount++;
+    perfStats.trigDrawCount += renderable.indexCount / 3;
 
-    auto draw = [&](const VktTypes::RenderObject &renderObject) {
-        perfStats.drawCallCount++;
-        perfStats.trigDrawCount += renderObject.indexCount / 3;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderable.material->pipeline->pipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            renderable.material->pipeline->layout,
+                            0, 1,
+                            &sceneDescriptorSet, 0,
+                            nullptr);
 
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderObject.material->pipeline->pipeline);
+    VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+    VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            renderable.material->pipeline->layout,
+                            1, 1,
+                            &renderable.material->materialSet, 0,
+                            nullptr);
+
+    vkCmdBindIndexBuffer(cmd, renderable.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+    if constexpr(VktConstraints::IsRenderableSkinned<RenderType>) {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        pushConstants.jointsBuffer = renderable.jointsBufferAddress;
+        pushConstants.worldMatrix = renderable.transform;
+        vkCmdPushConstants(cmd, renderable.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
+    } else if constexpr(VktConstraints::IsRenderableTransformable<RenderType>) {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        pushConstants.worldMatrix = renderable.transform;
+        vkCmdPushConstants(cmd, renderable.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+    } else {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        vkCmdPushConstants(cmd, renderable.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+    }
+
+    vkCmdDrawIndexed(cmd, renderable.indexCount, 1, renderable.firstIndex, renderable.vertexOffset, 0);
+}
+
+void VktCore::drawModels(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
+
+    VktTypes::DrawContext<VktTypes::SkinnedRenderObject> renderables;
+    //TecCorePtr->world->rigidObjects.objects.data(0).model->getDrawContext(renderables);
+    for(auto &renderable: TecCorePtr->world->rigidObjects.renderObjects.opaqueRenderable) {
+        drawMesh(cmd, sceneDescriptorSet, renderable);
+        if(debugConfig.enablePicking) { drawPicking(cmd, sceneDescriptorSet, renderable); }
+    }
+
+    for(auto &renderable: TecCorePtr->world->skinnedObjects.renderObjects.opaqueRenderable) {
+        drawMesh(cmd, sceneDescriptorSet, renderable);
+        if(debugConfig.enablePicking) { drawPicking(cmd, sceneDescriptorSet, renderable); }
+    }
+
+
+    /*for(const VktTypes::RenderObject &renderObject: mainDrawContext.transparentSurfaces) {
+        draw(renderObject);
+    }*/
+}
+
+void VktCore::drawTerrain(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) { for(auto &renderable: TecCorePtr->world->terrain->patchObjects.renderObjects.opaqueRenderable) { drawMesh(cmd, sceneDescriptorSet, renderable); } }
+
+template<typename RenderType>
+    requires VktConstraints::IsRenderable<RenderType>
+void VktCore::drawMeshNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet, const RenderType &renderable) {
+    perfStats.drawCallCount++;
+    perfStats.trigDrawCount += renderable.indexCount / 3;
+
+    if constexpr(VktConstraints::IsRenderableSkinned<RenderType>) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.normalsSkinned.pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                renderObject.material->pipeline->layout,
+                                debugPipelines.normalsSkinned.layout,
                                 0, 1,
                                 &sceneDescriptorSet, 0,
                                 nullptr);
-
-        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
-        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-        vkCmdSetScissor(cmd, 0, 1, &scissors);
-
+    } else {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.normalsStatic.pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                renderObject.material->pipeline->layout,
-                                1, 1,
-                                &renderObject.material->materialSet, 0,
+                                debugPipelines.normalsStatic.layout,
+                                0, 1,
+                                &sceneDescriptorSet, 0,
                                 nullptr);
-
-        vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-        if(renderObject.isSkinned) {
-            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
-            pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
-            pushConstants.jointsBuffer = renderObject.jointsBufferAddress;
-            pushConstants.worldMatrix = renderObject.transform;
-            vkCmdPushConstants(cmd, renderObject.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
-        } else {
-            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
-            pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
-            pushConstants.worldMatrix = renderObject.transform;
-            vkCmdPushConstants(cmd, renderObject.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
-        }
-
-        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, renderObject.vertexOffset, 0);
-    };
-
-    for(const VktTypes::RenderObject &renderObject: mainDrawContext.opaqueSurfaces) {
-        draw(renderObject);
     }
 
-    for(const VktTypes::RenderObject &renderObject: mainDrawContext.transparentSurfaces) {
-        draw(renderObject);
+    const VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+    const VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+    vkCmdBindIndexBuffer(cmd, renderable.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+    if constexpr(VktConstraints::IsRenderableSkinned<RenderType>) {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        pushConstants.jointsBuffer = renderable.jointsBufferAddress;
+        pushConstants.worldMatrix = renderable.transform;
+        vkCmdPushConstants(cmd, debugPipelines.normalsSkinned.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
+    } else {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        pushConstants.worldMatrix = renderable.transform;
+        vkCmdPushConstants(cmd, debugPipelines.normalsStatic.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
     }
+
+    vkCmdDrawIndexed(cmd, renderable.indexCount, 1, renderable.firstIndex, 0, 0);
 }
 
 void VktCore::drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
-    auto draw = [&](const VktTypes::RenderObject &renderObject) {
-        perfStats.drawCallCount++;
-        perfStats.trigDrawCount += renderObject.indexCount / 3;
-
-        if(renderObject.isSkinned) {
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.normalsSkinned.pipeline);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    debugPipelines.normalsSkinned.layout,
-                                    0, 1,
-                                    &sceneDescriptorSet, 0,
-                                    nullptr);
-        } else {
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.normalsStatic.pipeline);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    debugPipelines.normalsStatic.layout,
-                                    0, 1,
-                                    &sceneDescriptorSet, 0,
-                                    nullptr);
-        }
-
-        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
-        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
-        vkCmdSetViewport(cmd, 0, 1, &viewport);
-        vkCmdSetScissor(cmd, 0, 1, &scissors);
-
-        vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-        if(renderObject.isSkinned) {
-            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
-            pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
-            pushConstants.jointsBuffer = renderObject.jointsBufferAddress;
-            pushConstants.worldMatrix = renderObject.transform;
-            vkCmdPushConstants(cmd, debugPipelines.normalsSkinned.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
-                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
-        } else {
-            VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
-            pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
-            pushConstants.worldMatrix = renderObject.transform;
-            vkCmdPushConstants(cmd, debugPipelines.normalsStatic.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT, 0,
-                               sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
-        }
-
-        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
-    };
-
-    for(const VktTypes::RenderObject &renderObject: mainDrawContext.opaqueSurfaces) {
-        draw(renderObject);
-    }
-
-    for(const VktTypes::RenderObject &renderObject: mainDrawContext.transparentSurfaces) {
-        draw(renderObject);
-    }
+    for(auto &renderable: TecCorePtr->world->rigidObjects.renderObjects.opaqueRenderable) { drawMeshNormals(cmd, sceneDescriptorSet, renderable); }
+    for(auto &renderable: TecCorePtr->world->rigidObjects.renderObjects.transparentRenderable) { drawMeshNormals(cmd, sceneDescriptorSet, renderable); }
 }
 
 void VktCore::drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
 
     for(auto &[id, line]: debugGeometry.lines) {
-        if(line->meshBuffers.vertexBufferAddress == 0) {
-            line->meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(line->indices, line->vertices);
-        } else {
-            uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(line->meshBuffers, line->indices, line->vertices);
-        }
+        if(line->meshBuffers.vertexBufferAddress == 0) { line->meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(line->indices, line->vertices); } else { uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(line->meshBuffers, line->indices, line->vertices); }
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.lineStrip.pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 debugPipelines.lineStrip.layout,
@@ -567,11 +604,7 @@ void VktCore::drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescripto
     }
 
     for(auto &[id, line]: debugGeometry.infLines) {
-        if(line->meshBuffers.vertexBufferAddress == 0) {
-            line->meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(line->indices, line->vertices);
-        } else {
-            uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(line->meshBuffers, line->indices, line->vertices);
-        }
+        if(line->meshBuffers.vertexBufferAddress == 0) { line->meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(line->indices, line->vertices); } else { uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(line->meshBuffers, line->indices, line->vertices); }
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.infLine.pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 debugPipelines.infLine.layout,
@@ -594,16 +627,116 @@ void VktCore::drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescripto
         vkCmdDrawIndexed(cmd, line->indices.size(), 1, 0, 0, 0);
         //vkCmdDraw(cmd, line->vertices.size(), 1, 0, 0);
     }
+}
+
+template<typename Renderable>
+    requires VktConstraints::IsRenderable<Renderable>
+void VktCore::drawPicking(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet, const Renderable &renderable) {
+    perfStats.drawCallCount++;
+    perfStats.trigDrawCount += renderable.indexCount / 3;
+
+    if constexpr(VktConstraints::IsRenderableSkinned<Renderable>) {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pickingSkinnedPipeline.pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pickingSkinnedPipeline.layout,
+                                0, 1,
+                                &sceneDescriptorSet, 0,
+                                nullptr);
+    } else {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pickingRigidPipeline.pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pickingRigidPipeline.layout,
+                                0, 1,
+                                &sceneDescriptorSet, 0,
+                                nullptr);
+    }
+
+    VkRect2D rect{};
+    rect.offset.x = static_cast<int32_t>(TecCorePtr->cursor.xPos) > 0 ? static_cast<int32_t>(TecCorePtr->cursor.xPos) : 0;
+    rect.offset.y = static_cast<int32_t>(TecCorePtr->cursor.yPos) > 0 ? static_cast<int32_t>(TecCorePtr->cursor.yPos) : 0;
+    rect.extent = {1, 1};
+
+    VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &rect);
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            pickingRigidPipeline.layout,
+                            1, 1,
+                            &renderable.material->materialSet, 0,
+                            nullptr);
+
+    vkCmdBindIndexBuffer(cmd, renderable.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+    if constexpr(VktConstraints::IsRenderableSkinned<Renderable>) {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        pushConstants.jointsBuffer = renderable.jointsBufferAddress;
+        pushConstants.worldMatrix = renderable.transform;
+        vkCmdPushConstants(cmd, renderable.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>), &pushConstants);
+    } else {
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.vertexBuffer = renderable.vertexBufferAddress;
+        pushConstants.worldMatrix = renderable.transform;
+        vkCmdPushConstants(cmd, renderable.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+    }
+
+    vkCmdDrawIndexed(cmd, renderable.indexCount, 1, renderable.firstIndex, renderable.vertexOffset, 0);
 
 }
 
 void VktCore::drawDebugBoxes(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
-    for(auto &[id, box]: debugGeometry.SAABBs) {
-        if(box.mesh.meshBuffers.vertexBufferAddress == 0) {
-            createSAABBMesh(box);
-        }else{
-            updateSAABBMesh(box);
-        }
+    for(auto &box: std::ranges::views::values(debugGeometry.AABBs)) {
+        if(box.mesh.meshBuffers.vertexBufferAddress == 0) { createBoxMesh<AABB>(box); } else { updateBoxMesh<AABB>(box); }
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.box.pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                debugPipelines.box.layout,
+                                0, 1,
+                                &sceneDescriptorSet, 0,
+                                nullptr);
+
+        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+        vkCmdBindIndexBuffer(cmd, box.mesh.meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.worldMatrix = glm::identity<glm::mat4>();
+        pushConstants.vertexBuffer = box.mesh.meshBuffers.vertexBufferAddress;
+        vkCmdPushConstants(cmd, debugPipelines.box.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+        vkCmdDrawIndexed(cmd, box.mesh.indices.size(), 1, 0, 0, 0);
+    }
+
+    for(auto &box: std::ranges::views::values(debugGeometry.SAABBs)) {
+        if(box.mesh.meshBuffers.vertexBufferAddress == 0) { createBoxMesh<SAABB>(box); } else { updateBoxMesh<SAABB>(box); }
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.box.pipeline);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                debugPipelines.box.layout,
+                                0, 1,
+                                &sceneDescriptorSet, 0,
+                                nullptr);
+
+        VkViewport viewport = VktStructs::viewport(VktCachePtr->drawExtent);
+        VkRect2D scissors = VktStructs::scissors(VktCachePtr->drawExtent);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissors);
+
+        vkCmdBindIndexBuffer(cmd, box.mesh.meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
+        pushConstants.worldMatrix = glm::identity<glm::mat4>();
+        pushConstants.vertexBuffer = box.mesh.meshBuffers.vertexBufferAddress;
+        vkCmdPushConstants(cmd, debugPipelines.box.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
+                           sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
+        vkCmdDrawIndexed(cmd, box.mesh.indices.size(), 1, 0, 0, 0);
+    }
+    for(auto &box: std::ranges::views::values(debugGeometry.OBBs)) {
+        if(box.mesh.meshBuffers.vertexBufferAddress == 0) { createBoxMesh<OBB>(box); } else { updateBoxMesh<OBB>(box); }
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, debugPipelines.box.pipeline);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                 debugPipelines.box.layout,
@@ -627,32 +760,38 @@ void VktCore::drawDebugBoxes(VkCommandBuffer cmd, VkDescriptorSet sceneDescripto
     }
 }
 
-void VktCore::createSAABBMesh(VktTypes::PrimitiveMeshCache<SAABB>& boxCache) {
+template void VktCore::createBoxMesh<AABB>(VktTypes::PrimitiveMeshCache<AABB> &boxCache);
+template void VktCore::createBoxMesh<SAABB>(VktTypes::PrimitiveMeshCache<SAABB> &boxCache);
+template void VktCore::createBoxMesh<OBB>(VktTypes::PrimitiveMeshCache<OBB> &boxCache);
+
+template<typename T>
+void VktCore::createBoxMesh(VktTypes::PrimitiveMeshCache<T> &boxCache)
+    requires BB::IsBox<T> {
     BB::Corners_t points = boxCache.object->getCorners();
     boxCache.mesh.vertices.reserve(BB::BOX_CORNERS);
-    for(const auto &p : points) {
+    for(const auto &p: points) {
         boxCache.mesh.vertices.push_back(VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::POINT>{
-            .position = p,
-            .color = {1.0f, 1.0f, 1.0f}
+                .position = p,
+                .color = {1.0f, 1.0f, 1.0f}
         });
     }
     boxCache.mesh.indices.resize(BB::BOX_INDICES);
     boxCache.mesh.indices = {
-        0, 4, 5, 0, 5, 1,
-        0, 1, 3, 0, 3, 2,
-        0, 6, 4, 0, 2, 6,
-        7, 5, 1, 7, 3, 1,
-        7, 5, 4, 7, 4, 6,
-        7, 2, 3, 7, 6, 2
+            0, 4, 5, 0, 5, 1,
+            0, 1, 3, 0, 3, 2,
+            0, 6, 4, 0, 2, 6,
+            7, 5, 1, 7, 3, 1,
+            7, 5, 4, 7, 4, 6,
+            7, 2, 3, 7, 6, 2
     };
     boxCache.mesh.meshBuffers = createPrimitivesHostVisible<VktTypes::GPU::VertexType::POINT>(boxCache.mesh.indices, boxCache.mesh.vertices);
 }
 
-void VktCore::updateSAABBMesh(VktTypes::PrimitiveMeshCache<SAABB>& boxCache) {
+template<typename T>
+void VktCore::updateBoxMesh(VktTypes::PrimitiveMeshCache<T> &boxCache)
+    requires BB::IsBox<T> {
     BB::Corners_t points = boxCache.object->getCorners();
-    for(std::size_t pIndex = 0; pIndex < BB::BOX_CORNERS; pIndex++) {
-        boxCache.mesh.vertices[pIndex].position = points[pIndex];
-    }
+    for(std::size_t pIndex = 0; pIndex < BB::BOX_CORNERS; pIndex++) { boxCache.mesh.vertices[pIndex].position = points[pIndex]; }
     uploadPrimitivesToHostVisible<VktTypes::GPU::VertexType::POINT>(boxCache.mesh.meshBuffers, boxCache.mesh.indices, boxCache.mesh.vertices);
 }
 
@@ -670,7 +809,6 @@ void VktCore::initDescriptors() {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
 
     VktCachePtr->descriptorAllocator.initPool(5, sizes);
-    //VktCachePtr->descriptorAllocator.initPool(m_device, 5, sizes);
 
     // Build draw image descriptor layout
     {
@@ -694,7 +832,7 @@ void VktCore::initDescriptors() {
 
     {
         DescriptorLayoutBuilder builder;
-        builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);        // SceneData
+        builder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);// SceneData
         builder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// IBLCube
         builder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// Specular cube
         builder.addBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// BRDF texture
@@ -721,7 +859,8 @@ void VktCore::initDescriptors() {
 void VktCore::initPipelines() {
     initMaterialPipelines();
     initDebugPipeline();
-    LOG(LOG_INFO, "Finished initializing graphics pipelines");
+    //initPickingPipeline();
+    LOG(LOG_INFO, "Finished initializing pipelines");
 }
 
 void VktCore::initMaterialPipelines() {
@@ -739,7 +878,7 @@ void VktCore::initMaterialPipelines() {
     {
         DescriptorLayoutBuilder layoutBuilder;
         // TODO Create enums/defs/constexpr for binding numbers
-        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);        // MaterialData
+        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);// MaterialData
         layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// ColorTexture
         layoutBuilder.addBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);// MetalRoughnessTexture
 
@@ -753,18 +892,18 @@ void VktCore::initMaterialPipelines() {
 
     VkPipelineLayout staticLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &staticLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &staticLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, staticLayout);
 
     meshLayoutInfo.pPushConstantRanges = &skinnedMatrixRange;
 
     VkPipelineLayout skinnedLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &skinnedLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &skinnedLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, skinnedLayout);
 
     // Set the pipeline layout for both opaque and transparent material pipeline
@@ -842,41 +981,41 @@ void VktCore::initDebugPipeline() {
 
     VkPipelineLayout normalStaticLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &normalStaticLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &normalStaticLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, normalStaticLayout);
 
     meshLayoutInfo.pPushConstantRanges = &normalSkinnedPushConstants;
 
     VkPipelineLayout normalSkinnedLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &normalSkinnedLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &normalSkinnedLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, normalSkinnedLayout);
 
     meshLayoutInfo.pPushConstantRanges = &linesPushConstants;
 
     VkPipelineLayout linesLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &linesLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &linesLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, linesLayout);
 
     VkPipelineLayout infLinesLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &infLinesLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &infLinesLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, infLinesLayout);
 
     VkPipelineLayout boxLayout;
     VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
-                                    &meshLayoutInfo,
-                                    nullptr,
-                                    &boxLayout))
+        &meshLayoutInfo,
+        nullptr,
+        &boxLayout))
     coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, boxLayout);
 
 
@@ -964,28 +1103,113 @@ void VktCore::initDebugPipeline() {
         pipelineBuilder.setColorAttachmentFormat(drawImage.format);
         pipelineBuilder.setDepthFormat(depthImage.format);
         pipelineBuilder.setPipelineLayout(linesLayout);
-        pipelineBuilder.dynamicStates.pop_back(); // Disable dynamic polygons
+        pipelineBuilder.dynamicStates.pop_back();// Disable dynamic polygons
 
         debugPipelines.box.pipeline = pipelineBuilder.buildPipeline();
         coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, debugPipelines.box.pipeline);
     }
+}
 
+void VktCore::initPickingPipeline() {
+    VkPushConstantRange matrixRange{};
+    matrixRange.offset = 0;
+    matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>);
+    matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    {
+        DescriptorLayoutBuilder layoutBuilder;
+        layoutBuilder.addBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);// Picking ID To GPU
+        layoutBuilder.addBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);// Picking ID From GPU
+
+        VktCachePtr->storeLayout(VktCache::Layout::PICKING, layoutBuilder.build(VK_SHADER_STAGE_FRAGMENT_BIT));
+    }
+
+    auto layouts = VktCachePtr->getLayouts(VktCache::Layout::SCENE, VktCache::Layout::PICKING);
+
+    VkPipelineLayoutCreateInfo pickingRigidLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
+    VkPipelineLayout pickingRigidLayout;
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
+        &pickingRigidLayoutInfo,
+        nullptr,
+        &pickingRigidLayout));
+    coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, pickingRigidLayout);
+    pickingRigidPipeline.layout = pickingRigidLayout;
+
+    matrixRange.size = sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Skinned>);
+    VkPipelineLayoutCreateInfo pickingSkinnedLayoutInfo = VktStructs::pipelineLayoutCreateInfo(layouts, matrixRange);
+    VkPipelineLayout pickingSkinnedLayout;
+    VK_CHECK(vkCreatePipelineLayout(VktCachePtr->vkDevice,
+        &pickingSkinnedLayoutInfo,
+        nullptr,
+        &pickingSkinnedLayout));
+    coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE_LAYOUT, pickingSkinnedLayout);
+    pickingSkinnedPipeline.layout = pickingSkinnedLayout;
+
+    {
+        VktPipelineBuilder pipelineBuilder;
+        pipelineBuilder.setShaders("shaders/picking_rigid.vert.spv", "shaders/picking.frag.spv");
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.disableBlending();
+        pipelineBuilder.enableDepthTest(false, VK_COMPARE_OP_LESS);
+        pipelineBuilder.setColorAttachmentFormat(pickingImage.format);
+        pipelineBuilder.setDepthFormat(depthImage.format);
+        pipelineBuilder.setPipelineLayout(pickingRigidLayout);
+
+        pickingRigidPipeline.pipeline = pipelineBuilder.buildPipeline();
+        coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, pickingRigidPipeline.pipeline);
+    }
+    {
+        VktPipelineBuilder pipelineBuilder;
+        pipelineBuilder.setShaders("shaders/picking_skinned.vert.spv", "shaders/picking.frag.spv");
+        pipelineBuilder.setInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+        pipelineBuilder.setPolygonMode(VK_POLYGON_MODE_FILL);
+        pipelineBuilder.setCullMode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+        pipelineBuilder.setMultisamplingNone();
+        pipelineBuilder.disableBlending();
+        pipelineBuilder.enableDepthTest(false, VK_COMPARE_OP_LESS);
+        pipelineBuilder.setColorAttachmentFormat(pickingImage.format);
+        pipelineBuilder.setDepthFormat(depthImage.format);
+        pipelineBuilder.setPipelineLayout(pickingSkinnedLayout);
+
+        pickingSkinnedPipeline.pipeline = pipelineBuilder.buildPipeline();
+        coreDeletionQueue.pushDeletable(DeletableType::VK_PIPELINE, pickingSkinnedPipeline.pipeline);
+    }
+
+    LOG(LOG_INFO, "Initialized picking pipelines");
+}
+
+void VktCore::initPickingBuffer() {
+    pickingBufferToGPU = VktBuffers::create(sizeof(VktTypes::GPU::PickingBuffer),
+                                            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    pickingBufferFromGPU = VktBuffers::create(sizeof(VktTypes::GPU::PickingBuffer),
+                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                              VMA_MEMORY_USAGE_GPU_TO_CPU);
+    const VkBufferDeviceAddressInfo deviceAddressInfo{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+            .pNext = nullptr,
+            .buffer = pickingBufferFromGPU.buffer
+    };
+    pickingBufferAddress = vkGetBufferDeviceAddress(VktCachePtr->vkDevice, &deviceAddressInfo);
+    LOG(LOG_INFO, "Initialized picking buffers");
 }
 
 void VktCore::initImGui() {
 
     // Overkill pool resources but only for dev so whatever
-    VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-                                        {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-                                        {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
+    const VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+                                              {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+                                              {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+                                              {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+                                              {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+                                              {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+                                              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+                                              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+                                              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+                                              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+                                              {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
     VkDescriptorPoolCreateInfo poolInfo{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .pNext = nullptr};
     poolInfo.maxSets = 1000;
     poolInfo.poolSizeCount = static_cast<uint32_t>(std::size(poolSizes));
@@ -994,8 +1218,9 @@ void VktCore::initImGui() {
 
     VkDescriptorPool imguiPool;
     VK_CHECK(vkCreateDescriptorPool(VktCachePtr->vkDevice, &poolInfo, nullptr, &imguiPool))
+    coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_POOL, imguiPool);
 
-    ImGuiContext* ctx = ImGui::CreateContext();
+    ImGui::CreateContext();
     WindowPtr->initImGuiVulkan();
 
     ImGuiIO &io = ImGui::GetIO();
@@ -1029,7 +1254,6 @@ void VktCore::initImGui() {
 
     ImGui_ImplVulkan_Init(&initInfo);
     ImGui_ImplVulkan_CreateFontsTexture();
-    coreDeletionQueue.pushDeletable(DeletableType::VK_DESCRIPTOR_POOL, imguiPool);
 
     ImGuiHandler::initMenus();
     ImGuiHandler::mainWindow.Surface = surface;
@@ -1053,18 +1277,16 @@ void VktCore::initImGui() {
                                            swapchainImages.size());*/
 }
 
-void VktCore::drawImGui(VkCommandBuffer cmd, VkImageView targetView) {
-    VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(targetView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
-    VkRenderingInfo renderInfo = VktStructs::renderingInfo(swapchainExtent, &colorAttachment, nullptr);
+void VktCore::drawImGui(VkCommandBuffer cmd, VkImageView targetView) const {
+    const VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(targetView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
+    const VkRenderingInfo renderInfo = VktStructs::renderingInfo(swapchainExtent, &colorAttachment, nullptr);
 
     vkCmdBeginRendering(cmd, &renderInfo);
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
     vkCmdEndRendering(cmd);
 }
 
-bool VktCore::shouldClose() {
-    return WindowPtr->shouldClose();
-}
+bool VktCore::shouldClose() { return WindowPtr->shouldClose(); }
 
 void VktCore::run() {
 
@@ -1185,8 +1407,7 @@ VktTypes::GPU::JointsBuffers VktCore::uploadJoints(const std::span<glm::mat4> &j
                                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                                                 VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr};
-    deviceAddressInfo.buffer = newJoints.jointsBuffer.buffer;
+    const VkBufferDeviceAddressInfo deviceAddressInfo = VktStructs::bufferDeviceAddressInfo(newJoints.jointsBuffer.buffer);
     newJoints.jointsBufferAddress = vkGetBufferDeviceAddress(VktCachePtr->vkDevice, &deviceAddressInfo);
 
     memcpy(newJoints.jointsBuffer.info.pMappedData, jointMatrices.data(), jointsBufferSize);
@@ -1208,11 +1429,7 @@ void VktCore::initDefaultData() {
 
     uint32_t pink = 0xFF00DC;
     std::array<uint32_t, 16 * 16> pixels{};
-    for(uint32_t x = 0; x < 16; x++) {
-        for(uint32_t y = 0; y < 16; y++) {
-            pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? pink : 0;
-        }
-    }
+    for(uint32_t x = 0; x < 16; x++) { for(uint32_t y = 0; y < 16; y++) { pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? pink : 0; } }
     m_errorCheckboardImage = VktImages::createDeviceMemory(VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT).value();
     VktImages::copyFromRaw(m_errorCheckboardImage, 16 * 16 * 4, reinterpret_cast<char *>(pixels.data()));
 
@@ -1256,62 +1473,7 @@ void VktCore::setExtentDimensions() {
 }
 
 void VktCore::updateScene() {
-    mainDrawContext.opaqueSurfaces.clear();
-
-    for(auto &[oID, object]: loadedObjects) {
-        if(object.model->isSkinned() && object.model->currentAnimation() != ModelTypes::NULL_ID) {
-            object.model->updateAnimationTime();
-            object.model->updateJoints();
-        }
-        object.model->gatherDrawContext(mainDrawContext);
-    }
-    TecCorePtr->world->gatherDrawContext(mainDrawContext);
-}
-
-/**
- * Initialize first object identifiers to 0.
- */
-VktCore::objectID_t VktCore::EngineObject::lastID = 0;
-
-VktCore::EngineObject *VktCore::createObject(const std::string &name, const std::filesystem::path &filePath) {
-    // Find free identifier
-    while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
-    objectID_t freeID = EngineObject::lastID++;
-
-    // Create object
-    loadedObjects[freeID] = EngineObject{
-            .objectID = freeID,
-            .name = name,
-            .model = new Model(filePath),
-    };
-
-    // Upload default position
-    if(loadedObjects[freeID].model->isSkinned()) {
-        loadedObjects[freeID].model->updateJoints();
-    }
-
-    LOG(LOG_INFO, "Created an object " << name << " with ID " << freeID);
-    return &loadedObjects[freeID];
-}
-
-VktCore::EngineObject *VktCore::createObject(const std::string &name, Model *model) {
-    // Find free identifier
-    while(loadedObjects.contains(EngineObject::lastID)) EngineObject::lastID++;
-    objectID_t freeID = EngineObject::lastID++;
-
-    // Create object
-    loadedObjects[freeID] = EngineObject{
-            .objectID = freeID,
-            .name = name,
-            .model = model};
-
-    // Upload default position
-    if(loadedObjects[freeID].model->isSkinned()) {
-        loadedObjects[freeID].model->updateJoints();
-    }
-
-    LOG(LOG_INFO, "Created an object " << name << " with ID " << freeID);
-    return &loadedObjects[freeID];
+    // TecCorePtr->world->gatherDrawContext(mainDrawContext);
 }
 
 VktTypes::MaterialInstance VktCore::writeMaterial(VktTypes::MaterialPass pass,

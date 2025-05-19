@@ -7,7 +7,11 @@
 #include <ktxvulkan.h>
 #include <unordered_map>
 #include <vk_mem_alloc.h>
+#include <filesystem>
 #include <vulkan/vulkan_core.h>
+
+#include "VktLayout.h"
+#include "VktPipelines.h"
 
 /**
  * Singleton class for caching various resources. \n
@@ -22,7 +26,8 @@ struct VktCache {
         SKYBOX,
         MAT_METAL_ROUGHNESS,
         IBL_ROUGHNESS,
-        IBL_BRDF
+        IBL_BRDF,
+        PICKING
     };
 
     enum class Sampler : uint8_t {
@@ -44,6 +49,20 @@ struct VktCache {
      * @return Descriptor Layout
      */
     VkDescriptorSetLayout getLayout(Layout id);
+
+    /**
+     * @brief Loads a VktLayout from XML format
+     * @param path Path to the XML layout definition
+     * @return True if the layout was loaded successfully
+     */
+    bool loadLayoutXML(const std::filesystem::path& path);
+
+    /**
+     * @brief Loads a VktPipeline from XML format
+     * @param path Path to the XML pipeline definition
+     * @return True if the pipeline was loaded successfully
+     */
+    bool loadPipelineXML(const std::filesystem::path& path);
 
     /**
      * @brief Deletes a handle for a descriptor layout.
@@ -82,7 +101,6 @@ struct VktCache {
         return output;
     }
 
-
     /**
      * @brief Stores an image sampler.
      * @param id ID of sampler
@@ -102,7 +120,7 @@ struct VktCache {
      * @brief Deletes an image sampler.
      * @note This will not delete it from GPU memory.
      * @param id ID of an image sampler
-     * @return True if succesfull
+     * @return True if successful
      */
     bool deleteSampler(Sampler id);
 
@@ -112,8 +130,10 @@ struct VktCache {
     VmaAllocator vmaAllocator = VK_NULL_HANDLE;
     DescriptorAllocatorDynamic descriptorAllocator{};
     VkExtent2D drawExtent{};
-    ktxVulkanDeviceInfo ktxInfo;
+    ktxVulkanDeviceInfo ktxInfo{};
 
+    std::unordered_map<std::string, VktLayout> layouts;
+    std::unordered_map<std::string, VktPipeline> pipelines;
     std::unordered_map<Layout, VkDescriptorSetLayout> m_layouts;
     std::unordered_map<Sampler, VkSampler> m_samplers;
 };

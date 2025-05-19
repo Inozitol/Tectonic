@@ -39,10 +39,10 @@ namespace ModelTypes {
     };
 
     struct Node {
-        SerialTypes::Span<uint32_t,char,false> name;
+        SerialTypes::Span<uint32_t,char> name;
 
         NodeID_t parent = NULL_ID;
-        SerialTypes::Span<uint32_t,NodeID_t,false> children;
+        SerialTypes::Span<uint32_t,NodeID_t> children;
 
         MeshID_t mesh = NULL_ID;
 
@@ -65,25 +65,24 @@ namespace ModelTypes {
         };
 
         Interpolation interpolation;
-        SerialTypes::Span<uint32_t,float,false> inputs;
-        SerialTypes::Span<uint32_t,glm::vec4,false> outputsVec4;
+        SerialTypes::Span<uint32_t,float> inputs;
+        SerialTypes::Span<uint32_t,glm::vec4> outputsVec4;
         mutable uint32_t lastInput = 0;
     };
 
     struct AnimationChannel {
         NodeID_t node = NULL_ID;
-
         AnimSamplerID_t scaleSampler        = NULL_ID;
         AnimSamplerID_t rotationSampler     = NULL_ID;
         AnimSamplerID_t translationSampler  = NULL_ID;
     };
 
     struct Animation {
-        SerialTypes::Span<uint32_t,char, false> name;
+        SerialTypes::Span<uint32_t,char> name;
         float start = std::numeric_limits<float>::max();
         float end = std::numeric_limits<float>::min();
         std::vector<AnimationSampler> samplers;
-        SerialTypes::Span<uint32_t,AnimationChannel,false> channels;
+        SerialTypes::Span<uint32_t,AnimationChannel> channels;
 
         /** Each pair has ID of the node and ID of animation channel for that node */
         SerialTypes::Span<uint32_t,std::pair<uint32_t, uint32_t>,false> animatedNodes;
@@ -91,10 +90,10 @@ namespace ModelTypes {
     };
 
     struct Skin {
-        SerialTypes::Span<uint32_t,char,false> name;
+        SerialTypes::Span<uint32_t,char> name;
         uint32_t skeletonRoot = NULL_ID;
-        SerialTypes::Span<uint32_t,NodeID_t,false> skinNodes;
-        SerialTypes::Span<uint32_t,glm::mat4,false> inverseBindMatrices;
-        SerialTypes::Span<uint32_t,NodeID_t,false> joints;
+        SerialTypes::Span<uint32_t,NodeID_t> skinNodes;
+        SerialTypes::Span<uint32_t,glm::mat4> inverseBindMatrices;
+        SerialTypes::Span<uint32_t,NodeID_t> joints;
     };
 }

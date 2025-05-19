@@ -32,11 +32,11 @@ void LODManager::calcLODRegions() {
     }
 }
 
-const LODManager::patchLOD &LODManager::getPatchLOD(uint32_t patchX, uint32_t patchY) const {
+const LODManager::patchLOD &LODManager::getPatchLOD(const uint32_t patchX, const uint32_t patchY) const {
     return m_map.at(patchY).at(patchX);
 }
 
-void LODManager::updateLODMapPass1(uint32_t patchX, uint32_t patchY) {
+void LODManager::updateLODMapPass1(const uint32_t patchX, const uint32_t patchY) {
     for(uint32_t lodMapY = 0; lodMapY < terrain->patchesY; lodMapY++){
         for(uint32_t lodMapX = 0; lodMapX < terrain->patchesX; lodMapX++) {
             patchLOD& pPatchLOD = m_map.at(lodMapY).at(lodMapX);
@@ -54,7 +54,7 @@ void LODManager::updateLODMapPass1(uint32_t patchX, uint32_t patchY) {
 }
 
 void LODManager::updateLODMapPass1(const glm::vec3 &camPos) {
-    int32_t centerStep = static_cast<int32_t>(terrain->patchSize) / 2;
+    const int32_t centerStep = static_cast<int32_t>(terrain->patchSize) / 2;
     for(uint32_t lodMapY = 0; lodMapY < terrain->patchesY; lodMapY++){
         for(uint32_t lodMapX = 0; lodMapX < terrain->patchesX; lodMapX++) {
             //m_map.at(lodMapY).at(lodMapX).core = 0;

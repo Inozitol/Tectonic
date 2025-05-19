@@ -1,7 +1,7 @@
 #include "engine/camera/GameCamera.h"
 #include "engine/GlobalMemory.h"
 
-void GameCamera::handleKeyboardEvent(const keyboardButtonInfo& buttonInfo) {
+void FreeCamera::handleKeyboardEvent(const keyboardButtonInfo& buttonInfo) {
     if(buttonInfo.action == GLFW_PRESS) {
         m_holdingButtons.emplace(buttonInfo.key);
     }else if(buttonInfo.action == GLFW_RELEASE) {
@@ -43,12 +43,12 @@ void GameCamera::handleKeyboardEvent(const keyboardButtonInfo& buttonInfo) {
     }
 }
 
-void GameCamera::updatePosition() {
+void FreeCamera::updatePosition() {
     glm::vec3 directionRotated = destinationNormVec * orientation;
     setPosition(position + directionRotated * TecCorePtr->deltaTime * speed);
 }
 
-void GameCamera::handleMouseEvent(double x_in, double y_in) {
+void FreeCamera::handleMouseEvent(double x_in, double y_in) {
     if(cursorEnabled)
         return;
 
@@ -68,6 +68,6 @@ void GameCamera::handleMouseEvent(double x_in, double y_in) {
     lastMousePos = {x, y};
 }
 
-void GameCamera::setSpeed(float s) {
+void FreeCamera::setSpeed(float s) {
     speed = s;
 }

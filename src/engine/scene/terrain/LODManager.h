@@ -15,11 +15,11 @@ struct LODManager {
     void init(Terrain* terrain);
 
     struct patchLOD{
-        uint32_t core = 0;
-        uint32_t left = 0;
-        uint32_t right = 0;
-        uint32_t top = 0;
-        uint32_t bottom = 0;
+        uint8_t core = 0;
+        uint8_t left = 0;
+        uint8_t right = 0;
+        uint8_t top = 0;
+        uint8_t bottom = 0;
     };
 
     [[nodiscard]] const patchLOD& getPatchLOD(uint32_t patchX, uint32_t patchY) const;
@@ -32,20 +32,26 @@ struct LODManager {
 
     uint32_t distanceToLOD(float distance);
 
-    Slot<uint32_t, uint32_t> slt_activePatch{[this](uint32_t patchX, uint32_t patchY) {
-        updateLODMapPass1(patchX, patchY);
-        updateLODMapPass2();
-    }};
-    Slot<const glm::vec3&> slt_cameraPosition{[this](const glm::vec3& pos){
-        updateLODMapPass1(pos);
-        updateLODMapPass2();
-    }};
 
     Terrain* terrain;
 
     std::vector<std::vector<patchLOD>> m_map;
     std::vector<std::vector<float>> m_heights;
     std::vector<float> m_regions;
+
+    Signal<> sig_LODChange;
+
+    Slot<uint32_t, uint32_t> slt_activePatch{[this](const uint32_t patchX, const uint32_t patchY) {
+        updateLODMapPass1(patchX, patchY);
+        updateLODMapPass2();
+        sig_LODChange.emit();
+    }};
+    Slot<const glm::vec3&> slt_cameraPosition{[this](const glm::vec3& pos){
+        updateLODMapPass1(pos);
+        updateLODMapPass2();
+        sig_LODChange.emit();
+    }};
+
 };
 
 

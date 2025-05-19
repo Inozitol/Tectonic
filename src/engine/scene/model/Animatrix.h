@@ -12,6 +12,7 @@
 #include <queue>
 #include <regex>
 #include <set>
+#include <optional>
 
 #define ANIMATRIX_VERSION 0
 

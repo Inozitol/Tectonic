@@ -11,8 +11,12 @@ struct mouseButtonInfo{
     int32_t mods;
 };
 
-class Cursor {
-public:
+struct Cursor {
+
+    bool isPressed;
+    double xPos, yPos;
+    mouseButtonInfo buttonInfo;
+
     /// Emitted when mouse button got pressed or released
     Signal<bool> sig_updatePressed;
 
@@ -28,35 +32,31 @@ public:
     /// Emitted when cursor is pressed sending position of cursor
     Signal<double, double> sig_cursorPressedPos;
 
-    Slot<mouseButtonInfo> slt_updateButtonInfo{[this](mouseButtonInfo buttonInfo){
-        m_buttonInfo = buttonInfo;
-        sig_updateButtonInfo.emit(m_buttonInfo);
-        switch(m_buttonInfo.action){
+    Slot<mouseButtonInfo> slt_updateButtonInfo{[this](const mouseButtonInfo inButtonInfo){
+        buttonInfo = inButtonInfo;
+        sig_updateButtonInfo.emit(buttonInfo);
+        switch(buttonInfo.action){
             case GLFW_PRESS:
-                m_isPressed = true;
-                sig_updatePressed.emit(true);
-                sig_cursorPressedPos.emit(m_xPos, m_yPos);
+                isPressed = true;
+            sig_updatePressed.emit(true);
+            sig_cursorPressedPos.emit(xPos, yPos);
             break;
             case GLFW_REPEAT:
                 sig_updateHeld.emit();
-                break;
-            case GLFW_RELEASE:
-                m_isPressed = false;
-                sig_updatePressed.emit(false);
             break;
+            case GLFW_RELEASE:
+                isPressed = false;
+            sig_updatePressed.emit(false);
+            break;
+            default: break;
         }
     }};
 
     Slot<double, double> slt_updatePos{[this](double x, double y){
-        m_xPos = x;
-        m_yPos = y;
-        sig_updatePos.emit(m_xPos, m_yPos);
+        xPos = x;
+        yPos = y;
+        sig_updatePos.emit(xPos, yPos);
     }};
-
-private:
-    bool m_isPressed;
-    double m_xPos, m_yPos;
-    mouseButtonInfo m_buttonInfo;
 };
 
 

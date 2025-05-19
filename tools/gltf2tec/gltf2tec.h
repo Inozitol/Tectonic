@@ -36,6 +36,15 @@ namespace gltf2tec{
         SerialTypes::BinDataVec_t data;
     };
 
+    struct MinMaxAxies {
+        float minX = std::numeric_limits<float>::infinity();
+        float maxX = -std::numeric_limits<float>::infinity();;
+        float minY = std::numeric_limits<float>::infinity();
+        float maxY = -std::numeric_limits<float>::infinity();;
+        float minZ = std::numeric_limits<float>::infinity();
+        float maxZ = -std::numeric_limits<float>::infinity();;
+    };
+
     GLTFResources* loadGltfModel(const std::filesystem::path& filePath);
 }
 

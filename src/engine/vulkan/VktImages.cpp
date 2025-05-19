@@ -29,6 +29,14 @@ namespace VktImages {
 
         VK_CHECK(vmaCreateImage(VktCachePtr->vmaAllocator, &imgInfo, &allocInfo, &newImage.image, &newImage.allocation, &newImage.info))
 
+        #ifdef VKT_DEBUG_ALLOCATION_NAMES
+            const std::string debugName =
+                "VkImage_width_" + std::to_string(info.extent.width) +
+                "_height_" + std::to_string(info.extent.height) +
+                "_layers_" + std::to_string(info.layers);
+            vmaSetAllocationName(VktCachePtr->vmaAllocator,newImage.allocation,debugName.c_str());
+        #endif
+
         VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
         if(info.format == VK_FORMAT_D32_SFLOAT) {
             aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -50,7 +58,7 @@ namespace VktImages {
                                                                  uint32_t mipLevels,
                                                                  uint32_t layers,
                                                                  bool isCubemap) {
-        VktImageCreateInfo info{
+        return create(VktImageCreateInfo{
                 .extent = allocSize,
                 .format = format,
                 .mipLevels = mipLevels,
@@ -58,19 +66,18 @@ namespace VktImages {
                 .isCubemap = isCubemap,
                 .usageFlags = usageFlags,
                 .memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-                .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
-
-        return create(info);
+                .memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+        });
     }
 
     void copyFromRaw(const VktTypes::Resources::Image &image,
-                     size_t size,
+                     const size_t size,
                      const char *data) {
 
         size_t mipOffset = 0;
 
         // Copying data to staging buffer
-        VktTypes::Resources::Buffer stagingBuffer = VktBuffers::create(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        const VktTypes::Resources::Buffer stagingBuffer = VktBuffers::create(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
         memcpy(stagingBuffer.info.pMappedData, data, size);
 
         VktInstantCommands::submitCommands([&](VkCommandBuffer cmd) {
@@ -98,7 +105,7 @@ namespace VktImages {
             });
             mipOffset += mipExtent.width * mipExtent.height * mipExtent.depth * vkuFormatComponentCount(image.format) * image.layers;
         }
-        VktInstantCommands::submitCommands([&](VkCommandBuffer cmd) {
+        VktInstantCommands::submitCommands([&](const VkCommandBuffer cmd) {
             VktUtils::transitionImage(cmd, image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         });
         VktBuffers::destroy(stagingBuffer);
@@ -159,7 +166,7 @@ namespace VktImages {
         ktxCreateInfo.numLevels = image.mipLevels;
         ktxCreateInfo.numLayers = image.layers;
         ktxCreateInfo.numFaces = 1;
-        ktxCreateInfo.isArray = image.layers > 1 ? KTX_TRUE : KTX_FALSE;
+        ktxCreateInfo.isArray = image.layers > 1;
         ktxCreateInfo.generateMipmaps = KTX_FALSE;
 
         ktxResult = ktxTexture2_Create(&ktxCreateInfo, KTX_TEXTURE_CREATE_ALLOC_STORAGE, &texture);

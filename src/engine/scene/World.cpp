@@ -2,7 +2,21 @@
 
 #include "../GlobalMemory.h"
 
-void World::clear() {
+#include <ranges>
+
+World::World() {
+    rigidObjects.storeFunc = [this](WorldObject_t& obj, const objectID_t id) {
+        obj.model.sig_change.connect(rigidObjects.slt_objectChanged);
+        obj.model.id = id;
+    };
+    skinnedObjects.storeFunc = [this](WorldObject_t& obj, const objectID_t id) {
+        obj.model.sig_change.connect(skinnedObjects.slt_objectChanged);
+        obj.model.id = id;
+    };
+}
+
+void World::clear() const {
+    LOG(LOG_INFO, "Clearing world resources");
     if(terrain) terrain->clear();
     if(skybox) skybox->clear();
 }
@@ -20,13 +34,24 @@ void World::updateScene() {
     sceneData.cameraPosition = PlayerPtr->camera.position;
     sceneData.cameraDirection = PlayerPtr->camera.getDirection();
     sceneData.time = TecCorePtr->currTime;
-}
 
-void World::gatherDrawContext(VktTypes::DrawContext &ctx) const {
+    for(auto [id,obj] : skinnedObjects.objects) {
+        if(obj.model.currentAnimation() != ModelTypes::NULL_ID) {
+            obj.model.updateAnimationTime();
+            obj.model.updateJoints();
+        }
+    }
+}
+/*
+void World::gatherDrawContext(VktTypes::DrawContext &ctx) {
     // Gather Terrain context
     auto renderIter = terrain->renderIter();
     while(renderIter) {
         ctx.opaqueSurfaces.push_back(*renderIter);
         ++renderIter;
     }
-}
+
+    for(auto [id,obj] : objects) {
+        obj.model->gatherDrawContext(VktCorePtr->mainDrawContext);
+    }
+}*/

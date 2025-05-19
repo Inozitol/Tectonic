@@ -28,4 +28,9 @@ namespace BB {
 
     using Corners_t = std::array<glm::vec3, BOX_CORNERS>;
     using SideCorners_t = std::array<glm::vec3, BOX_SIDE_CORNERS>;
+
+    template<typename BoxType>
+    concept IsBox = requires(BoxType b) {
+        {b.getCorners()} -> std::same_as<Corners_t>;
+    };
 }

@@ -8,13 +8,13 @@
 #include "connector/Slot.h"
 
 /**
- * Represents a controllable game camera. Usually only one per scene.
+ * Represents a controllable free camera.
  * This camera can be controlled with keyboard and mouse by calling handleKeyEvent and handleMouseEvent.
  *
- * @brief Controllable camera.
+ * @brief Free controllable camera.
  */
-struct GameCamera : Camera {
-    GameCamera() = default;
+struct FreeCamera : Camera {
+    FreeCamera() = default;
 
     /**
      * @brief Handles an incoming key event and moves the camera accordingly.

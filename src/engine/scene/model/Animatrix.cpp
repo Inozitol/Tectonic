@@ -18,7 +18,7 @@
 Animatrix::Animatrix(Model *model) : m_model(model) {
     assert(m_model);
     if(!loadArmature()) {
-        LOG(LOG_ERROR, "Model [" << m_model->path() << "] has invalid armature");
+        LOG(LOG_ERROR, "Model [" << m_model->path << "] has invalid armature");
         return;
     }
     m_instances.insert(this);
@@ -95,7 +95,7 @@ void writeAction(SerialTypes::BinDataVec_t &data, const Animatrix::Action &act) 
 
 void writeActionGroup(SerialTypes::BinDataVec_t &data, const Animatrix::ActionGroup &grp) {
     // Write group name size + data [32bits + 8bits * size]
-    Serial::pushData<char>(data, grp.name);
+    Serial::pushData(data, grp.name);
 
     // Write group destiation time [sizeof(float)]
     Serial::pushData<float>(data, grp.destinationTime);
@@ -113,7 +113,7 @@ std::optional<SerialTypes::BinDataVec_t> Animatrix::serializeSequence(const char
     SerialTypes::BinDataVec_t data;
 
     // Write sequence name size + data [32bits + 8bits * size]
-    Serial::pushData<char>(data, actionSequence.name.data());
+    Serial::pushData(data, actionSequence.name);
 
     // Write groups size + data [32bits + sizeof(ActionGroup) * size]
     Serial::pushData<uint32_t>(data, actionSequence.groups.size());
@@ -190,7 +190,7 @@ Model *Animatrix::model() const {
 
 bool Animatrix::loadArmature() {
     if(!m_model->isSkinned()) {
-        LOG(LOG_ERROR, "Model [" << m_model->path() << "] has no skin\n");
+        LOG(LOG_ERROR, "Model [" << m_model->path << "] has no skin\n");
         return false;
     }
 
@@ -202,16 +202,16 @@ bool Animatrix::loadArmature() {
         uint32_t nodeID;
     };
 
-    ModelTypes::Skin &skin = m_model->skin();
+    ModelTypes::Skin &skin = m_model->skin;
     std::vector<loadedJoint> bodyJointsBuffer;
     uint32_t numOfJoints = skin.joints.size();
     bodyJointsBuffer.reserve(numOfJoints);
     uint32_t jointID = 0;
     for(const auto &nID: skin.joints) {
-        ModelTypes::Node &skinJoint = m_model->nodes()[nID];
+        ModelTypes::Node &skinJoint = m_model->nodes[nID];
         std::cmatch m;
         if(!std::regex_match(skinJoint.name.data(), m, m_skinNodeRegex)) {
-            LOG(LOG_ERROR, "Model [" << m_model->path() << "] has invalid skin joint name [" << skinJoint.name.data() << ']');
+            LOG(LOG_ERROR, "Model [" << m_model->path << "] has invalid skin joint name [" << skinJoint.name.data() << ']');
             return false;
         }
 
@@ -391,9 +391,9 @@ void Animatrix::loadJointGeometry() {
         //auto joints = [this, &jointIDs](uint32_t index)->JointInfo&{ return bodyJoints[jointIDs[index]]; };
 
         // The position of each bone can be calculated by transforming an origin point by inverse of inverse bind transformation of that bone (this took me whole night)
-        bodyPartJointOuter(bodyPart)->origPosition = glm::inverse(m_model->skin().inverseBindMatrices[bodyPartJointOuter(bodyPart)->jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        bodyPartJointOuter(bodyPart)->origPosition = glm::inverse(m_model->skin.inverseBindMatrices[bodyPartJointOuter(bodyPart)->jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         bodyPartJointOuter(bodyPart)->currPosition = bodyPartJointOuter(bodyPart)->tempPosition = bodyPartJointOuter(bodyPart)->origPosition;
-        bodyPartJointOuter(bodyPart)->origAnimTransform = m_model->nodes()[bodyPartJointOuter(bodyPart)->nodeID].animationTransform;
+        bodyPartJointOuter(bodyPart)->origAnimTransform = m_model->nodes[bodyPartJointOuter(bodyPart)->nodeID].animationTransform;
         bodyPartJointOuter(bodyPart)->origAnimTransformInverse = glm::inverse(bodyPartJointOuter(bodyPart)->origAnimTransform);
 
         JointInfo *prevJoint = bodyPartJointOuter(bodyPart);
@@ -404,14 +404,14 @@ void Animatrix::loadJointGeometry() {
         for(size_t jointInfoIndex = bodyPartSize(bodyPart) - 2; jointInfoIndex != std::numeric_limits<std::size_t>::max(); jointInfoIndex--) {
 
             JointInfo *currJoint = bodyPartJoint(bodyPart, jointInfoIndex);
-            ModelTypes::Node &currJointNode = m_model->nodes()[currJoint->nodeID];
-            ModelTypes::Node &prevJointNode = m_model->nodes()[prevJoint->nodeID];
+            ModelTypes::Node &currJointNode = m_model->nodes[currJoint->nodeID];
+            ModelTypes::Node &prevJointNode = m_model->nodes[prevJoint->nodeID];
 
             assert(prevJointNode.parent == currJoint->nodeID);
             if(currJointNode.parent != ModelTypes::NULL_ID) {
-                currJoint->origPosition = glm::inverse(m_model->skin().inverseBindMatrices[currJoint->jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                currJoint->origPosition = glm::inverse(m_model->skin.inverseBindMatrices[currJoint->jointID]) * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
                 currJoint->currPosition = currJoint->tempPosition = currJoint->origPosition;
-                currJoint->origAnimTransform = m_model->nodes()[currJoint->nodeID].animationTransform;
+                currJoint->origAnimTransform = m_model->nodes[currJoint->nodeID].animationTransform;
                 currJoint->origAnimTransformInverse = glm::inverse(currJoint->origAnimTransform);
                 currJoint->distance = glm::distance(currJoint->origPosition, prevJoint->origPosition);
 
@@ -796,11 +796,11 @@ Animatrix::JointInfo::JointInfo() {
 }
 
 void Animatrix::JointInfo::applyTransformation(Model *model, const glm::mat4 &t) const {
-    model->nodes()[nodeID].animationTransform = t * model->nodes()[nodeID].animationTransform;
+    model->nodes[nodeID].animationTransform = t * model->nodes[nodeID].animationTransform;
 }
 
 void Animatrix::JointInfo::setTransformation(Model *model, const glm::mat4 &t) const {
-    model->nodes()[nodeID].animationTransform = t;
+    model->nodes[nodeID].animationTransform = t;
 }
 
 void Animatrix::JointInfo::setModelPosition(Model *model) const {
@@ -881,7 +881,7 @@ void Animatrix::JointInfo::fixTempPositionInterpolate(const JointInfo &changedJo
     this->tempPosition = destPos;
 }
 
-void Animatrix::JointInfo::fixTempPositionExtrapolate(const JointInfo &changedJoint, bool fromInner, float distance) {
+void Animatrix::JointInfo::fixTempPositionExtrapolate(const JointInfo &changedJoint, bool, float distance) {
     this->tempPosition = changedJoint.tempPosition + changedJoint.tempDirection * distance;
 }
 
@@ -1071,7 +1071,7 @@ void Animatrix::runImGui() {
         return;
     }
     for(auto &instance: m_instances) {
-        if(!ImGui::TreeNode(instance->model()->path().c_str())) continue;
+        if(!ImGui::TreeNode(instance->model()->path.c_str())) continue;
 
         ImGui::SeparatorText("Action Sequences");
         ImGui::PushID("Action Sequences");

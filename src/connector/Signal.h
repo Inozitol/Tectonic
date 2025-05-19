@@ -11,7 +11,10 @@ private:
 public:
     Signal(const Signal&) = delete;
     Signal(Signal&&) = delete;
-    Signal &operator=(const Signal&) = delete;
+    Signal &operator=(const Signal& other) {
+        m_connectedSlots = other.m_connectedSlots;
+        return *this;
+    };
 
     Signal() = default;
     ~Signal() = default;

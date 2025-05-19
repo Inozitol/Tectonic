@@ -2,6 +2,7 @@
 #include "VktTypes.h"
 
 #include <ktx.h>
+#include <optional>
 
 namespace VktImages {
 

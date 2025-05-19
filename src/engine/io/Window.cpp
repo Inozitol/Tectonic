@@ -14,7 +14,7 @@ Window::Window(const char* name){
     glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
     glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
 
-    glfwWindow = glfwCreateWindow(mode->width-75, mode->height-75, name, nullptr, nullptr);
+    glfwWindow = glfwCreateWindow(mode->width, mode->height, name, glfwGetPrimaryMonitor(), nullptr);
     if(!glfwWindow){
         throw windowException("Unable to create Window");
     }
@@ -48,22 +48,22 @@ Window::~Window() {
     clean();
 }
 
-void Window::clean() {
+void Window::clean() const {
     glfwDestroyWindow(glfwWindow);
 }
 
-void Window::makeCurrentContext() {
+void Window::makeCurrentContext() const {
     glfwMakeContextCurrent(glfwWindow);
 }
 
-void Window::swapBuffers() {
+void Window::swapBuffers() const {
     glfwSwapBuffers(glfwWindow);
 }
-bool Window::shouldClose() {
+bool Window::shouldClose() const {
     return glfwWindowShouldClose(glfwWindow);
 }
 
-Utils::WindowDimension Window::getSize() {
+Utils::WindowDimension Window::getSize() const {
     int32_t winWidth, winHeight;
     glfwGetWindowSize(glfwWindow, &winWidth, &winHeight);
     return {winWidth, winHeight};
@@ -92,7 +92,7 @@ void Window::toggleCursor() {
     }
 }
 
-void Window::initSignals() {
+void Window::initSignals() const {
     glfwSetCursorPosCallback(glfwWindow, [](GLFWwindow* win, double x, double y){
         Window* winContext = Window::getContextFromWindow(win);
         winContext->sig_updateMousePos.emit(x,y);
@@ -128,7 +128,7 @@ Window *Window::getContextFromWindow(GLFWwindow *window) {
     return static_cast<Window*>(glfwGetWindowUserPointer(window));
 }
 
-void Window::close() {
+void Window::close() const {
     glfwSetWindowShouldClose(glfwWindow, GLFW_TRUE);
 }
 
@@ -141,7 +141,7 @@ void Window::connectKeyboard(Keyboard &keyboard) {
     sig_updateKeyboardButtonInfo.connect(keyboard.slt_updateButtonInfo);
 }
 
-VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
+VkSurfaceKHR Window::createWindowSurface(VkInstance instance) const {
     static bool surfaceCreated = false;
     if(surfaceCreated){
         throw windowException("Attempted to create VkSurfaceKHR on Window with previously created surface");
@@ -154,7 +154,7 @@ VkSurfaceKHR Window::createWindowSurface(VkInstance instance) {
     return surface;
 }
 
-void Window::initImGuiVulkan() {
+void Window::initImGuiVulkan() const {
     ImGui_ImplGlfw_InitForVulkan(glfwWindow, true);
 }
 

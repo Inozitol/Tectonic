@@ -23,4 +23,5 @@ struct OBB {
     void rotatePoints(std::span<glm::vec3> px) const;
     void alignPoint(glm::vec3 &p) const;
     void alignPoints(std::span<glm::vec3> px) const;
+    [[nodiscard]] BB::Corners_t getCorners() const;
 };

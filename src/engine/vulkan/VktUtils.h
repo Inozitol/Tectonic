@@ -25,6 +25,7 @@ namespace VktUtils{
     void CmdSetPolygonModeEXT(VkCommandBuffer cmd, VkPolygonMode polygonMode);
     std::vector<VkImageView> createImageMipViews(VkImage image, VkFormat format, uint32_t mipLevels);
     std::vector<VkImageView> createCubemapMipViews(VkImage cubemapImage, VkFormat format, uint32_t mipLevels);
+    void reinitCommandBuffer(VkCommandBuffer cmd, const VkCommandBufferUsageFlags flags = 0);
 }
 
 #endif //TECTONIC_VKTUTILS_H

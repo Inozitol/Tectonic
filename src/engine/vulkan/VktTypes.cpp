@@ -134,7 +134,7 @@ void VktTypes::Skin::updateJoints(VktTypes::Animation* animation, const VktTypes
 
     std::size_t numJoints = joints.size();
     std::vector<glm::mat4> jointMatrices(numJoints);
-    /*
+
     for(std::size_t nodeID = 0; nodeID < skinNodes.size(); nodeID++){
         VktTypes::Node* node = skinNodes[nodeID];
         glm::mat4 inverseTransform = glm::inverse(node->animationTransform);

@@ -11,7 +11,7 @@
 #include "defs/ConfigDefs.h"
 #include "utils/exceptions.h"
 
-#include "engine/../../tools/gltf2tec/gltf2tec.h"
+#include "../../tools/gltf2tec/gltf2tec.h"
 #include "vulkan/VktCore.h"
 #include "Player.h"
 
@@ -29,8 +29,6 @@ struct TecCore
     void clean();
 
     static void glfwErrorCallback(int, const char* msg);
-
-    std::unordered_map<VktCore::objectID_t, VktCore::EngineObject*> m_objects;
 
     void initKeyGroups();
     void initKeyboard();

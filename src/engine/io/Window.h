@@ -17,19 +17,19 @@
  */
 struct Window {
     Window();
-    explicit Window(const char *name);
+    explicit Window(const char* name);
     ~Window();
 
     /**
      * @brief Makes the m_window as the current context.
      */
-    void makeCurrentContext();
+    void makeCurrentContext() const;
 
     /**
      * @brief Gets the width and height of the m_window.
      * @return Width and height.
      */
-    Utils::WindowDimension getSize();
+    Utils::WindowDimension getSize() const;
 
     /**
      * @brief Gets the m_window aspect aspect.
@@ -41,13 +41,13 @@ struct Window {
      * Swaps the front and back buffers of the m_window.
      * Should be called after every frame.
      */
-    void swapBuffers();
+    void swapBuffers() const;
 
     /**
      * Returns true if the m_window should close.
      * @return True if m_window should close.
      */
-    bool shouldClose();
+    bool shouldClose() const;
 
     /**
      * @brief Disables the cursor inside the m_window.
@@ -67,32 +67,32 @@ struct Window {
     /**
      * @brief Sets the m_window to shouldClose state.
      */
-    void close();
+    void close() const;
 
     /**
      * @brief Connects the appropriate signals and slots between this Window and provided Cursor.
      * @param cursor Cursor object.
      */
-    void connectCursor(Cursor &cursor);
+    void connectCursor(Cursor& cursor);
 
     /**
      * @brief Connects the appropriate signals and slots between this Window and provided Keyboard.
      * @param keyboard Keyboard object.
      */
-    void connectKeyboard(Keyboard &keyboard);
+    void connectKeyboard(Keyboard& keyboard);
 
-    static Window *getContextFromWindow(GLFWwindow *window);
+    static Window* getContextFromWindow(GLFWwindow* window);
 
-    [[nodiscard]] VkSurfaceKHR createWindowSurface(VkInstance instance);
-    void initImGuiVulkan();
-    void clean();
+    [[nodiscard]] VkSurfaceKHR createWindowSurface(VkInstance instance) const;
+    void initImGuiVulkan() const;
+    void clean() const;
 
-    static constexpr const char *DEFAULT_WINDOW_NAME = "Tectonic";
+    static constexpr const char* DEFAULT_WINDOW_NAME = "Tectonic";
 
-    void initSignals();
+    void initSignals() const;
     static void initGLFW();
 
-    GLFWwindow *glfwWindow;
+    GLFWwindow* glfwWindow;
 
     /**
      * @brief Emitted on every mouse button press.
@@ -134,16 +134,20 @@ struct Window {
     /**
      * @brief Closes the m_window.
      */
-    Slot<> slt_setClose{[this]() {
-        close();
-    }};
+    Slot<> slt_setClose{
+        [this]() {
+            close();
+        }
+    };
 
     /**
      * @brief Toggles between cursor being enabled/disabled.
      */
-    Slot<> slt_toggleCursor{[this]() {
-        toggleCursor();
-    }};
+    Slot<> slt_toggleCursor{
+        [this]() {
+            toggleCursor();
+        }
+    };
 };
 
 #endif//TECTONIC_WINDOW_H

@@ -20,6 +20,22 @@ VkDescriptorSetLayout VktCache::getLayout(Layout id) {
     return m_layouts[id];
 }
 
+bool VktCache::loadLayoutXML(const std::filesystem::path& path) {
+    VktLayout layout;
+    layout.loadXml(path);
+    layout.buildLayout();
+    layouts[layout.name] = layout;
+    return true;
+}
+
+bool VktCache::loadPipelineXML(const std::filesystem::path& path) {
+    VktPipeline pipeline;
+    pipeline.loadXml(path);
+    pipeline.buildPipeline();
+    pipelines[pipeline.name] = pipeline;
+    return true;
+}
+
 bool VktCache::deleteLayout(Layout id) {
     if(!m_layouts.contains(id)) {
         LOG(LOG_WARNING, "Trying to delete a layout with ID " << Utils::enumVal(id) << ", but it's not cached\n");

@@ -1,9 +1,13 @@
 #include "TecCore.h"
 
+#define CR_HOST
+#include "extern/cr/cr.h"
+
 #include "GlobalMemory.h"
 #include "engine/imgui/ImGuiHandler.h"
 #include "engine/scene/World.h"
 #include "math/Physics.h"
+#include "vulkan/VktLayout.h"
 
 #include <cfenv>
 
@@ -11,6 +15,17 @@ TecCore::TecCore() {
     feenableexcept(FE_INVALID | FE_OVERFLOW);
 
     VktCorePtr->init();
+
+    /*
+    VktLayout layout;
+    layout.loadXml("./pipelines/layouts/metalroughness.xml");
+    layout.buildLayout();
+
+    VktPipeline pipeline;
+    pipeline.loadXml("./pipelines/test.xml");
+    pipeline.buildPipeline();
+    */
+
     WindowPtr->sig_widowDimensions.connect(VktCorePtr->slt_windowResize);
     WindowPtr->connectKeyboard(keyboard);
     WindowPtr->connectCursor(cursor);
@@ -21,6 +36,13 @@ TecCore::TecCore() {
 
     isInitialized = true;
 
+    auto index1 = world->skinnedObjects.objects.storeData(World::WorldObject_t{ .name = "Barbwara1", .model = Model("meshes/barbwara.tecm")});
+    auto index2 = world->skinnedObjects.objects.storeData(World::WorldObject_t{ .name = "Barbwara2", .model = Model("meshes/barbwara.tecm")});
+    auto index3 = world->skinnedObjects.objects.storeData(World::WorldObject_t{ .name = "Barbwara3", .model = Model("meshes/barbwara.tecm")});
+
+    /*world->skinnedObjects.objects.data(index1).model.transformation.setTranslation(0.0f, 10.0f, 0.0f);
+    world->skinnedObjects.objects.data(index2).model.transformation.setTranslation(10.0f, 10.0f, 0.0f);
+    world->skinnedObjects.objects.data(index3).model.transformation.setTranslation(0.0f, 10.0f, 10.0f);*/
 }
 
 TecCore::~TecCore() { clean(); }
@@ -53,6 +75,7 @@ void TecCore::clean() {
     if(isInitialized) {
         vkDeviceWaitIdle(VktCachePtr->vkDevice);
         if(world) world->clear();
+        delete(world);
         VktCorePtr->clear();
         glfwTerminate();
 
@@ -89,19 +112,20 @@ void TecCore::initKeyGroups() {
                                            GLFW_KEY_3,
                                            GLFW_KEY_4,
                                            GLFW_KEY_5});
-    keyboard.addKeyGroup("generateTerrain", {GLFW_KEY_T});
+    keyboard.addKeyGroup("toggleFly", {GLFW_KEY_F});
 
     keyboard.connectKeyGroup("controls", PlayerPtr->slt_keyEvent);
     keyboard.connectKeyGroup("close", WindowPtr->slt_setClose);
     keyboard.connectKeyGroup("cursorToggle", WindowPtr->slt_toggleCursor);
     keyboard.connectKeyGroup("polygonToggle", VktCorePtr->slt_polygonModeToggle);
+    keyboard.connectKeyGroup("toggleFly", PlayerPtr->slt_toggleFlying);
 }
 
 void TecCore::initCursor() {
     //m_window->disableCursor();
     cursor.sig_updatePos.connect(PlayerPtr->slt_mouseMovement);
     WindowPtr->sig_cursorEnabled.connect(PlayerPtr->slt_cursorEnabled);
-    WindowPtr->disableCursor();
+    //WindowPtr->disableCursor();
     WindowPtr->enableCursor();
 }
 

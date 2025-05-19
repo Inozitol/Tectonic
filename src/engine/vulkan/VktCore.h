@@ -94,22 +94,6 @@ struct VktCore {
                                              DescriptorAllocatorDynamic& descriptorAllocator,
                                              bool isSkinned);
 
-    using objectID_t = uint32_t;
-
-    /**
-     * @brief Represents a objects created from 3D model.
-     */
-    struct EngineObject {
-        objectID_t objectID = 0;
-        static objectID_t lastID;
-
-        std::string name;
-        Model* model;
-    };
-
-    VktCore::EngineObject* createObject(const std::string& name, const std::filesystem::path& filePath);
-    VktCore::EngineObject* createObject(const std::string& name, Model* model);
-
     uint32_t addDebugPointMesh(VktTypes::PointMesh* pointMesh);
 
     // TODO REMOVE LATER
@@ -119,34 +103,50 @@ struct VktCore {
     VktTypes::Resources::Image m_greyImage{};
     VktTypes::GLTFMetallicRoughness metalRoughMaterial;
 
-    std::unordered_map<objectID_t, EngineObject> loadedObjects;
-
     void initVulkan();
     void initSwapchain();
     void initCommands();
     void initSyncStructs();
     void initDescriptors();
     void initPipelines();
-    void initDebugPipeline();
-    void initMaterialPipelines();
     void initImGui();
     void initDefaultData();
+    void initPickingBuffer();
+
+    void initDebugPipeline();
+    void initMaterialPipelines();
+    void initPickingPipeline();
 
     void createSwapchain(uint32_t width, uint32_t height);
     void destroySwapchain();
 
     VktTypes::FrameData& getCurrentFrame();
 
+    void waitForRenderFence();
+
     void draw();
 
-    void drawImGui(VkCommandBuffer cmd, VkImageView targetView);
-    void drawGeometry(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
+    void drawImGui(VkCommandBuffer cmd, VkImageView targetView) const;
+    void drawModels(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
+    void drawTerrain(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
     void drawDebugNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
     void drawDebugLines(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
     void drawDebugBoxes(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet);
 
-    static void createSAABBMesh(VktTypes::PrimitiveMeshCache<SAABB>& boxCache);
-    static void updateSAABBMesh(VktTypes::PrimitiveMeshCache<SAABB>& boxCache);
+    template<typename RenderType> requires VktConstraints::IsRenderable<RenderType>
+    void drawMesh(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet, const RenderType& renderable);
+
+    template<typename RenderType> requires VktConstraints::IsRenderable<RenderType>
+    void drawMeshNormals(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet, const RenderType& renderable);
+
+    template<typename RenderType> requires VktConstraints::IsRenderable<RenderType>
+    void drawPicking(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet, const RenderType& renderable);
+
+    template<typename T>
+    static void createBoxMesh(VktTypes::PrimitiveMeshCache<T>& boxCache) requires BB::IsBox<T>;
+
+    template<typename T>
+    static void updateBoxMesh(VktTypes::PrimitiveMeshCache<T>& boxCache) requires BB::IsBox<T>;
 
     static VkBool32 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT type, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 
@@ -163,12 +163,20 @@ struct VktCore {
     VkFormat swapchainImageFormat = VK_FORMAT_UNDEFINED;
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+    std::vector<VktTypes::SwapchainSync> swapchainSyncs;
     VkExtent2D swapchainExtent = {.width = 0, .height = 0};
     bool m_resizeSwapchain = false;
 
     VktTypes::Resources::Image drawImage;
     VktTypes::Resources::Image depthImage;
     float renderScale = 1.0f;
+
+    VktTypes::Resources::Image pickingImage;
+    VktTypes::ModelPipeline pickingRigidPipeline;
+    VktTypes::ModelPipeline pickingSkinnedPipeline;
+    VktTypes::Resources::Buffer pickingBufferToGPU;
+    VktTypes::Resources::Buffer pickingBufferFromGPU;
+    VkDeviceAddress pickingBufferAddress;
 
     std::array<VktTypes::FrameData, FRAMES_OVERLAP> frames;
     VkQueue graphicsQueue = VK_NULL_HANDLE;
@@ -178,7 +186,7 @@ struct VktCore {
 
     VkDescriptorSet drawImageDescriptors = VK_NULL_HANDLE;
 
-    VktTypes::DrawContext mainDrawContext;
+    //VktTypes::DrawContext mainDrawContext;
 
     struct DebugPipelines {
         VktTypes::ModelPipeline normalsStatic;
@@ -200,13 +208,16 @@ struct VktCore {
     /** Various configurations to enable debugging render in pipeline */
     struct DebugConfig {
         bool enableDebugNormals = false;
-        bool enableDebugVectors = true;
+        bool enableDebugVectors = false;
+        bool enablePicking = false;
     } debugConfig;
 
     struct DebugGeometry {
         std::unordered_map<uint32_t, VktTypes::PointMesh*> lines;
         std::unordered_map<uint32_t, VktTypes::PointMesh*> infLines;
         std::unordered_map<uint32_t, VktTypes::PrimitiveMeshCache<SAABB>> SAABBs;
+        std::unordered_map<uint32_t, VktTypes::PrimitiveMeshCache<AABB>> AABBs;
+        std::unordered_map<uint32_t, VktTypes::PrimitiveMeshCache<OBB>> OBBs;
     } debugGeometry;
 
     uint32_t lastPointMeshIndex = 0;

@@ -3,7 +3,7 @@
 
 struct Skybox {
     Skybox() = default;
-    Skybox(const char* path);
+    explicit Skybox(const char* path);
     ~Skybox();
 
     void load(const char* path);
@@ -38,8 +38,10 @@ struct Skybox {
     inline static VktTypes::ModelPipeline IBLSpecularPipeline;
     inline static VktTypes::ModelPipeline IBLBRDFPipeline;
 
-    inline static VktTypes::Resources::Image BRDFImage;
+    inline static VktTypes::Resources::Image BRDFImage; // TODO why static?
     inline static uint32_t skyboxCount = 0;
+
+    inline static VktTypes::RigidRenderObject cubeRenderable;
 
     bool loaded = false;
     std::string path;

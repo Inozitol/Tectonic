@@ -66,12 +66,12 @@ void ImGuiHandler::initMenus() {
     sceneItem.name = "Scene";
     sceneItem.procedure = [] {
         IMGUI_WINDOW(Scene)
-        ImGui::InputFloat3("Ambient color: ", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.ambientColor));
-        ImGui::InputFloat3("Sunlight direction: ", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.sunlightDirection));
-        ImGui::InputFloat3("Sunlight color: ", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.sunlightColor));
-        ImGui::InputFloat3("Camera position: ", reinterpret_cast<float *>(&PlayerPtr->camera.position));
-        ImGui::InputFloat3("Camera direction: ", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.cameraDirection));
-        ImGui::InputFloat("Time: ", &TecCorePtr->world->sceneData.time);
+        ImGui::InputFloat3("Ambient color", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.ambientColor));
+        ImGui::InputFloat3("Sunlight direction", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.sunlightDirection));
+        ImGui::InputFloat3("Sunlight color", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.sunlightColor));
+        ImGui::InputFloat3("Camera position", reinterpret_cast<float *>(&PlayerPtr->camera.position));
+        ImGui::InputFloat3("Camera direction", reinterpret_cast<float *>(&TecCorePtr->world->sceneData.cameraDirection));
+        ImGui::InputFloat("Time", &TecCorePtr->world->sceneData.time);
     };
     coreMenu.items.emplace(sceneItem.name, sceneItem);
 
@@ -93,34 +93,35 @@ void ImGuiHandler::initMenus() {
     modelsItem.name = "Models";
     modelsItem.procedure = [] {
         IMGUI_WINDOW(Models)
-        for(auto &[mID, object]: VktCorePtr->loadedObjects) {
-            if(ImGui::TreeNode(object.name.c_str())) {
-                ImGui::Text("ID: %u", mID);
-                ImGui::Text("Name: %s", object.name.c_str());
+
+        for(auto [id,obj]: TecCorePtr->world->skinnedObjects.objects) {
+            if(ImGui::TreeNode(obj.name.c_str())) {
+                ImGuiTec::Text("ID", id);
+                ImGuiTec::Text("Name", obj.name.c_str());
                 if(ImGui::TreeNode("Transformation")) {
 
                     // Change position
-                    glm::vec3 pos = object.model->transformation.getTranslation();
-                    if(ImGui::DragFloat3("Pos", (float *) &(pos))) { object.model->transformation.setTranslation(pos.x, pos.y, pos.z); }
+                    glm::vec3 pos = obj.model.transformation.getTranslation();
+                    if(ImGui::DragFloat3("Pos", reinterpret_cast<float *>(&(pos)), 0.1)) { obj.model.transformation.setTranslation(pos.x, pos.y, pos.z); }
 
                     // Change rotation
-                    glm::vec3 rotation = object.model->transformation.getRotation();
-                    if(ImGui::DragFloat3("Rotation", (float *) &(rotation))) { object.model->transformation.setRotation(rotation.x, rotation.y, rotation.z); }
+                    glm::vec3 rotation = obj.model.transformation.getRotation();
+                    if(ImGui::DragFloat3("Rotation", reinterpret_cast<float *>(&(rotation)), 0.1)) { obj.model.transformation.setRotation(rotation.x, rotation.y, rotation.z); }
 
                     // Change scale
-                    float scale = object.model->transformation.getScale();
-                    if(ImGui::DragFloat("Scale", &scale)) { object.model->transformation.setScale(scale); }
+                    float scale = obj.model.transformation.getScale();
+                    if(ImGui::DragFloat("Scale", &scale, 0.1, 0.0)) { obj.model.transformation.setScale(scale); }
                     ImGui::TreePop();
                 }
 
-                if(object.model->isSkinned() && ImGui::TreeNode("Animation")) {
-                    static std::size_t currentAnimation = object.model->currentAnimation();
+                if(obj.model.isSkinned() && ImGui::TreeNode("Animation")) {
+                    static std::size_t currentAnimation = obj.model.currentAnimation();
                     if(ImGui::BeginListBox("##animation_list", ImVec2(-FLT_MIN, 5 * ImGui::GetTextLineHeightWithSpacing()))) {
-                        uint32_t animCount = object.model->animationCount();
+                        uint32_t animCount = obj.model.animationCount();
                         for(std::size_t animID = 0; animID < animCount; animID++) {
                             const bool isActive = (currentAnimation == animID);
-                            if(ImGui::Selectable(object.model->animationName(animID).data(), isActive)) {
-                                object.model->setAnimation(animID);
+                            if(ImGui::Selectable(obj.model.animationName(animID).data(), isActive)) {
+                                obj.model.setAnimation(animID);
                                 currentAnimation = animID;
                             }
                             if(isActive) { ImGui::SetItemDefaultFocus(); }
@@ -141,6 +142,8 @@ void ImGuiHandler::initMenus() {
         IMGUI_WINDOW(Debug)
         ImGui::Checkbox("Debug normals", &VktCorePtr->debugConfig.enableDebugNormals);
         ImGui::Checkbox("Debug vectors", &VktCorePtr->debugConfig.enableDebugVectors);
+        ImGui::Checkbox("Debug picking", &VktCorePtr->debugConfig.enablePicking);
+
     };
     coreMenu.items.emplace(debugItem.name, debugItem);
 

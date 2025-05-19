@@ -22,6 +22,6 @@ namespace VktBuffers {
      * @brief Destroys a GPU buffer
      * @param buffer Allocated GPU buffer
      */
-    void destroy(VktTypes::Resources::Buffer buffer);
+    void destroy(const VktTypes::Resources::Buffer& buffer);
 
 }// namespace VktBuffers

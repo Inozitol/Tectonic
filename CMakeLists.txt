@@ -5,9 +5,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -rdynamic")
-
+#add_compile_options(-Wall -Wextra -pedantic)
 add_definitions(-DGLM_FORCE_INTRINSICS)
 add_definitions(-DGLM_ENABLE_EXPERIMENTAL)
+add_definitions(-DVKT_DEBUG_ALLOCATION_NAMES)
 
 find_package(glfw3 3.3 REQUIRED)
 find_package(Vulkan REQUIRED)
@@ -17,7 +18,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/extern)
 add_executable(Tectonic
         src/main.cpp
         src/engine/vulkan/VktCore.cpp
-        src/engine/vulkan/VktStructs.cpp
         src/engine/vulkan/VktUtils.cpp
         src/engine/vulkan/VktDescriptorUtils.cpp
         src/engine/vulkan/VktPipelines.cpp
@@ -65,6 +65,12 @@ add_executable(Tectonic
         src/geometry/AABB.cpp
         src/geometry/AABB.h
         src/math/MathUtils.h
+        src/utils/IndexableStorage.h
+        src/engine/scene/RenderableBuffer.h
+        src/engine/vulkan/VktConstraints.h
+        src/engine/vulkan/VktStructs.h
+        src/engine/vulkan/VktLayout.h
+        src/engine/vulkan/VktLayout.cpp
 )
 
 #find_library(KTX_LIB ktx)
@@ -75,6 +81,8 @@ target_link_libraries(Tectonic vkbootstrap)
 target_link_libraries(Tectonic GPUOpen::VulkanMemoryAllocator)
 target_link_libraries(Tectonic imgui)
 target_link_libraries(Tectonic ktx)
+target_link_libraries(Tectonic pugixml)
+target_link_libraries(Tectonic vulkan-mini-libs)
 
 include_directories(src)
 

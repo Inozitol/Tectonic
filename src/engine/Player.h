@@ -3,6 +3,8 @@
 #include "geometry/BB.h"
 #include "geometry/SAABB.h"
 
+#include <defs/CompilerDefs.h>
+
 struct Player {
     Player();
 
@@ -42,18 +44,33 @@ struct Player {
     void updatePosition();
 
     void updatePhysics();
-    void fallImpact(){}
+    [[nodiscard]] std::tuple<float, float, float> getBBHeight() const;
+    void fallImpactCallback(){}
+    void jumpImpactCallback(){}
 
     void runImGui();
 
     float jumpForce = 2.9f;
     float jumpSpeed = 2.0f;
-    bool inAir = false;
-    bool justJumped = false;
     float mass = 75.0f; // kg
     float fallTime = 0.0f;
     float jumpTime = 0.0f;
     float walkSpeed = 0.1f;
+    float heightDelta = 0.01f;
+    float syncFallDelta = 0.1f;
+    bool justJumped = false;
+
+    enum class State : uint8_t {
+        UNKNOWN,
+        STANDING,
+        WALKING,
+        JUMPING,
+        SYNC_FALLING,
+        LONG_FALLING,
+        FLYING
+    };
+
+    State state = State::LONG_FALLING;
 
     float sensitivity = 0.1;
 
@@ -65,7 +82,7 @@ struct Player {
 
 
     bool firstMouse = true;
-    bool cursorEnabled = false;
+    bool cursorEnabled = true;
     glm::vec2 lastMousePos = glm::vec2(0.0f, 0.0f);
     float yaw = 0.0f;
     float pitch = 0.0f;
@@ -89,6 +106,14 @@ struct Player {
     Slot<bool> slt_cursorEnabled{[this](bool isEnabled) {
         cursorEnabled = isEnabled;
         firstMouse = true;
+    }};
+
+    Slot<> slt_toggleFlying{[this]() {
+        if(state == State::FLYING) {
+            state = State::UNKNOWN;
+        }else {
+            state = State::FLYING;
+        }
     }};
 
 };

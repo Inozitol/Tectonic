@@ -1,15 +1,19 @@
 #include "Terrain.h"
+
 #include <glm/gtx/string_cast.hpp>
-#include "../../../extern/stb/stb_image.h"
+#include "extern/stb/stb_image.h"
 #include "PatchManager.h"
 
-#include "../../GlobalMemory.h"
+#include "engine/GlobalMemory.h"
 
 Terrain::Terrain() { initSignals(); }
 
 Terrain::~Terrain() { clear(); }
 
-void Terrain::initSignals() { flags.sig_flagChanged.connect(slt_flagChange); }
+void Terrain::initSignals() {
+    flags.sig_flagChanged.connect(slt_flagChange);
+    lodManager.sig_LODChange.connect(slt_LODChange);
+}
 
 void Terrain::normalize() {
     if(maxHeight <= minHeight) { return; }
@@ -50,10 +54,11 @@ void Terrain::generateFlat(uint32_t X, uint32_t Z) {
 
     materials.resize(1);
     createMaterial();
+    createPatchesObjects();
     meshBuffers = VktCore::createPrimitivesDeviceMemory(std::span(indices.data(), indices.size()), std::span(vertices.data(), vertices.size()));
 }
 
-void Terrain::loadHeightmap(const char *heightmapFile, const char *textureFile) {
+void Terrain::loadHeightmap(const char *heightmapFile, const char *) {
     int32_t width, height, channels;
     u_char *hMapData = stbi_load(heightmapFile, &width, &height, &channels, 0);
 
@@ -82,11 +87,12 @@ void Terrain::loadHeightmap(const char *heightmapFile, const char *textureFile) 
 
     materials.resize(1);
     createMaterial();
+    createPatchesObjects();
     meshBuffers = VktCore::createPrimitivesDeviceMemory(std::span(indices.data(), indices.size()), std::span(vertices.data(), vertices.size()));
 
 }
 
-void Terrain::generateMidpoint(uint32_t size, float roughness, const std::vector<std::string> &textureFiles) {
+void Terrain::generateMidpoint(uint32_t size, float roughness, const std::vector<std::string> &) {
     clear();
 
     dimX = size;
@@ -124,6 +130,7 @@ void Terrain::generateMidpoint(uint32_t size, float roughness, const std::vector
 
     materials.resize(1);
     createMaterial();
+    createPatchesObjects();
     meshBuffers = VktCore::createPrimitivesDeviceMemory(std::span(indices.data(), indices.size()), std::span(vertices.data(), vertices.size()));
 }
 
@@ -150,6 +157,14 @@ void Terrain::createMaterial() {
     gpuResources.dataBuffer = materialBuffer.buffer;
 
     materials[0] = VktCorePtr->writeMaterial(pass, gpuResources, descriptorPool, false);
+}
+
+void Terrain::createPatchesObjects() {
+    for(uint32_t pX = 0; pX < patchesX; pX++) {
+        for(uint32_t pY = 0; pY < patchesY; pY++) {
+            patchObjects.objects.storeDataAt(PatchObject{.patchX = pX, .patchY = pY, .pLOD = {}, .culled = false},pxy2i(pX,pY));
+        }
+    }
 }
 
 void Terrain::diamondStep(uint32_t rectSize, float currHeight) {
@@ -325,8 +340,8 @@ void Terrain::generateFlatPlane() {
 void Terrain::generateDebugLines() {
     for(int32_t y = 0; y < dimY; y++) {
         for(int32_t x = 0; x < dimX; x++) {
-            Vertex_t& vertex = vertices.at(hxy2i(x, y));
-            if(x % (patchSize-1) == 0 && y % (patchSize-1) == 0) {
+            Vertex_t &vertex = vertices.at(hxy2i(x, y));
+            if(x % (patchSize - 1) == 0 && y % (patchSize - 1) == 0) {
                 debugGridLines.vertices.emplace_back(VktTypes::GPU::Vertex<VktTypes::GPU::VertexType::POINT>{
                         .position = vertex.position,
                         .color = {1.0f, 0.0f, 0.0f}
@@ -339,9 +354,7 @@ void Terrain::generateDebugLines() {
             }
         }
     }
-    for(std::size_t vertexIndex = 0; vertexIndex < debugGridLines.vertices.size(); vertexIndex++) {
-        debugGridLines.indices.push_back(vertexIndex);
-    }
+    for(std::size_t vertexIndex = 0; vertexIndex < debugGridLines.vertices.size(); vertexIndex++) { debugGridLines.indices.push_back(vertexIndex); }
 }
 
 void Terrain::clear() {

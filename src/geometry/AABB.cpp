@@ -4,6 +4,7 @@
 
 void AABB::alignPoint(glm::vec3 &p) const { p += center; }
 void AABB::alignPoints(std::span<glm::vec3> px) const { for(auto &p: px) { p += center; } }
+
 BB::Corners_t AABB::getCorners() const {
     const glm::vec3 &hl = halfLengths;
     BB::Corners_t points{

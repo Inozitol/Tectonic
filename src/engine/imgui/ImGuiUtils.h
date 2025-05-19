@@ -16,7 +16,6 @@ explicit operator bool() const { return ok; } \
 
 inline char IMGUI_CHAR_BUFFER[IMGUI_CHAR_BUFFER_SIZE];
 
-
 namespace ImGuiTec {
     struct Context {
         std::function<void(void *)> showFunc;
@@ -43,8 +42,8 @@ namespace ImGuiTec {
     }
 
     inline void Text(const char *name, uint64_t n, const char *postfix = nullptr) {
-        if(postfix) ImGui::Text("%s: %u %s", name, n, postfix);
-        else ImGui::Text("%s: %u", name, n);
+        if(postfix) ImGui::Text("%s: %lu %s", name, n, postfix);
+        else ImGui::Text("%s: %lu", name, n);
     }
 
     inline void Text(const char *name, bool b, const char *postfix = nullptr) {
@@ -71,11 +70,16 @@ namespace ImGuiTec {
 
     inline void Text(const char *name, const glm::vec4 &vec, const char *postfix = nullptr) {
         if(postfix) ImGui::Text("%s: [%f, %f, %f, %f] %s", name, vec[0], vec[1], vec[2], vec[3], postfix);
-        else ImGui::Text("%s: [%f, %f, %f, %f]", name, vec[0], vec[1], vec[2]);
+        else ImGui::Text("%s: [%f, %f, %f, %f]", name, vec[0], vec[1], vec[2], vec[3]);
     }
 
     inline void Text(const char *name, const glm::quat &quat, const char *postfix = nullptr) {
         Text(name, glm::vec4{quat.w, quat.x, quat.y, quat.z}, postfix);
+    }
+
+    inline void Text(const char *name, const char* str, const char *postfix = nullptr) {
+        if(postfix) ImGui::Text("%s: [%s] %s", name, str, postfix);
+        else ImGui::Text("%s: [%s]", name, str);
     }
 
     struct BeginRAII {

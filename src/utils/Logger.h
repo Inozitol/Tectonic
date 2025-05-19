@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <cstdint>
 
 #define LOG_DEBUG "Debug"
 #define LOG_INFO "Info"
@@ -52,7 +53,7 @@ void output(std::ostream& os, std::pair<Begin, Last>&& data){
   os << data.second;
 }
 
-inline void output(std::ostream& os, None)
+inline void output(std::ostream&, None)
 { }
 
 template<typename L>

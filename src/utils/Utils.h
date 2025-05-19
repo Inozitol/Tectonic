@@ -15,10 +15,31 @@
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
+#define INIT_ENUM_FR_OR(EnumClass) \
+    friend inline EnumClass operator|(EnumClass lhs, EnumClass rhs){ \
+        return Utils::enumFromVal<EnumClass>(Utils::enumVal(lhs) | Utils::enumVal(rhs)); \
+    } \
+    friend inline EnumClass& operator |=(EnumClass& lhs, EnumClass rhs){\
+        return lhs = lhs | rhs; \
+    }
+
+#define INIT_ENUM_FR_AND(EnumClass) \
+    friend inline bool operator&(EnumClass lhs, EnumClass rhs){ \
+        return (Utils::enumVal(lhs) & Utils::enumVal(rhs)) == Utils::enumVal(rhs); \
+    }
+
+#define INIT_ENUM_FR_OP(EnumClass) \
+    INIT_ENUM_FR_OR(EnumClass)\
+    INIT_ENUM_FR_AND(EnumClass)
+
 #define INIT_ENUM_OR(EnumClass) \
     inline EnumClass operator|(EnumClass lhs, EnumClass rhs){ \
         return Utils::enumFromVal<EnumClass>(Utils::enumVal(lhs) | Utils::enumVal(rhs)); \
+    } \
+    inline EnumClass& operator |=(EnumClass& lhs, EnumClass rhs){\
+        return lhs = lhs | rhs; \
     }
+
 
 #define INIT_ENUM_AND(EnumClass) \
     inline bool operator&(EnumClass lhs, EnumClass rhs){ \
@@ -103,7 +124,6 @@ namespace Utils {
     constexpr E enumFromVal(E const val) {
         return val;
     }
-
 
 
     /**

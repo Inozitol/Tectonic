@@ -1,6 +1,6 @@
 #include "Model.h"
 
-#include "../../GlobalMemory.h"
+#include "engine/GlobalMemory.h"
 
 #include <glm/gtx/quaternion.hpp>
 #include <glm/simd/matrix.h>
@@ -15,7 +15,118 @@
 
 #include "engine/vulkan/VktCache.h"
 
-std::unordered_map<std::string, Model::Resources> Model::m_loadedModels = std::unordered_map<std::string, Model::Resources>{};
+std::unordered_map<std::string, Model::Resources> Model::loadedModels = std::unordered_map<std::string, Model::Resources>{};
+
+Model::Model() { initSignals(); }
+
+Model::Model(const std::filesystem::path &p) : path(p) {
+    if(!loadedModels.contains(path)) { loadModelData(path); }
+    Resources &resources = loadedModels[path];
+    meshes = &resources.meshes;
+    images = &resources.images;
+    samplers = &resources.samplers;
+    materials = &resources.materials;
+    nodes = resources.nodes;
+    rootNode = resources.rootNode;
+    flags |= resources.isSkinned ? Flags::SKINNED : Flags::NONE;
+    obb = resources.obb;
+    obbOriginalHalfLengths = obb.halfLengths;
+    if(resources.isSkinned) {
+        skin = resources.skin;
+        jointsBuffer = VktCore::uploadJoints(
+                std::span<glm::mat4>(skin.inverseBindMatrices.data(), skin.inverseBindMatrices.size()));
+        animations = resources.animations;
+        uploadJointsMatrices();
+    }
+    initSignals();
+
+    resources.activeModels++;
+    m_isLoaded = true;
+}
+
+Model::Model(const Model& other) {
+    transformation = other.transformation;
+    path = other.path;
+    m_isLoaded = other.isLoaded();
+    meshes = other.meshes;
+    samplers = other.samplers;
+    materials = other.materials;
+    nodes = other.nodes;
+    skin = other.skin;
+    animations = other.animations;
+    rootNode = other.rootNode;
+    flags = other.flags;
+    activeAnimation = other.activeAnimation;
+    obb = other.obb;
+    obbOriginalHalfLengths = other.obbOriginalHalfLengths;
+    if(other.isSkinned()) {
+        jointsBuffer = VktCore::uploadJoints(std::span<glm::mat4>(skin.inverseBindMatrices.data(), skin.inverseBindMatrices.size()));
+        uploadJointsMatrices();
+
+    }
+    id = other.id;
+    sig_change = other.sig_change;
+    initSignals();
+
+    loadedModels.at(path).activeModels++;
+}
+
+Model &Model::operator=(Model const &other) {
+    if(this == &other) { return *this; }
+
+    transformation = other.transformation;
+    path = other.path;
+    m_isLoaded = other.isLoaded();
+    meshes = other.meshes;
+    samplers = other.samplers;
+    materials = other.materials;
+    nodes = other.nodes;
+    skin = other.skin;
+    animations = other.animations;
+    rootNode = other.rootNode;
+    flags = other.flags;
+    activeAnimation = other.activeAnimation;
+    obb = other.obb;
+    obbOriginalHalfLengths = other.obbOriginalHalfLengths;
+    if(other.isSkinned()) {
+        jointsBuffer = VktCore::uploadJoints(std::span<glm::mat4>(skin.inverseBindMatrices.data(), skin.inverseBindMatrices.size()));
+        uploadJointsMatrices();
+    }
+    initSignals();
+
+    loadedModels.at(path).activeModels++;
+    return *this;
+}
+
+void Model::initSignals() {
+    transformation.sig_translation.connect(slt_translated);
+    transformation.sig_rotation.connect(slt_rotation);
+}
+
+Model::~Model() { clear(); }
+
+void Model::clear() const {
+    if(!m_isLoaded) {
+        LOG(LOG_WARNING, "Trying to clear unloaded model. Ignoring clear call.");
+        return;
+    }
+
+    VktBuffers::destroy(jointsBuffer.jointsBuffer);
+
+    if(!loadedModels.contains(path)) { return; }
+    loadedModels.at(path).activeModels--;
+    if(loadedModels.at(path).activeModels == 0) {
+        Resources &resources = loadedModels.at(path);
+        for(const auto &mesh: resources.meshes) {
+            VktBuffers::destroy(mesh.meshBuffers.indexBuffer);
+            VktBuffers::destroy(mesh.meshBuffers.vertexBuffer);
+        }
+        for(const auto &sampler: resources.samplers) { vkDestroySampler(VktCachePtr->vkDevice, sampler, nullptr); }
+        for(const auto &image: resources.images) { VktImages::destroy(image); }
+        VktBuffers::destroy(resources.materialBuffer);
+        resources.descriptorPool.destroyPool();
+    }
+}
 
 void Model::readMesh(VktTypes::MeshAsset &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     SerialTypes::Span<uint32_t, VktTypes::MeshSurface> surfaces = SerialTypes::Span<uint32_t, VktTypes::MeshSurface>(src, offset);
@@ -101,6 +212,12 @@ void Model::readMaterial(ModelTypes::GLTFMaterial &dst,
     dst.data = VktCorePtr->writeMaterial(loadedPass, gpuResources, resources.descriptorPool, resources.isSkinned);
 }
 
+void Model::readOBB(OBB &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
+    dst.center = Serial::readDataAtInc<glm::vec3>(src, offset);
+    dst.halfLengths = Serial::readDataAtInc<glm::vec3>(src, offset);
+    dst.rotation = {1.0f, 0.0f, 0.0f, 0.0f};
+}
+
 void Model::readSkin(ModelTypes::Skin &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     dst.name = SerialTypes::Span<uint32_t, char, false>(src, offset);
     dst.skeletonRoot = Serial::readDataAtInc<uint32_t>(src, offset);
@@ -111,41 +228,20 @@ void Model::readSkin(ModelTypes::Skin &dst, SerialTypes::BinDataVec_t &src, std:
 
 void Model::readAnimationSampler(ModelTypes::AnimationSampler &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
     dst.interpolation = Serial::readDataAtInc<ModelTypes::AnimationSampler::Interpolation>(src, offset);
-    dst.inputs = SerialTypes::Span<uint32_t, float, false>(src, offset);
-    dst.outputsVec4 = SerialTypes::Span<uint32_t, glm::vec4, false>(src, offset);
+    dst.inputs = SerialTypes::Span<uint32_t, float>(src, offset);
+    dst.outputsVec4 = SerialTypes::Span<uint32_t, glm::vec4>(src, offset);
 }
 
 void Model::readAnimation(ModelTypes::Animation &dst, SerialTypes::BinDataVec_t &src, std::size_t &offset) {
-    dst.name = SerialTypes::Span<uint32_t, char, false>(src, offset);
+    dst.name = SerialTypes::Span<uint32_t, char>(src, offset);
     dst.start = Serial::readDataAtInc<float>(src, offset);
     dst.end = Serial::readDataAtInc<float>(src, offset);
     uint32_t samplerCount = Serial::readDataAtInc<uint32_t>(src, offset);
     dst.samplers.resize(samplerCount);
     for(uint32_t i = 0; i < samplerCount; i++) { readAnimationSampler(dst.samplers[i], src, offset); }
-    dst.channels = SerialTypes::Span<uint32_t, ModelTypes::AnimationChannel, false>(src, offset);
-    dst.animatedNodes = SerialTypes::Span<uint32_t, std::pair<uint32_t, uint32_t>, false>(src, offset);
+    dst.channels = SerialTypes::Span<uint32_t, ModelTypes::AnimationChannel>(src, offset);
+    dst.animatedNodes = SerialTypes::Span<uint32_t, std::pair<uint32_t, uint32_t>>(src, offset);
     dst.currentTime = dst.start;
-}
-
-Model::Model(const std::filesystem::path &path) {
-    if(!m_loadedModels.contains(path)) { loadModelData(path); }
-    Resources &resources = m_loadedModels[path];
-    m_meshes = &resources.meshes;
-    m_images = &resources.images;
-    m_samplers = &resources.samplers;
-    m_materials = &resources.materials;
-    m_nodes = resources.nodes;
-    m_rootNode = resources.rootNode;
-    m_isSkinned = resources.isSkinned;
-    if(resources.isSkinned) {
-        m_skin = resources.skin;
-        m_jointsBuffer = VktCore::uploadJoints(
-                std::span<glm::mat4>(m_skin.inverseBindMatrices.data(), m_skin.inverseBindMatrices.size()));
-        m_animations = resources.animations;
-    }
-    resources.activeModels++;
-    m_modelPath = path;
-    m_isLoaded = true;
 }
 
 void Model::loadModelData(const std::filesystem::path &path) {
@@ -158,12 +254,13 @@ void Model::loadModelData(const std::filesystem::path &path) {
     file.unsetf(std::ios::skipws);
     std::size_t fileSize = std::filesystem::file_size(path);
 
-    m_loadedModels[path] = Resources{.data = SerialTypes::BinDataVec_t(fileSize)};
-    Resources &resources = m_loadedModels[path];
+    loadedModels[path] = Resources{};
+    loadedModels[path].data = SerialTypes::BinDataVec_t(fileSize);
+    Resources &resources = loadedModels[path];
     SerialTypes::BinDataVec_t &data = resources.data;
     file.read(reinterpret_cast<char *>(data.data()), static_cast<long>(fileSize));
 
-    const uint8_t version = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::VERSION_OFFSET);
+    Serial::readDataAt<uint8_t>(data, SerialTypes::Model::VERSION_OFFSET);
     const uint8_t metabyte = Serial::readDataAt<uint8_t>(data, SerialTypes::Model::META_OFFSET);
     const uint32_t meshIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::MESHES_INDEX);
     const uint32_t imageIndex = Serial::readDataAt<uint32_t>(data, SerialTypes::Model::IMAGES_INDEX);
@@ -230,6 +327,12 @@ void Model::loadModelData(const std::filesystem::path &path) {
     for(std::size_t i = 0; i < materialCount; i++) { readMaterial(resources.materials[i], data, index, i, resources); }
     LOG(LOG_DEBUG, path << " Finished loading " << materialCount << " materials");
 
+    readOBB(resources.obb, data, index);
+    resources.obb.center = {0.0f, 0.0f, 0.0f};
+
+    //resources.obbCenterDiff = -resources.obb.center;
+    LOG(LOG_DEBUG, path << " Finished loading OBB");
+
     if(resources.isSkinned) {
         index = skinIndex;
         readSkin(resources.skin, data, index);
@@ -246,37 +349,47 @@ void Model::loadModelData(const std::filesystem::path &path) {
     }
 }
 
-void Model::gatherDrawContext(VktTypes::DrawContext &ctx) {
+template void Model::updateDrawContextFromOffset<VktTypes::RigidRenderObject>(VktTypes::DrawContext<VktTypes::RigidRenderObject>& ctx, std::size_t offset) const;
+template void Model::updateDrawContextFromOffset<VktTypes::SkinnedRenderObject>(VktTypes::DrawContext<VktTypes::SkinnedRenderObject>& ctx, std::size_t offset) const;
+
+template<typename RenderType>
+void Model::updateDrawContextFromOffset(VktTypes::DrawContext<RenderType>& ctx, std::size_t offset) const
+requires VktConstraints::IsRenderableTransformable<RenderType> {
     std::queue<uint32_t> q;
-    q.push(m_rootNode);
+    q.push(rootNode);
 
     glm::mat4 worldM = transformation.getMatrix();
     while(!q.empty()) {
-        const ModelTypes::Node *n = &m_nodes[q.front()];
+        const ModelTypes::Node *n = &nodes[q.front()];
         q.pop();
 
         // TODO Pre-calc a vector with mesh nodes to not traverse the whole tree every frame
         // If there's a mesh in this node, update DrawContext with surfaces
         if(n->mesh != ModelTypes::NULL_ID) {
-            const VktTypes::MeshAsset *mesh = &(*m_meshes)[n->mesh];
+            const VktTypes::MeshAsset *mesh = &(*meshes)[n->mesh];
             for(const auto &s: mesh->surfaces) {
-                VktTypes::RenderObject def;
+                RenderType def;
                 def.indexCount = s.count;
                 def.firstIndex = s.startIndex;
                 def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
-                def.material = &(*m_materials)[s.materialIndex].data;
-                def.isSkinned = m_isSkinned;
+                def.material = &(*materials)[s.materialIndex].data;
+                def.objectID = id;
 
                 def.transform = worldM;
                 def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
-                if(n->skin != ModelTypes::NULL_ID) { def.jointsBufferAddress = m_jointsBuffer.jointsBufferAddress; }
+                if constexpr(VktConstraints::IsRenderableSkinned<RenderType>) {
+                    assert(isSkinned());
+                    if(n->skin != ModelTypes::NULL_ID) { def.jointsBufferAddress = jointsBuffer.jointsBufferAddress; }
+                }
 
-                switch((*m_materials)[s.materialIndex].data.passType) {
+                switch((*materials)[s.materialIndex].data.passType) {
                     case VktTypes::MaterialPass::OPAQUE:
-                        ctx.opaqueSurfaces.push_back(def);
+                        if(offset >= ctx.opaqueRenderable.size()) ctx.opaqueRenderable.resize(offset+1);
+                        ctx.opaqueRenderable.at(offset++) = def;
                         break;
                     case VktTypes::MaterialPass::TRANSPARENT:
-                        ctx.transparentSurfaces.push_back(def);
+                        if(offset >= ctx.transparentRenderable.size()) ctx.transparentRenderable.resize(offset+1);
+                        ctx.transparentRenderable.at(offset++) = def;
                         break;
                     case VktTypes::MaterialPass::OTHER:
                         break;
@@ -289,23 +402,75 @@ void Model::gatherDrawContext(VktTypes::DrawContext &ctx) {
     }
 }
 
+template void Model::getDrawContext<VktTypes::RigidRenderObject>(VktTypes::DrawContext<VktTypes::RigidRenderObject>& ctx) const;
+template void Model::getDrawContext<VktTypes::SkinnedRenderObject>(VktTypes::DrawContext<VktTypes::SkinnedRenderObject>& ctx) const;
+
+template<typename RenderType>
+void Model::getDrawContext(VktTypes::DrawContext<RenderType>& ctx) const
+requires VktConstraints::IsRenderableTransformable<RenderType> {
+    std::queue<uint32_t> q;
+    q.push(rootNode);
+
+    glm::mat4 worldM = transformation.getMatrix();
+    while(!q.empty()) {
+        const ModelTypes::Node *n = &nodes[q.front()];
+        q.pop();
+
+        // TODO Pre-calc a vector with mesh nodes to not traverse the whole tree every frame
+        // If there's a mesh in this node, update DrawContext with surfaces
+        if(n->mesh != ModelTypes::NULL_ID) {
+            const VktTypes::MeshAsset *mesh = &(*meshes)[n->mesh];
+            for(const auto &s: mesh->surfaces) {
+                RenderType def;
+                def.indexCount = s.count;
+                def.firstIndex = s.startIndex;
+                def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
+                def.material = &(*materials)[s.materialIndex].data;
+                def.objectID = id;
+
+                def.transform = worldM;
+                def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
+                if constexpr(VktConstraints::IsRenderableSkinned<RenderType>) {
+                    assert(isSkinned());
+                    if(n->skin != ModelTypes::NULL_ID) { def.jointsBufferAddress = jointsBuffer.jointsBufferAddress; }
+                }
+
+                switch((*materials)[s.materialIndex].data.passType) {
+                    case VktTypes::MaterialPass::OPAQUE:
+                        ctx.opaqueRenderable.push_back(def);
+                        break;
+                    case VktTypes::MaterialPass::TRANSPARENT:
+                        ctx.transparentRenderable.push_back(def);
+                        break;
+                    case VktTypes::MaterialPass::OTHER:
+                        break;
+                }
+            }
+        }
+
+        // Continue adding context from the tree
+        for(unsigned int nodeID: n->children) { q.push(nodeID); }
+    }
+}
+
+
 void Model::updateAnimationTime() {
-    ModelTypes::Animation *a = &m_animations[m_activeAnimation];
+    ModelTypes::Animation *a = &animations[activeAnimation];
     a->currentTime += TecCorePtr->deltaTime;
     if(a->currentTime > a->end) { a->currentTime -= a->end; }
 }
 
 void Model::updateJoints() {
-    if(m_activeAnimation != ModelTypes::NULL_ID) {
-        glm::mat4 identity = glm::identity<glm::mat4>();
+    if(activeAnimation != ModelTypes::NULL_ID) {
+        auto identity = glm::identity<glm::mat4>();
         const glm::mat4 *parentTransform = &identity;
-        const ModelTypes::Animation *animation = &m_animations[m_activeAnimation];
+        const ModelTypes::Animation *animation = &animations[activeAnimation];
 
         for(std::size_t nodeID = 0; nodeID < animation->animatedNodes.size(); nodeID++) {
             auto [nID, chID] = animation->animatedNodes[nodeID];
-            ModelTypes::Node *node = &m_nodes[nID];
+            ModelTypes::Node *node = &nodes[nID];
             ModelTypes::AnimationChannel *channel = &animation->channels[chID];
-            if(node->parent != ModelTypes::NULL_ID) { parentTransform = &m_nodes[node->parent].animationTransform; }
+            if(node->parent != ModelTypes::NULL_ID) { parentTransform = &nodes[node->parent].animationTransform; }
 
             glm::mat4 sm = glm::scale(glm::identity<glm::mat4>(), node->scale);
             glm::mat4 rm = glm::toMat4(node->rotation);
@@ -388,86 +553,40 @@ void Model::updateJoints() {
 }
 
 void Model::uploadJointsMatrices() {
-    std::size_t numJoints = m_skin.joints.size();
+    std::size_t numJoints = skin.joints.size();
     std::vector<glm::mat4> jointMatrices(numJoints);
 
-    ModelTypes::Node *node = &m_nodes[m_skin.skinNodes[0]];// For some reason this works too?
+    ModelTypes::Node *node = &nodes[skin.skinNodes[0]];// For some reason this works too?
     glm::mat4 inverseTransform = glm::inverse(node->animationTransform);
 
-    for(std::size_t i = 0; i < numJoints; i++) { jointMatrices[i] = inverseTransform * m_nodes[m_skin.joints[i]].animationTransform * m_skin.inverseBindMatrices[i]; }
-    memcpy(m_jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+    for(std::size_t i = 0; i < numJoints; i++) { jointMatrices[i] = inverseTransform * nodes[skin.joints[i]].animationTransform * skin.inverseBindMatrices[i]; }
+    memcpy(jointsBuffer.jointsBuffer.info.pMappedData, jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
 }
 
-std::vector<ModelTypes::Node> &Model::nodes() { return m_nodes; }
-ModelTypes::Skin &Model::skin() { return m_skin; }
-
-bool Model::isSkinned() const { return m_isSkinned; }
+bool Model::isSkinned() const { return flags & Flags::SKINNED; }
 
 void Model::setAnimation(uint32_t aID) {
-    if(aID < m_animations.size()) {
-        m_activeAnimation = aID;
-        m_animations[m_activeAnimation].currentTime = m_animations[m_activeAnimation].start;
+    if(aID < animations.size()) {
+        activeAnimation = aID;
+        animations[activeAnimation].currentTime = animations[activeAnimation].start;
     }
 }
 
 std::string_view Model::animationName(uint32_t aID) const {
-    if(aID < m_animations.size()) { return m_animations[aID].name.data(); }
+    if(aID < animations.size()) { return animations[aID].name.data(); }
     return "";
 }
 
-uint32_t Model::animationCount() const { return m_animations.size(); }
+uint32_t Model::animationCount() const { return animations.size(); }
 
-uint32_t Model::currentAnimation() const { return m_activeAnimation; }
-
-Model::~Model() { clear(); }
-
-Model &Model::operator=(Model const &other) {
-    if(this == &other) { return *this; }
-
-    transformation = other.transformation;
-    m_modelPath = other.m_modelPath;
-    m_isLoaded = other.isLoaded();
-    m_meshes = other.m_meshes;
-    m_samplers = other.m_samplers;
-    m_materials = other.m_materials;
-    m_nodes = other.m_nodes;
-    m_skin = other.m_skin;
-    m_animations = other.m_animations;
-    m_rootNode = other.m_rootNode;
-    m_isSkinned = other.m_isSkinned;
-    m_activeAnimation = other.m_activeAnimation;
-    if(other.m_isSkinned) {
-        m_jointsBuffer = VktCore::uploadJoints(
-                std::span<glm::mat4>(m_skin.inverseBindMatrices.data(), m_skin.inverseBindMatrices.size()));
-    }
-
-    m_loadedModels.at(m_modelPath).activeModels++;
-    return *this;
-}
-
-void Model::clear() {
-    if(!m_isLoaded) {
-        LOG(LOG_WARNING, "Trying to clear unloaded model. Ignoring clear call.");
-        return;
-    }
-
-    VktBuffers::destroy(m_jointsBuffer.jointsBuffer);
-
-    if(!m_loadedModels.contains(m_modelPath)) { return; }
-    m_loadedModels.at(m_modelPath).activeModels--;
-    if(m_loadedModels.at(m_modelPath).activeModels == 0) {
-        Resources &resources = m_loadedModels.at(m_modelPath);
-        for(const auto &mesh: resources.meshes) {
-            VktBuffers::destroy(mesh.meshBuffers.indexBuffer);
-            VktBuffers::destroy(mesh.meshBuffers.vertexBuffer);
-        }
-        for(const auto &sampler: resources.samplers) { vkDestroySampler(VktCachePtr->vkDevice, sampler, nullptr); }
-        for(const auto &image: resources.images) { VktImages::destroy(image); }
-        VktBuffers::destroy(resources.materialBuffer);
-        resources.descriptorPool.destroyPool();
-    }
-}
+uint32_t Model::currentAnimation() const { return activeAnimation; }
 
 bool Model::isLoaded() const { return m_isLoaded; }
 
-const std::string &Model::path() const { return m_modelPath; }
+std::size_t Model::renderables() const {
+    std::size_t renderables = 0;
+    for(const auto& mesh : *meshes) {
+        renderables += mesh.surfaces.size();
+    }
+    return renderables;
+}

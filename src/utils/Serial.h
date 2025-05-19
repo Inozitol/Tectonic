@@ -292,11 +292,10 @@ namespace Serial {
      * @param data Destination
      * @param str String
      */
-    template<typename T>
-    void pushData(SerialTypes::BinDataVec_t &data, const std::basic_string<T>& str){
+    inline void pushData(SerialTypes::BinDataVec_t &data, const std::basic_string<char>& str){
         pushData<uint32_t>(data, str.size());
         for(const auto& c : str){
-            pushData<uint8_t>(data,c);
+            pushData<char>(data,c);
         }
     }
 

@@ -7,6 +7,8 @@
 #include "engine/vulkan/VktImages.h"
 #include "engine/vulkan/VktInstantCommands.h"
 
+#include <engine/vulkan/VktTypes.h>
+
 Skybox::Skybox(const char *path) {
     load(path);
 }
@@ -67,6 +69,7 @@ void Skybox::load(const char *pth) {
 
 void Skybox::clear() {
     if(loaded) {
+        LOG(LOG_INFO, "Clearing skybox resources");
         loaded = false;
         skyboxCount--;
         VktImages::destroy(colorCubemap);
@@ -81,9 +84,6 @@ void Skybox::clear() {
 }
 
 void Skybox::draw(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
-    VktTypes::DrawContext drawContext;
-    cube.gatherDrawContext(drawContext);
-    VktTypes::RenderObject &cubeRenderObject = drawContext.opaqueSurfaces.at(0);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, colorPipeline.pipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -103,15 +103,15 @@ void Skybox::draw(VkCommandBuffer cmd, VkDescriptorSet sceneDescriptorSet) {
                             &descriptorSet, 0,
                             nullptr);
 
-    vkCmdBindIndexBuffer(cmd, cubeRenderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd, cubeRenderable.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
     VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
-    pushConstants.vertexBuffer = cubeRenderObject.vertexBufferAddress;
-    pushConstants.worldMatrix = cubeRenderObject.transform;
+    pushConstants.vertexBuffer = cubeRenderable.vertexBufferAddress;
+    pushConstants.worldMatrix = cubeRenderable.transform;
     vkCmdPushConstants(cmd, colorPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                        sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
 
-    vkCmdDrawIndexed(cmd, cubeRenderObject.indexCount, 1, cubeRenderObject.firstIndex, 0, 0);
+    vkCmdDrawIndexed(cmd, cubeRenderable.indexCount, 1, cubeRenderable.firstIndex, 0, 0);
 }
 
 void Skybox::writeColorSet() const {
@@ -299,6 +299,10 @@ void Skybox::clearPipelines() {
 
 void Skybox::initCube() {
     cube = Model(CUBE_PATH);
+    VktTypes::DrawContext<VktTypes::RigidRenderObject> renderables;
+    cube.getDrawContext(renderables);
+    assert(renderables.opaqueRenderable.size() == 1);
+    cubeRenderable = renderables.opaqueRenderable.at(0);
 }
 
 void Skybox::clearCube() {
@@ -331,11 +335,6 @@ void Skybox::generateIBLCubemaps() {
     VktInstantCommands::submitCommands({[&, this](VkCommandBuffer cmd) {
         VktUtils::transitionCubeMap(cmd, IBLDiffuseCubemap.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(IBLDiffuseCubemap.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-        // Gather cube's render context
-        VktTypes::DrawContext drawContext;
-        cube.gatherDrawContext(drawContext);
-        VktTypes::RenderObject &renderObject = drawContext.opaqueSurfaces[0];
 
         VkExtent2D extent2D = {.width = colorCubemap.extent.width, .height = colorCubemap.extent.height};
         VkRenderingInfo renderingInfo = VktStructs::renderingInfo(extent2D, &colorAttachment, nullptr, 6);
@@ -377,15 +376,15 @@ void Skybox::generateIBLCubemaps() {
 
         vkCmdSetScissor(cmd, 0, 1, &scissors);
 
-        vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(cmd, cubeRenderable.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
         VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
-        pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
-        pushConstants.worldMatrix = renderObject.transform;
+        pushConstants.vertexBuffer = cubeRenderable.vertexBufferAddress;
+        pushConstants.worldMatrix = cubeRenderable.transform;
         vkCmdPushConstants(cmd, IBLDiffusePipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                            sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
 
-        vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+        vkCmdDrawIndexed(cmd, cubeRenderable.indexCount, 1, cubeRenderable.firstIndex, 0, 0);
         vkCmdEndRendering(cmd);
 
         VktUtils::transitionCubeMap(cmd, IBLDiffuseCubemap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -404,11 +403,6 @@ void Skybox::generateIBLCubemaps() {
     for(uint32_t mipLevel = 0; mipLevel < cubeViews.size(); mipLevel++) {
         VktInstantCommands::submitCommands({[&, this](VkCommandBuffer cmd) {
             VkRenderingAttachmentInfo colorAttachment = VktStructs::attachmentInfo(cubeViews[mipLevel], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-            // Gather cube's render context
-            VktTypes::DrawContext drawContext;
-            cube.gatherDrawContext(drawContext);
-            VktTypes::RenderObject &renderObject = drawContext.opaqueSurfaces[0];
 
             VkExtent2D extent2D = {
                     .width = static_cast<uint32_t>(colorCubemap.extent.width * std::pow(0.5, mipLevel)),
@@ -472,15 +466,15 @@ void Skybox::generateIBLCubemaps() {
 
             vkCmdSetScissor(cmd, 0, 1, &scissors);
 
-            vkCmdBindIndexBuffer(cmd, renderObject.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+            vkCmdBindIndexBuffer(cmd, cubeRenderable.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
             VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static> pushConstants;
-            pushConstants.vertexBuffer = renderObject.vertexBufferAddress;
-            pushConstants.worldMatrix = renderObject.transform;
+            pushConstants.vertexBuffer = cubeRenderable.vertexBufferAddress;
+            pushConstants.worldMatrix = cubeRenderable.transform;
             vkCmdPushConstants(cmd, IBLSpecularPipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0,
                                sizeof(VktTypes::GPU::DrawPushConstants<VktTypes::GPU::Static>), &pushConstants);
 
-            vkCmdDrawIndexed(cmd, renderObject.indexCount, 1, renderObject.firstIndex, 0, 0);
+            vkCmdDrawIndexed(cmd, cubeRenderable.indexCount, 1, cubeRenderable.firstIndex, 0, 0);
             vkCmdEndRendering(cmd);
         }});
     }

@@ -5,12 +5,19 @@
 
 namespace VktBuffers {
 
-    VktTypes::Resources::Buffer create(size_t allocSize,
-                                           VkBufferUsageFlags usage,
-                                           VmaMemoryUsage memoryUsage) {
-        VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .pNext = nullptr};
-        bufferInfo.size = allocSize;
-        bufferInfo.usage = usage;
+    VktTypes::Resources::Buffer create(const size_t allocSize,
+                                       const VkBufferUsageFlags usage,
+                                       const VmaMemoryUsage memoryUsage) {
+        const VkBufferCreateInfo bufferInfo{
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .size = allocSize,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices = nullptr
+        };
 
         VmaAllocationCreateInfo vmaAllocInfo{};
         vmaAllocInfo.usage = memoryUsage;
@@ -18,17 +25,19 @@ namespace VktBuffers {
 
         VktTypes::Resources::Buffer newBuffer{};
         VK_CHECK(vmaCreateBuffer(VktCachePtr->vmaAllocator,
-                                 &bufferInfo,
-                                 &vmaAllocInfo,
-                                 &newBuffer.buffer,
-                                 &newBuffer.allocation,
-                                 &newBuffer.info))
+            &bufferInfo,
+            &vmaAllocInfo,
+            &newBuffer.buffer,
+            &newBuffer.allocation,
+            &newBuffer.info))
+#ifdef VKT_DEBUG_ALLOCATION_NAMES
+        const std::string debugName = "VkBuffer_size_" + std::to_string(allocSize);
+        vmaSetAllocationName(VktCachePtr->vmaAllocator,newBuffer.allocation,debugName.c_str());
+#endif
         return newBuffer;
     }
 
-    void destroy(VktTypes::Resources::Buffer buffer) {
-        vmaDestroyBuffer(VktCachePtr->vmaAllocator, buffer.buffer, buffer.allocation);
-    }
+    void destroy(const VktTypes::Resources::Buffer &buffer) { vmaDestroyBuffer(VktCachePtr->vmaAllocator, buffer.buffer, buffer.allocation); }
 
 
 }

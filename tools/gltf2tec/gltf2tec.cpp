@@ -1,6 +1,8 @@
-#include "engine/scene/gltf2tec.h"
+#include "gltf2tec.h"
 
 #include "stb_image.h"
+#include "geometry/AABB.h"
+
 #include <iostream>
 
 #include <glm/gtx/quaternion.hpp>
@@ -14,7 +16,7 @@
 #include <queue>
 #include <set>
 
-#include "Logger.h"
+#include "utils/Logger.h"
 #include "utils/Utils.h"
 
 /**
@@ -100,7 +102,7 @@ std::optional<SerialTypes::Model::Image> loadImage(fastgltf::Asset &asset, fastg
                            auto &buffer = asset.buffers[bufferView.bufferIndex];
 
                            std::visit(fastgltf::visitor{
-                                              [](auto &arg) {},
+                                              [](auto &) {},
                                               [&newImage, &width, &height, &channels, &bufferView](fastgltf::sources::Array &array) {
                                                   unsigned char *data = stbi_load_from_memory(reinterpret_cast<stbi_uc *>(array.bytes.data() + bufferView.byteOffset),
                                                                                               static_cast<int>(bufferView.byteLength),
@@ -904,7 +906,44 @@ void writeAnimation(SerialTypes::BinDataVec_t &data, const SerialTypes::Model::A
     // Write animated nodes vector size + data [32bits + 64bits * size]
     Serial::pushData<std::pair<uint32_t, uint32_t>>(data, animation.animatedNodes);
 }
+template<VktTypes::GPU::VertexType vType>
+void updateMinMaxAxies(gltf2tec::MinMaxAxies& axies, const SerialTypes::Model::MeshAsset<vType> &mesh) {
+    for(auto& v : mesh.vertices) {
+        if(v.position.x < axies.minX) axies.minX = v.position.x;
+        if(v.position.x > axies.maxX) axies.maxX = v.position.x;
+        if(v.position.y < axies.minY) axies.minY = v.position.y;
+        if(v.position.y > axies.maxY) axies.maxY = v.position.y;
+        if(v.position.z < axies.minZ) axies.minZ = v.position.z;
+        if(v.position.z > axies.maxZ) axies.maxZ = v.position.z;
+    }
+}
 
+void writeAABB(SerialTypes::BinDataVec_t &data, const AABB &aabb) {
+    // Write center [sizeof(float) * 3]
+    Serial::pushData(data, aabb.center);
+
+    // Write half lengths [sizeof(float) * 3]
+    Serial::pushData(data, aabb.halfLengths);
+}
+
+AABB calcAABB(const gltf2tec::GLTFResources &gltfResources) {
+    gltf2tec::MinMaxAxies axies;
+    std::visit([&axies](auto &&meshVec) {
+        for(const auto &mesh: meshVec) {
+            updateMinMaxAxies(axies, *mesh);
+        }
+    },
+    gltfResources.meshes);
+    const glm::vec3 halfVector = {
+        std::abs(axies.maxX) > std::abs(axies.minX) ? std::abs(axies.maxX) : std::abs(axies.minX),
+        std::abs(axies.maxY) > std::abs(axies.minY) ? std::abs(axies.maxY) : std::abs(axies.minY),
+        std::abs(axies.maxZ) > std::abs(axies.minZ) ? std::abs(axies.maxZ) : std::abs(axies.minZ)
+    };
+    return AABB{
+        .center = {0.0f, 0.0f, 0.0f},
+        .halfLengths = halfVector
+    };
+}
 
 gltf2tec::TectonicResources convertGLTFModel(const gltf2tec::GLTFResources &gltfResources) {
     gltf2tec::TectonicResources tecResources;
@@ -928,7 +967,8 @@ gltf2tec::TectonicResources convertGLTFModel(const gltf2tec::GLTFResources &gltf
     Serial::pushData<uint32_t>(data, 0);// Samplers [32bits]
     Serial::pushData<uint32_t>(data, 0);// Nodes [32bits]
     Serial::pushData<uint32_t>(data, 0);// Materials [32bits]
-    if(gltfResources.isSkinned) {
+    Serial::pushData<uint32_t>(data, 0);// AABB [32bits]
+    if(Utils::enumCheckBit(metaByte, SerialTypes::Model::MetaBits::SKINNED)) {
         Serial::pushData<uint32_t>(data, 0);// Skin [32bits]
         Serial::pushData<uint32_t>(data, 0);// Animations [32bits]
     }
@@ -944,7 +984,7 @@ gltf2tec::TectonicResources convertGLTFModel(const gltf2tec::GLTFResources &gltf
             writeMesh(data, *mesh);
         }
     },
-               gltfResources.meshes);
+    gltfResources.meshes);
 
     // Write index to image data
     index = data.size();
@@ -989,7 +1029,12 @@ gltf2tec::TectonicResources convertGLTFModel(const gltf2tec::GLTFResources &gltf
         writeMaterial(data, *material);
     }
 
-    if(gltfResources.isSkinned) {
+    // Write index to AABB data
+    index = data.size();
+    Serial::pushData<uint32_t>(data, index, SerialTypes::Model::AABB_INDEX);
+    writeAABB(data, calcAABB(gltfResources));
+
+    if(Utils::enumCheckBit(metaByte, SerialTypes::Model::MetaBits::SKINNED)) {
         // Write index to skin data
         index = data.size();
         Serial::pushData<uint32_t>(data, index, SerialTypes::Model::SKIN_INDEX);
@@ -1025,7 +1070,6 @@ int main() {
         {"meshes/barbwara.glb"},
         {"meshes/terrain.glb"}
     };
-
 
     for(auto &inPath: convertQueue) {
         std::filesystem::path outPath = inPath;

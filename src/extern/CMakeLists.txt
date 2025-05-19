@@ -4,6 +4,8 @@ find_package(Vulkan REQUIRED)
 add_library(vkbootstrap STATIC)
 add_library(stb STATIC)
 add_library(imgui STATIC)
+add_library(pugixml STATIC)
+add_library(vulkan-mini-libs STATIC)
 
 # Includes submodules
 add_subdirectory(fastgltf)
@@ -39,3 +41,13 @@ target_sources(imgui PRIVATE
 target_include_directories(imgui INTERFACE imgui)
 
 add_subdirectory(KTX-Software)
+
+# pugixml
+target_sources(pugixml PRIVATE pugixml/pugixml.cpp)
+target_include_directories(pugixml INTERFACE pugixml)
+
+# vulkan-mini-libs
+set_target_properties(vulkan-mini-libs PROPERTIES LINKER_LANGUAGE CXX)
+target_sources(vulkan-mini-libs PRIVATE
+        vulkan-mini-libs-2/vk_value_serialization.h
+        vulkan-mini-libs-2/vk_value_serialization.hpp)
