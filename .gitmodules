@@ -1,9 +1,11 @@
-[submodule "include/extern/fastgltf"]
-	path = include/extern/fastgltf
+[submodule "src/extern/fastgltf"]
+	path = src/extern/fastgltf
 	url = https://github.com/spnda/fastgltf
-[submodule "include/extern/VulkanMemoryAllocator"]
-	path = include/extern/VulkanMemoryAllocator
+
+[submodule "src/extern/VulkanMemoryAllocator"]
+	path = src/extern/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
-[submodule "include/extern/KTX-Software"]
-	path = include/extern/KTX-Software
+
+[submodule "src/extern/KTX-Software"]
+	path = src/extern/KTX-Software
 	url = https://github.com/KhronosGroup/KTX-Software.git
